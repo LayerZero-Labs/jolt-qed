@@ -21,16 +21,6 @@ def read_doubleword? (byte : Nat → Option (BitVec 8)) (address : Nat) : Option
       some (b7 ++ b6 ++ b5 ++ b4 ++ b3 ++ b2 ++ b1 ++ b0)
   | _, _, _, _, _, _, _, _ => none
 
--- The 64 bits at `address` in `state`, looked up without running a load (no
--- checks, no state change). The trace uses it to record the value a load reads
--- and the old value a store overwrites, as Rust does for the witness.
--- See : jolt/tracer/src/emulator/mmu.rs:480 (trace_load), :556 (trace_store)
-noncomputable def trace_doubleword? (state : SailJoltState) (address : BitVec 64) :
-    Option (BitVec 64) :=
-  if address.toNat < RAM_START_ADDRESS then
-    read_doubleword? (JoltDevice.load? state.jolt_device) address.toNat
-  else read_doubleword? state.sail.mem.get? address.toNat
-
 /-
 Jolt's own memory access, following Rust's Mmu directly.
 Every Rust panic is an error. Address translation is the identity: Jolt never
@@ -38,24 +28,13 @@ leaves AddressingMode::None (mmu.rs:105, 750-757).
 -/
 namespace Mmu
 
+def ram_backing_end (device : JoltDevice) : Nat :=
+  RAM_START_ADDRESS + device.memory_layout.ram_size
+
 -- true exactly when Rust's assertions pass for an access at `ea`.
--- See : jolt/tracer/src/emulator/mmu.rs:120-184 (assert_effective_address)
-def effective_address_ok (device : JoltDevice) (ea : Nat) (is_write : Bool) : Bool :=
-  let layout := device.memory_layout
-  if ea < RAM_START_ADDRESS then
-    ea ≤ layout.io_end.toNat &&
-    (layout.get_lowest_address.toNat ≤ ea || ea ≤ RAM_START_ADDRESS - 8) &&
-    (if is_write then
-      device.is_output ea || device.is_panic ea || device.is_termination ea
-    else
-      device.is_input ea || device.is_trusted_advice ea || device.is_untrusted_advice ea ||
-        device.is_output ea || device.is_panic ea || device.is_termination ea ||
-        ea ≤ RAM_START_ADDRESS - 8)
-  else if is_write then
-    (ea < layout.stack_end.toNat || layout.stack_end.toNat + STACK_CANARY_SIZE ≤ ea) &&
-      ea < layout.heap_end.toNat
-  else
-    ea < layout.heap_end.toNat
+def effective_address_ok (device : JoltDevice) (ea : Nat) (_is_write : Bool) : Bool :=
+  if ea < RAM_START_ADDRESS then device.readable ea
+  else ea < ram_backing_end device
 
 -- Rust RAM is zero-filled, so an address with no byte in the hash map reads 0.
 -- See : jolt/tracer/src/emulator/memory.rs:49-51, 197-201
@@ -72,48 +51,69 @@ def write_ram_doubleword (mem : Std.ExtHashMap Nat (BitVec 8)) (ea : Nat) (value
     Std.ExtHashMap Nat (BitVec 8) :=
   (List.range 8).foldl (fun mem k => mem.insert (ea + k) (value.extractLsb' (8 * k) 8)) mem
 
+def assert_write_protected_store (state : SailJoltState) (address : Nat) (value : BitVec 64)
+    (width : Nat) : Bool :=
+  let first := address / 8 * 8
+  let last := (address + width - 1) / 8 * 8
+  (if first = last then [first] else [first, last]).all fun word =>
+    let device := state.jolt_device
+    let layout := device.memory_layout
+    let index := (word - layout.get_lowest_address.toNat) / 8
+    let canary := layout.stack_end.toNat ≤ word + 7 &&
+      word < layout.stack_end.toNat + STACK_CANARY_SIZE
+    if !(state.code_guard.any fun guard => guard.region.1 ≤ index && index < guard.region.2)
+        && !device.is_input word
+        && !device.is_trusted_advice word
+        && !device.is_untrusted_advice word
+        && !canary then
+      true
+    else
+      let old := ram_doubleword state.sail.mem word
+      let start := max address word
+      let stop := min (address + width) (word + 8)
+      let bits := 8 * (stop - start)
+      let mask : BitVec 64 := (BitVec.allOnes 64 >>> (64 - bits)) <<< (8 * (start - word))
+      let replacement : BitVec 64 := (value >>> (8 * (start - address))) <<< (8 * (start - word))
+      (old &&& mask) == (replacement &&& mask)
+
+def unsupported_load (ea : Nat) : Bool :=
+  (0x1020 ≤ ea && ea ≤ 0x1fff) || (0x02000000 ≤ ea && ea ≤ 0x0200ffff) ||
+    (0x0c000000 ≤ ea && ea ≤ 0x0fffffff) || (0x10000000 ≤ ea && ea ≤ 0x100000ff) ||
+    (0x10001000 ≤ ea && ea ≤ 0x10001fff)
+
+def unsupported_store (ea : Nat) : Bool :=
+  (0x02000000 ≤ ea && ea ≤ 0x0200ffff) ||
+    (0x0c000000 ≤ ea && ea ≤ 0x0fffffff) || (0x10000000 ≤ ea && ea ≤ 0x100000ff) ||
+    (0x10001000 ≤ ea && ea ≤ 0x10001fff)
+
 -- One byte; none where Rust panics.
--- See : jolt/tracer/src/emulator/mmu.rs:450-478 (load_raw)
 def load_raw? (state : SailJoltState) (ea : Nat) : Option (BitVec 8) :=
-  let device := state.jolt_device
-  if !effective_address_ok device ea false then none
+  if !effective_address_ok state.jolt_device ea false then none
   else if RAM_START_ADDRESS ≤ ea then some (ram_byte state.sail.mem ea)
-  else if (0x1020 ≤ ea && ea ≤ 0x1fff) || (0x02000000 ≤ ea && ea ≤ 0x0200ffff) ||
-      (0x0c000000 ≤ ea && ea ≤ 0x0fffffff) || (0x10000000 ≤ ea && ea ≤ 0x100000ff) ||
-      (0x10001000 ≤ ea && ea ≤ 0x10001fff) then none
-  else if device.is_input ea || device.is_trusted_advice ea || device.is_untrusted_advice ea ||
-      device.is_output ea || device.is_panic ea || device.is_termination ea ||
-      ea ≤ RAM_START_ADDRESS - 8 then
-    device.load? ea
-  else none
+  else if unsupported_load ea then none
+  else state.jolt_device.load? state.sail.mem ea
 
 -- One byte; none where Rust panics.
 -- See : jolt/tracer/src/emulator/mmu.rs:644-667 (store_raw)
 def store_raw? (state : SailJoltState) (ea : Nat) (value : BitVec 8) : Option SailJoltState :=
   if RAM_START_ADDRESS ≤ ea then
-    if effective_address_ok state.jolt_device ea true then
-      some { state with sail := { state.sail with mem := state.sail.mem.insert ea value } }
-    else none
-  else if (0x02000000 ≤ ea && ea ≤ 0x0200ffff) || (0x0c000000 ≤ ea && ea ≤ 0x0fffffff) ||
-      (0x10000000 ≤ ea && ea ≤ 0x100000ff) || (0x10001000 ≤ ea && ea ≤ 0x10001fff) then none
+    if !effective_address_ok state.jolt_device ea true then none
+    else if !assert_write_protected_store state ea (value.zeroExtend 64) 1 then none
+    else some { state with sail := { state.sail with mem := state.sail.mem.insert ea value } }
+  else if unsupported_store ea then none
   else if !effective_address_ok state.jolt_device ea true then none
-  else (state.jolt_device.store? ea value).map fun device => { state with jolt_device := device }
+  else if !assert_write_protected_store state ea (value.zeroExtend 64) 1 then none
+  else if state.jolt_device.is_input ea || state.jolt_device.is_trusted_advice ea ||
+      state.jolt_device.is_untrusted_advice ea then some state
+  else (state.jolt_device.store? state.sail.mem ea value).map
+    fun mem => { state with sail := { state.sail with mem := mem } }
 
--- Rust backs RAM with whole 64-bit units: the total memory size rounded up to a
--- multiple of 8. Reading past them panics.
--- See : jolt/tracer/src/emulator/mod.rs:219-225 at 5def437f (init_memory)
---       jolt/tracer/src/emulator/memory.rs:49-51, 64-69 (init_with_capacity, access_u64)
-def ram_backing_end (device : JoltDevice) : Nat :=
-  RAM_START_ADDRESS + 8 * ((device.memory_layout.get_total_memory_size.toNat + 7) / 8)
-
--- true exactly when Rust's trace_load does not panic. It reads 64 bits starting at
--- `ea` rounded down to a multiple of 4, from the device or from RAM.
--- See : jolt/tracer/src/emulator/mmu.rs:480-504 (trace_load, device_doubleword)
+-- true exactly when Rust's trace_load does not panic.
 def trace_load_ok (device : JoltDevice) (ea : Nat) : Bool :=
-  let word_address := ea / 4 * 4
-  if word_address < RAM_START_ADDRESS then
-    (read_doubleword? device.load? word_address).isSome
-  else word_address + 8 ≤ ram_backing_end device
+  effective_address_ok device ea false &&
+    (if ea < RAM_START_ADDRESS then
+      (List.range 8).all fun k => device.readable (ea / 8 * 8 + k)
+    else ea / 8 * 8 + 8 ≤ ram_backing_end device)
 
 -- One byte, as Rust's load: trace_load, then load_raw. None where Rust panics.
 -- See : jolt/tracer/src/emulator/mmu.rs:237-247 (load)
@@ -151,7 +151,8 @@ noncomputable def store_doubleword (address value : BitVec 64) :
   let ea := address.toNat
   if ea % 8 ≠ 0 then .error (Error.Assertion "Unaligned store_doubleword") state
   else if RAM_START_ADDRESS ≤ ea then
-    if effective_address_ok state.jolt_device ea true then
+    if effective_address_ok state.jolt_device ea true &&
+        assert_write_protected_store state ea value 8 then
       .ok (.Ok true)
         { state with sail := { state.sail with mem := write_ram_doubleword state.sail.mem ea value } }
     else .error (Error.Assertion "Illegal Memory Access") state
@@ -164,5 +165,14 @@ noncomputable def store_doubleword (address value : BitVec 64) :
     | none => .error (Error.Assertion "Store Failed") state
 
 end Mmu
+
+noncomputable def trace_doubleword? (state : SailJoltState) (address : BitVec 64) :
+    Option (BitVec 64) :=
+  let ea := address.toNat
+  if ea < RAM_START_ADDRESS then
+    read_doubleword? (state.jolt_device.load? state.sail.mem) ea
+  else if ea + 8 ≤ Mmu.ram_backing_end state.jolt_device then
+    some (Mmu.ram_doubleword state.sail.mem ea)
+  else none
 
 end JoltISA

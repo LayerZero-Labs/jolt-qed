@@ -1,3 +1,5 @@
+import Std.Data.ExtHashMap
+
 -- Rust layout source: common/src/jolt_device.rs at public pin 8bbb2357.
 -- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/common/src/jolt_device.rs#L381-L533
 -- Constants: common/src/constants.rs at public pin 8bbb2357.
@@ -44,8 +46,6 @@ structure MemoryLayout where
   stack_end : BitVec 64
   heap_size : BitVec 64
   heap_end : BitVec 64
-  panic : BitVec 64
-  termination : BitVec 64
   io_end : BitVec 64
   deriving DecidableEq
 
@@ -89,6 +89,42 @@ def adviceRegions (trusted_size untrusted_size io_bytes : Nat) : Option (Nat × 
     let trusted_end ← checkedAdd untrusted_end trusted_size
     pure (untrusted_end, trusted_end, untrusted_start, untrusted_end)
 
+-- Rust: jolt/common/src/jolt_device.rs:535-537
+def get_lowest_address (layout : MemoryLayout) : BitVec 64 :=
+  if layout.trusted_advice_start.toNat ≤ layout.untrusted_advice_start.toNat
+  then layout.trusted_advice_start
+  else layout.untrusted_advice_start
+
+def io_segments_ok (l : MemoryLayout) : Bool := Id.run do
+  let t := (l.trusted_advice_start.toNat, l.trusted_advice_end.toNat,
+    l.max_trusted_advice_size.toNat)
+  let u := (l.untrusted_advice_start.toNat, l.untrusted_advice_end.toNat,
+    l.max_untrusted_advice_size.toNat)
+  let advice := if t.1 < u.1 || (t.1 == u.1 && t.2.1 ≤ u.2.1) then [t, u] else [u, t]
+  let mut previous := l.get_lowest_address.toNat
+  for (start, stop, size) in advice ++
+      [(l.input_start.toNat, l.input_end.toNat, l.max_input_size.toNat),
+       (l.output_start.toNat, l.output_end.toNat, l.max_output_size.toNat)] do
+    if start != previous || start % 8 != 0 || size % 8 != 0 || stop != start + size then
+      return false
+    previous := stop
+  return powerOfTwoOrZero t.2.2 && powerOfTwoOrZero u.2.2 &&
+    l.io_end.toNat == previous && l.io_end.toNat ≤ JoltISA.RAM_START_ADDRESS &&
+    (t.2.2 == 0 || (t.1 - l.get_lowest_address.toNat) % t.2.2 == 0) &&
+    (u.2.2 == 0 || (u.1 - l.get_lowest_address.toNat) % u.2.2 == 0)
+
+def max_ram_k? (layout : MemoryLayout) : Option Nat := do
+  guard (layout.heap_end.toNat ≤ 2^64 - 8 && layout.heap_end.toNat % 8 == 0)
+  guard layout.io_segments_ok
+  let total ← checkedSub layout.heap_end.toNat layout.get_lowest_address.toNat
+  let words := (total / 8).nextPowerOfTwo
+  guard (words < 2^64 && layout.get_lowest_address.toNat + 8 * words ≤ 2^64)
+  pure words
+
+def ram_size (layout : MemoryLayout) : Nat :=
+  (layout.max_ram_k?.map fun k => layout.get_lowest_address.toNat + 8 * k -
+    JoltISA.RAM_START_ADDRESS).getD 0
+
 -- Rust: jolt/common/src/jolt_device.rs:381-533 (MemoryLayout::try_new)
 def new (config : MemoryConfig) : Option MemoryLayout := do
   let program_size ← config.program_size
@@ -101,11 +137,10 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
   guard (powerOfTwoOrZero max_trusted_advice_size)
   guard (powerOfTwoOrZero max_untrusted_advice_size)
 
-  -- 16 bytes for the panic word and the termination word.
   let io_region_bytes ← (checkedAdd max_input_size max_trusted_advice_size)
     >>= (checkedAdd · max_untrusted_advice_size)
     >>= (checkedAdd · max_output_size)
-    >>= (checkedAdd · 16)
+    >>= (checkedAdd · 8)
   -- The checked sum is below 2^64, so its quotient by eight is below 2^61.
   -- Its next power of two is at most 2^61 and cannot overflow Rust's u64.
   -- Multiplication by eight can still overflow; checkedMul rejects that case.
@@ -119,15 +154,13 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
   let input_end ← checkedAdd input_start max_input_size
   let output_start := input_end
   let output_end ← checkedAdd output_start max_output_size
-  let panic := output_end
-  let termination ← checkedAdd panic 8
-  let io_end ← checkedAdd termination 8
+  let io_end := output_end
 
   let stack_end ← checkedAdd JoltISA.RAM_START_ADDRESS program_size.toNat
   let stack_start ← (checkedAdd stack_end JoltISA.STACK_CANARY_SIZE) >>= (checkedAdd · stack_size)
-  let heap_end ← checkedAdd stack_start heap_size
+  let heap_end ← (checkedAdd stack_start heap_size) >>= alignUp8
 
-  some
+  let layout : MemoryLayout :=
     { program_size := program_size
       max_trusted_advice_size := BitVec.ofNat 64 max_trusted_advice_size
       trusted_advice_start := BitVec.ofNat 64 trusted_advice_start
@@ -145,28 +178,17 @@ def new (config : MemoryConfig) : Option MemoryLayout := do
       stack_end := BitVec.ofNat 64 stack_end
       heap_size := BitVec.ofNat 64 heap_size
       heap_end := BitVec.ofNat 64 heap_end
-      panic := BitVec.ofNat 64 panic
-      termination := BitVec.ofNat 64 termination
       io_end := BitVec.ofNat 64 io_end }
 
--- Rust: jolt/common/src/jolt_device.rs:535-537
-def get_lowest_address (layout : MemoryLayout) : BitVec 64 :=
-  if layout.trusted_advice_start.toNat ≤ layout.untrusted_advice_start.toNat
-  then layout.trusted_advice_start
-  else layout.untrusted_advice_start
+  let _ ← layout.max_ram_k?
+  pure layout
 
--- Rust: jolt/common/src/jolt_device.rs:561-563
 def get_total_memory_size (layout : MemoryLayout) : BitVec 64 :=
-  layout.heap_end - BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
+  BitVec.ofNat 64 layout.ram_size
 
 end MemoryLayout
 
--- Rust: jolt/common/src/jolt_device.rs:57-68 (JoltDevice)
 structure JoltDevice where
-  inputs : Array (BitVec 8)
-  trusted_advice : Array (BitVec 8)
-  untrusted_advice : Array (BitVec 8)
-  outputs : Array (BitVec 8)
   panic : Bool
   memory_layout : MemoryLayout
 
@@ -187,45 +209,40 @@ def is_untrusted_advice (device : JoltDevice) (address : Nat) : Bool :=
 
 def is_output (device : JoltDevice) (address : Nat) : Bool :=
   device.memory_layout.output_start.toNat ≤ address &&
-    address < device.memory_layout.termination.toNat
+    address < device.memory_layout.output_end.toNat
 
-def is_panic (device : JoltDevice) (address : Nat) : Bool :=
-  device.memory_layout.panic.toNat ≤ address &&
-    address < device.memory_layout.termination.toNat
+def is_io_gap (device : JoltDevice) (address : Nat) : Bool :=
+  device.memory_layout.io_end.toNat ≤ address && address < JoltISA.RAM_START_ADDRESS
 
-def is_termination (device : JoltDevice) (address : Nat) : Bool :=
-  device.memory_layout.termination.toNat ≤ address &&
-    address < device.memory_layout.io_end.toNat
+def readable (device : JoltDevice) (address : Nat) : Bool :=
+  device.is_input address || device.is_trusted_advice address ||
+    device.is_untrusted_advice address || device.is_output address || device.is_io_gap address
 
--- Rust: jolt/common/src/jolt_device.rs:121-148 (JoltDevice::load).
--- Device buffers are zero-padded by Rust. This is distinct from a missing Sail
--- RAM byte, which trace_doubleword? below leaves absent.
-def load? (device : JoltDevice) (address : Nat) : Option (BitVec 8) :=
-  let layout := device.memory_layout
-  if device.is_panic address then some (if device.panic then 1 else 0)
-  else if device.is_termination address then some 0
-  else if device.is_input address then
-    some (device.inputs[address - layout.input_start.toNat]?.getD 0)
-  else if device.is_trusted_advice address then
-    some (device.trusted_advice[address - layout.trusted_advice_start.toNat]?.getD 0)
-  else if device.is_untrusted_advice address then
-    some (device.untrusted_advice[address - layout.untrusted_advice_start.toNat]?.getD 0)
-  else if device.is_output address then
-    some (device.outputs[address - layout.output_start.toNat]?.getD 0)
-  else if address ≤ JoltISA.RAM_START_ADDRESS - 8 then some 0
-  else none
+def load? (device : JoltDevice) (mem : Std.ExtHashMap Nat (BitVec 8))
+    (address : Nat) : Option (BitVec 8) :=
+  if device.readable address then some ((mem.get? address).getD 0) else none
 
--- Rust: jolt/common/src/jolt_device.rs:150-176 (JoltDevice::store).
--- The panic byte sets the flag regardless of the stored value. The rest of the
--- panic/termination regions ignore writes. Output grows with zero-filled gaps.
-def store? (device : JoltDevice) (address : Nat) (value : BitVec 8) :
-    Option JoltDevice :=
-  if address = device.memory_layout.panic.toNat then some { device with panic := true }
-  else if device.is_panic address || device.is_termination address then some device
-  else if device.is_output address then
-    let offset := address - device.memory_layout.output_start.toNat
-    let outputs := device.outputs ++ Array.replicate (offset + 1 - device.outputs.size) 0
-    some { device with outputs := outputs.set! offset value }
-  else none
+def store? (device : JoltDevice) (mem : Std.ExtHashMap Nat (BitVec 8))
+    (address : Nat) (value : BitVec 8) : Option (Std.ExtHashMap Nat (BitVec 8)) :=
+  if device.readable address then some (mem.insert address value) else none
+
+def try_with_io (memory_config : MemoryConfig)
+    (inputs trusted_advice untrusted_advice : Array (BitVec 8)) : Option JoltDevice := do
+  let memory_layout ← MemoryLayout.new memory_config
+  guard (trusted_advice.size ≤ memory_layout.max_trusted_advice_size.toNat)
+  guard (untrusted_advice.size ≤ memory_layout.max_untrusted_advice_size.toNat)
+  guard (inputs.size ≤ memory_layout.max_input_size.toNat)
+  pure { panic := false, memory_layout }
+
+def initial_ram_state (device : JoltDevice) (mem : Std.ExtHashMap Nat (BitVec 8))
+    (inputs trusted_advice untrusted_advice : Array (BitVec 8)) : Std.ExtHashMap Nat (BitVec 8) :=
+  let l := device.memory_layout
+  let zeroed := (List.range (JoltISA.RAM_START_ADDRESS - l.get_lowest_address.toNat)).foldl
+    (fun m k => m.insert (l.get_lowest_address.toNat + k) 0) mem
+  let populate := fun (m : Std.ExtHashMap Nat (BitVec 8)) (start : Nat) (bytes : Array (BitVec 8)) =>
+    bytes.toList.zipIdx.foldl (fun m (byte, k) => m.insert (start + k) byte) m
+  let m := populate zeroed l.trusted_advice_start.toNat trusted_advice
+  let m := populate m l.untrusted_advice_start.toNat untrusted_advice
+  populate m l.input_start.toNat inputs
 
 end JoltDevice

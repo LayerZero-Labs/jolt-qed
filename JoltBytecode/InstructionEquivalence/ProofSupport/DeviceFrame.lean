@@ -1,12 +1,14 @@
 import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionFrame
-import Batteries.Data.Array.Lemmas
 
 open LeanRV64D
 
 /-
-Every Jolt ISA instruction leaves the device's memory layout, inputs and advice
-buffers unchanged; Rust fixes them in `create_emulator` and never updates them.
+Every Jolt ISA instruction leaves the device's memory layout and the code guard
+unchanged. Jolt's tracer fixes the layout in `create_emulator` and the code guard
+in `Mmu::protect_code`, and no instruction updates either; stores change only memory.
+See `tracer/src/emulator/mmu.rs` (`store_raw`, `store_doubleword`) at Jolt `504dd78a2`.
+Based on Quang Dao's version in PR #73.
 -/
 
 set_option autoImplicit false
@@ -17,165 +19,114 @@ namespace JoltIOSetupFrame
 
 open JoltISA
 
-/-- The device fields that Rust fixes in `create_emulator` and never updates.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/tracer/src/lib.rs#L388-L391 -/
-def Same (a b : JoltDevice) : Prop :=
-  b.memory_layout = a.memory_layout ∧ b.trusted_advice = a.trusted_advice ∧
-    b.untrusted_advice = a.untrusted_advice ∧ b.inputs = a.inputs
+/-- The device setup Jolt's tracer fixes for a run: its memory layout.
+For example, storing an output byte leaves this layout unchanged.
+Input and advice bytes live in memory, not in the device. -/
+structure Same (a b : JoltDevice) : Prop where
+  layout : b.memory_layout = a.memory_layout
 
-theorem Same.refl (a : JoltDevice) : Same a a := ⟨rfl, rfl, rfl, rfl⟩
+/-- Setup agrees with itself; for example, a load leaves the layout unchanged. -/
+theorem Same.refl (a : JoltDevice) : Same a a := ⟨rfl⟩
 
+/-- Compose setup agreement; for example, two consecutive stores keep the layout. -/
 theorem Same.trans {a b c : JoltDevice} (hab : Same a b) (hbc : Same b c) : Same a c :=
-  ⟨hbc.1.trans hab.1, hbc.2.1.trans hab.2.1, hbc.2.2.1.trans hab.2.2.1,
-    hbc.2.2.2.trans hab.2.2.2⟩
+  ⟨hbc.layout.trans hab.layout⟩
 
+/-- Setup preservation for a computation; for example, every row preserves layout. -/
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   StatePreservation.Preserves (fun s t => Same s.jolt_device t.jolt_device) m
 
-theorem storeDeviceByte_same (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
-    (h : JoltDevice.store? io address value = some io') : Same io io' := by
-  unfold JoltDevice.store? at h
-  split_ifs at h <;> cases h <;> exact ⟨rfl, rfl, rfl, rfl⟩
+/-- Static MMU setup agrees across two states: the layout and the code guard.
+For example, a store changes memory while keeping both. -/
+def SetupSame (s t : SailJoltState) : Prop :=
+  t.jolt_device.memory_layout = s.jolt_device.memory_layout ∧ t.code_guard = s.code_guard
 
-/-- A successful device byte store preserves the layout and keeps the output
-byte count within the layout's `max_output_size.toNat`. -/
-theorem storeDeviceByte_outputs_fit (layout : MemoryLayout)
-    (outputSpan : layout.panic.toNat =
-      layout.output_start.toNat + layout.max_output_size.toNat)
-    (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
-    (sameLayout : io.memory_layout = layout)
-    (oldBound : io.outputs.size ≤ layout.max_output_size.toNat)
-    (stored : io.store? address value = some io') :
-    io'.memory_layout = layout ∧
-      io'.outputs.size ≤ layout.max_output_size.toNat := by
-  unfold JoltDevice.store? at stored
-  split_ifs at stored with isPanic special isOutput
-  · cases stored
-    exact ⟨sameLayout, oldBound⟩
-  · cases stored
-    exact ⟨sameLayout, oldBound⟩
-  · cases stored
-    refine ⟨sameLayout, ?_⟩
-    have notPanic : io.is_panic address = false := by
-      cases hp : io.is_panic address <;> simp_all
-    have outputRange : layout.output_start.toNat ≤ address ∧
-        address < layout.termination.toNat := by
-      simpa [JoltDevice.is_output, sameLayout] using isOutput
-    have beforePanic : address < layout.panic.toNat := by
-      have panicRange : ¬ (layout.panic.toNat ≤ address ∧
-          address < layout.termination.toNat) := by
-        simpa [JoltDevice.is_panic, sameLayout] using notPanic
-      omega
-    simp only [Array.size_set!, Array.size_append, Array.size_replicate]
-    rw [sameLayout]
-    omega
+/-- Compose unchanged MMU setup across fragments.
+For example, a load followed by an arithmetic row keeps the same code guard. -/
+theorem SetupSame.trans {s t u : SailJoltState} (hst : SetupSame s t)
+    (htu : SetupSame t u) : SetupSame s u :=
+  ⟨htu.1.trans hst.1, htu.2.trans hst.2⟩
 
-/-- Writing an integer or virtual register leaves the Jolt device unchanged,
-so it preserves every reflexive relation on devices.
-For example, writing x5 preserves equality of the input arrays. -/
-theorem writeDst_rule_of_device_relation
-    (relation : JoltDevice → JoltDevice → Prop)
-    (refl : ∀ io, relation io io)
-    (dst : Dst) (value : BitVec 64) :
-    StatePreservation.Preserves
-      (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
-      (writeDst dst value) :=
-  InstructionFrame.writeDst_rule _ (fun _ _ => refl _) (fun _ _ _ => refl _) dst value
+private theorem setup_refl (s : SailJoltState) : SetupSame s s := ⟨rfl, rfl⟩
 
-/-- Shared instruction frame for any reflexive, transitive device relation
-whose byte-store obligations are supplied for SD and the floor-addressed
-VirtualStoreB, VirtualStoreH, and VirtualStoreW rows.
-For example, equality of device inputs is preserved even when an instruction
-updates RAM, writes an output byte, or consumes the advice tape.
-See the tracer's `SD::exec` in `tracer/src/instruction/sd.rs` and `store` in
-`tracer/src/instruction/floor_access.rs`. -/
-theorem execInstr_rule_of_device_relation_for_store
-    (relation : JoltDevice → JoltDevice → Prop)
-    (refl : ∀ io, relation io io)
-    (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (instr : Instr)
-    (store : ∀ base source imm, instr = .SD base source imm →
-      ∀ io io' address value,
-        JoltDevice.store? io address value = some io' → relation io io')
-    (floorStore : ∀ base source imm fault,
-      (instr = .VirtualStoreB base source imm fault ∨
-       instr = .VirtualStoreH base source imm fault ∨
-       instr = .VirtualStoreW base source imm fault) →
-      ∀ io io' address value,
-        JoltDevice.store? io address value = some io' → relation io io') :
-    StatePreservation.Preserves
-      (fun s t => relation s.jolt_device t.jolt_device) (execInstr instr) :=
-  InstructionFrame.execInstr_rule_of_store
-    (relation := fun s t => relation s.jolt_device t.jolt_device)
-    { refl := fun _ => refl _
-      trans := fun _ _ _ first second => trans _ _ _ first second
-      sail := fun _ _ => refl _
-      vreg := fun _ _ _ => refl _
-      append := fun _ _ => refl _ }
-    instr (fun base source imm isStore _ _ _ _ stored =>
-      store base source imm isStore _ _ _ _ stored)
-    (fun base source imm fault isStore _ _ _ _ stored =>
-      floorStore base source imm fault isStore _ _ _ _ stored)
-    (fun _ _ _ _ _ _ _ => refl _)
+private theorem setup_trans (s t u : SailJoltState) (h : SetupSame s t) (h' : SetupSame t u) :
+    SetupSame s u := h.trans h'
 
-/-- Shared instruction frame for any reflexive, transitive device relation
-that a successful device byte store preserves.
-For example, equality of device inputs is preserved even when an instruction
-updates RAM, writes an output byte, or consumes the advice tape. -/
-theorem execInstr_rule_of_device_relation
-    (relation : JoltDevice → JoltDevice → Prop)
-    (refl : ∀ io, relation io io)
-    (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (store : ∀ io io' address value,
-      JoltDevice.store? io address value = some io' → relation io io')
-    (instr : Instr) :
-    StatePreservation.Preserves
-      (fun s t => relation s.jolt_device t.jolt_device) (execInstr instr) :=
-  execInstr_rule_of_device_relation_for_store relation refl trans instr
-    (fun _ _ _ _ => store) (fun _ _ _ _ _ => store)
+/-- A successful doubleword store changes only memory, so it keeps the static MMU setup.
+For example, a store into an output byte keeps the layout and the code guard. -/
+theorem store_doubleword_setup (address value : BitVec 64) :
+    StatePreservation.Preserves SetupSame (Mmu.store_doubleword address value) := by
+  intro s t v h
+  simp only [Mmu.store_doubleword] at h
+  repeat' split at h
+  all_goals first
+    | (cases h; exact setup_refl _)
+    | (rename_i heq
+       cases h
+       exact InstructionFrame.storeFold_rule_of_step _ value s _
+         (fun _ _ _ _ before stored => setup_trans _ _ _ before
+           (InstructionFrame.storeRaw_rule (relation := SetupSame)
+             (fun _ _ => setup_refl _) (fun _ _ _ _ _ => setup_refl _) _ _ _ _ stored))
+         (some s) (fun s1 hs1 => by cases hs1; exact setup_refl _) _ heq)
+    | cases h
 
-/-- A raw byte store preserves the device setup fields: layout, advice buffers,
-and inputs.
-For example, writing an output byte leaves the input array unchanged. -/
-theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
-    (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device :=
-  InstructionFrame.storeRaw_rule (relation := fun s t => Same s.jolt_device t.jolt_device)
-    (fun _ _ => Same.refl _) (fun _ _ _ _ stored => storeDeviceByte_same _ _ _ _ stored)
-    s s' ea value h
+/-- Every row preserves the static MMU setup, including both halt kinds.
+For example, a panic halt records its kind but keeps the code guard. -/
+theorem execInstr_setup (instr : Instr) :
+    StatePreservation.Preserves SetupSame (execInstr instr) :=
+  InstructionFrame.execInstr_rule
+    { refl := setup_refl
+      trans := setup_trans
+      sail := fun _ _ _ => setup_refl _
+      vreg := fun _ _ _ => setup_refl _
+      store := store_doubleword_setup
+      halt := fun _ _ => setup_refl _
+      append := fun _ _ => setup_refl _ }
+    instr (fun _ _ _ _ _ _ _ => setup_refl _)
 
-/-- Every Jolt ISA instruction preserves the device setup fields: memory layout,
-advice buffers, and inputs.
-For example, a floor-addressed word store preserves the input array; both its
-store obligation and SD's use `storeDeviceByte_same`. -/
-theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) :=
-  execInstr_rule_of_device_relation Same Same.refl
-    (fun _ _ _ first next => first.trans next) storeDeviceByte_same instr
-
-theorem execProgram_rule (program : Program) : Preserves (execProgram program) := by
+/-- Every program preserves the static MMU setup; for example, an AMO prefix. -/
+theorem execProgram_setup (program : Program) :
+    StatePreservation.Preserves SetupSame (execProgram program) := by
   induction program with
-  | done result =>
-    exact StatePreservation.pure_rule (fun (s : SailJoltState) => Same.refl s.jolt_device) _
+  | done result => exact StatePreservation.pure_rule setup_refl _
   | instr instr rest ih =>
     simp only [execProgram]
-    refine StatePreservation.bind_rule
-      (relation := fun (s t : SailJoltState) => Same s.jolt_device t.jolt_device)
-      (fun _ _ _ first next => first.trans next)
-      (execInstr_rule instr) (fun result => ?_)
+    refine StatePreservation.bind_rule setup_trans (execInstr_setup instr) (fun result => ?_)
     split
     · exact ih
-    · exact StatePreservation.pure_rule
-        (fun (s : SailJoltState) => Same.refl s.jolt_device) _
+    · exact StatePreservation.pure_rule setup_refl _
 
--- A step that runs any tail program after it keeps the memory layout.
+/-- Every row preserves the device layout; for example, an output store. -/
+theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) :=
+  fun _ _ _ h => ⟨(execInstr_setup instr _ _ _ h).1⟩
+
+/-- Every row program preserves the device layout; for example, a narrow store. -/
+theorem execProgram_rule (program : Program) : Preserves (execProgram program) :=
+  fun _ _ _ h => ⟨(execProgram_setup program _ _ _ h).1⟩
+
+/-- Recover the code guard after a successful expansion; for example, an AMO prefix. -/
+theorem code_guard_of_program_run {program : Program} {s t : SailJoltState} {r : ExecutionResult}
+    (h : execProgram program s = .ok r t) : t.code_guard = s.code_guard :=
+  (execProgram_setup program s t r h).2
+
+/-- Recover static MMU setup from a prefix whose continuation can be chosen freely.
+For example, choosing a successful empty tail certifies a narrow-store prefix.
+Based on Quang Dao's version in PR #73. -/
+theorem setup_of_tail_run {step : Program → Program} {s t : SailJoltState}
+    (h : ∀ tail, (execProgram (step tail)).run s = (execProgram tail).run t) :
+    SetupSame s t :=
+  execProgram_setup _ s t _ (h (.done RETIRE_SUCCESS))
+
+/-- Recover layout agreement from a program run; for example, an AMO prefix. -/
 theorem layout_of_tail_run {step : Program → Program} {s t : SailJoltState}
     (h : ∀ tail, (execProgram (step tail)).run s = (execProgram tail).run t) :
     t.jolt_device.memory_layout = s.jolt_device.memory_layout :=
-  (execProgram_rule _ s t _ (h (.done RETIRE_SUCCESS))).1
+  (execProgram_rule _ s t _ (h (.done RETIRE_SUCCESS))).layout
 
--- A single instruction keeps the memory layout.
+/-- Recover layout agreement from a row run; for example, a load. -/
 theorem layout_of_instr_run {instr : Instr} {s t : SailJoltState} {r : ExecutionResult}
     (h : (execInstr instr).run s = .ok r t) :
     t.jolt_device.memory_layout = s.jolt_device.memory_layout :=
-  (execInstr_rule instr s t r h).1
+  (execInstr_rule instr s t r h).layout
 
 end JoltIOSetupFrame

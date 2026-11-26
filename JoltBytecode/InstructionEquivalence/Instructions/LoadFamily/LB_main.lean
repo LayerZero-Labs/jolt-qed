@@ -97,7 +97,7 @@ theorem lb_ld_run
   · exact h.dwordWindowFacts.load_pmp
   · exact h.dwordWindowFacts.read_mmio
   · exact hWritable
-  · exact ⟨h.jolt_ram.below_heap_end⟩
+  · exact ⟨h.jolt_ram.below_backing_end⟩
 
 /-- The second LB instruction writes the byte-window mask to its chosen scratch
 virtual register. -/

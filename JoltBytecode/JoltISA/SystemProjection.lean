@@ -15,6 +15,9 @@ noncomputable section
 
 namespace System
 
+def reservationWidth (w d : BitVec 64) : Int :=
+  if w = 0#64 then 0 else if d = w then 8 else 4
+
 /-- As the control status registers are present in both the virtual register 
 file and the sail hash map.
 Simply killing of vregs does not suffice for equivalence. 
@@ -27,13 +30,17 @@ For now this works.
 def systemProject (js : SailJoltState) : SailState :=
   { js.sail with
     regs :=
-      ((((((js.sail.regs
-        |>.insert Register.mtvec (js.vregs JoltISA.trapHandlerVReg))
-        |>.insert Register.mscratch (js.vregs JoltISA.mscratchVReg))
-        |>.insert Register.mepc (js.vregs JoltISA.mepcVReg))
-        |>.insert Register.mcause (js.vregs JoltISA.mcauseVReg))
-        |>.insert Register.mtval (js.vregs JoltISA.mtvalVReg))
-        |>.insert Register.mstatus (js.vregs JoltISA.mstatusVReg)) }
+      js.sail.regs
+        |>.insert Register.mtvec (js.vregs JoltISA.trapHandlerVReg)
+        |>.insert Register.mscratch (js.vregs JoltISA.mscratchVReg)
+        |>.insert Register.mepc (js.vregs JoltISA.mepcVReg)
+        |>.insert Register.mcause (js.vregs JoltISA.mcauseVReg)
+        |>.insert Register.mtval (js.vregs JoltISA.mtvalVReg)
+        |>.insert Register.mstatus (js.vregs JoltISA.mstatusVReg ||| 0x1800#64)
+        |>.insert Register.reservation_valid (js.vregs JoltISA.reservationWReg != 0#64)
+        |>.insert Register.reservation_addr (js.vregs JoltISA.reservationWReg)
+        |>.insert Register.reservation_width
+          (reservationWidth (js.vregs JoltISA.reservationWReg) (js.vregs JoltISA.reservationDReg)) }
 
 /-- Given the post execution result of Jolt computation, 
 Get the post execution result of the Sail part of that computation.

@@ -28,13 +28,26 @@ theorem effective_address_ok_of_load {js : SailJoltState} {addr : BitVec 64}
     (hram : RAM_START_ADDRESS ≤ addr.toNat) (h : Assumptions.JoltRamLoadOk addr js) :
     effective_address_ok js.jolt_device addr.toNat false = true := by
   have hlt : ¬ addr.toNat < RAM_START_ADDRESS := by omega
-  simp [effective_address_ok, hlt, h.below_heap_end]
+  simp [effective_address_ok, hlt, h.below_backing_end]
 
-theorem effective_address_ok_of_store {js : SailJoltState} {addr : BitVec 64}
-    (hram : RAM_START_ADDRESS ≤ addr.toNat) (h : Assumptions.JoltRamStoreOk addr js) :
+theorem effective_address_ok_of_store {js : SailJoltState} {addr value : BitVec 64} {width : Nat}
+    (hram : RAM_START_ADDRESS ≤ addr.toNat) (h : Assumptions.JoltRamStoreOk addr js value width) :
     effective_address_ok js.jolt_device addr.toNat true = true := by
   have hlt : ¬ addr.toNat < RAM_START_ADDRESS := by omega
-  simp [effective_address_ok, hlt, h.below_heap_end, h.outside_canary]
+  simp [effective_address_ok, hlt, h.below_backing_end]
+
+/-- The protected-store check reads only the layout, the code guard and memory.
+For example, a register write between a load and a store does not change it.
+Based on Quang Dao's `protected_store_ok_congr` in PR #73. -/
+theorem assert_write_protected_store_congr {s t : SailJoltState} (address : Nat)
+    (value : BitVec 64) (width : Nat)
+    (hlayout : t.jolt_device.memory_layout = s.jolt_device.memory_layout)
+    (hcode : t.code_guard = s.code_guard) (hmem : t.sail.mem = s.sail.mem) :
+    assert_write_protected_store t address value width =
+      assert_write_protected_store s address value width := by
+  simp only [assert_write_protected_store, ram_doubleword, ram_byte, JoltDevice.is_input,
+    JoltDevice.is_trusted_advice, JoltDevice.is_untrusted_advice, hlayout, hcode, hmem]
+  rfl
 
 -- With the byte present, the zero-filled direct read and Sail's lookup agree.
 theorem ram_byte_eq_loaded_byte_at (s : SailState) (v : BitVec 64)
@@ -70,12 +83,13 @@ theorem load_doubleword_ram (js : SailJoltState) (addr : BitVec 64)
 -- Jolt's 64-bit RAM write when Rust's checks pass.
 theorem store_doubleword_ram (js : SailJoltState) (addr value : BitVec 64)
     (halign : addr &&& 7 = 0) (hram : RAM_START_ADDRESS ≤ addr.toNat)
-    (hlegal : effective_address_ok js.jolt_device addr.toNat true = true) :
+    (hlegal : effective_address_ok js.jolt_device addr.toNat true = true)
+    (hprotected : assert_write_protected_store js addr.toNat value 8 = true) :
     store_doubleword addr value js =
       .ok (.Ok true)
         { js with sail := { js.sail with mem := write_ram_doubleword js.sail.mem addr.toNat value } } := by
   have hmod := toNat_mod_eight_of_align halign
-  simp [store_doubleword, hmod, hram, hlegal]
+  simp [store_doubleword, hmod, hram, hlegal, hprotected]
 
 -- A one-byte load changes no state.
 theorem load_state {address : BitVec 64} {s t : SailJoltState}
@@ -102,7 +116,7 @@ theorem store_raw_regs {s s' : SailJoltState} {ea : Nat} {v : BitVec 8}
   all_goals first
     | (cases h; exact ⟨rfl, rfl⟩)
     | cases h
-    | (cases hst : s.jolt_device.store? ea v <;> simp [hst] at h; cases h; exact ⟨rfl, rfl⟩)
+    | (cases hst : s.jolt_device.store? s.sail.mem ea v <;> simp [hst] at h; cases h; exact ⟨rfl, rfl⟩)
 
 theorem store_bytes_regs (ea : Nat) (value : BitVec 64) :
     ∀ (l : List Nat) (o : Option SailJoltState) (s0 s' : SailJoltState),
@@ -141,3 +155,16 @@ theorem store_doubleword_regs {address value : BitVec 64} {s t : SailJoltState}
     | cases h
 
 end JoltISA.Mmu
+
+/-- Transport a store assumption between states with the same layout, code guard and memory.
+For example, a register write before the store keeps the assumption.
+Based on Quang Dao's version in PR #73. -/
+theorem Assumptions.JoltRamStoreOk.transfer {s t : SailJoltState}
+    {addr value : BitVec 64} {width : Nat}
+    (h : Assumptions.JoltRamStoreOk addr s value width)
+    (hlayout : t.jolt_device.memory_layout = s.jolt_device.memory_layout)
+    (hcode : t.code_guard = s.code_guard) (hmem : t.sail.mem = s.sail.mem) :
+    Assumptions.JoltRamStoreOk addr t value width :=
+  ⟨by simpa only [JoltISA.Mmu.ram_backing_end, hlayout] using h.below_backing_end,
+   by rw [JoltISA.Mmu.assert_write_protected_store_congr _ _ _ hlayout hcode hmem]
+      exact h.preserves_protected⟩

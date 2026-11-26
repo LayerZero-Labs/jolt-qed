@@ -82,6 +82,8 @@ inductive Instr where
   | BLTU (lhs rhs : Src) (imm : BitVec 128)
   | BGEU (lhs rhs : Src) (imm : BitVec 128)
   | FENCE
+  | JoltPanic (dst : Dst) (src : Src) (imm : BitVec 12)
+  | JoltSuccess (dst : Dst) (src : Src) (imm : BitVec 12)
   | ADD  (dst : Dst) (lhs rhs : Src)
   | ADDW (dst : Dst) (lhs rhs : Src)
   | SUB  (dst : Dst) (lhs rhs : Src)
@@ -110,6 +112,8 @@ inductive Instr where
   | VirtualROTRI (dst : Dst) (src : Src) (bitmask : Nat)
   | VirtualROTRIW (dst : Dst) (src : Src) (bitmask : Nat)
   | VirtualRev8W (dst : Dst) (src : Src) (imm : BitVec 64 := 0)
+  -- Jolt's VirtualXORROT2 and VirtualXORROT61 are not here: Jolt's Keccak inline
+  -- (`jolt-inlines/keccak256`) needs them, and inlines are out of scope.
   | VirtualXORROT32 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROT24 (dst : Dst) (lhs rhs : Src)
   | VirtualXORROT16 (dst : Dst) (lhs rhs : Src)
@@ -479,6 +483,7 @@ def Instr.destination? : Instr → Option Dst
       some dst
   | .LD _ dst _ _ | .VirtualLoadB _ dst _ _ _ | .VirtualLoadH _ dst _ _ _
   | .VirtualLoadW _ dst _ _ _ => some dst
+  | .JoltPanic dst _ _ | .JoltSuccess dst _ _ => some dst
   | .BEQ _ _ _ | .BNE _ _ _ | .BLT _ _ _ | .BGE _ _ _ | .BLTU _ _ _
   | .BGEU _ _ _ | .FENCE | .VirtualHostIO | .SD _ _ _ | .VirtualAssertEQ _ _ _
   | .VirtualStoreB _ _ _ _ | .VirtualStoreH _ _ _ _ | .VirtualStoreW _ _ _ _
@@ -495,6 +500,14 @@ def Instr.rewriteNative (instruction : Instr) : Instr :=
   | .LD fault dst base imm => .LD fault (sideEffectingDst dst) base imm
   | .VirtualAdviceLoad dst byteCount =>
       .VirtualAdviceLoad (sideEffectingDst dst) byteCount
+  | .VirtualLoadB faultClass dst base imm fault =>
+      .VirtualLoadB faultClass (sideEffectingDst dst) base imm fault
+  | .VirtualLoadH faultClass dst base imm fault =>
+      .VirtualLoadH faultClass (sideEffectingDst dst) base imm fault
+  | .VirtualLoadW faultClass dst base imm fault =>
+      .VirtualLoadW faultClass (sideEffectingDst dst) base imm fault
+  | .JoltPanic dst src imm => .JoltPanic (sideEffectingDst dst) src imm
+  | .JoltSuccess dst src imm => .JoltSuccess (sideEffectingDst dst) src imm
   | instruction =>
       match instruction.destination? with
       | some (.xreg rd) =>

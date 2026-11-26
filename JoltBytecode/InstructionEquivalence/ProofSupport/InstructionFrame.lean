@@ -1,15 +1,22 @@
 import JoltBytecode.JoltISA.Semantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 import Batteries.Data.Array.Lemmas
+import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 
 open LeanRV64D
 
 /-! A shared frame for Jolt instructions, parameterized by a state relation.
-The state-changing primitives are Sail updates, virtual-register writes, device
-stores, tape appends, and tape reads.
-See `jolt/tracer/src/emulator/mmu.rs:644-667`,
-`jolt/tracer/src/emulator/cpu.rs:45-60,494-515,984-1018`, and
-`jolt/tracer/src/instruction/virtual_advice_load.rs:20-27` at 5def437f. -/
+Sail register effects must preserve memory, and store effects must satisfy the
+checked MMU's doubleword-store relation. This supports both static setup and
+protected shared-memory invariants at Jolt `504dd78a2`.
+See `tracer/src/emulator/mmu.rs` (`store_raw`, `assert_write_protected_store`)
+and `tracer/src/emulator/cpu.rs` (`Cpu::halt`, `Cpu::tick`).
+A halt changes only `halted` (and the link register and PC, which are Sail and
+virtual-register effects): `Cpu::halt` at `tracer/src/emulator/cpu.rs:549-555` sets
+`self.halted`, and Jolt copies the halt kind into the device's `panic` flag only at
+the end of the run, in `Emulator::take_jolt_device` (`tracer/src/emulator/mod.rs:137-146`).
+Based on Quang Dao's version in PR #73. -/
 
 set_option autoImplicit false
 
@@ -18,57 +25,57 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 namespace InstructionFrame
 
 /-- Primitive preservation obligations for a reflexive, transitive state relation.
-`sail` permits replacing the Sail component, `vreg` permits a virtual-register
-write, `store` permits a successful device byte store, and `append` permits adding
+`sail` permits memory-preserving Sail effects, `vreg` permits a virtual-register
+write, `store` requires checked MMU doubleword stores to preserve the relation, and `append` permits adding
 bytes to the advice tape without moving its cursor.
-For example, preserving device inputs and allowing only tape growth both fit.
+For example, preserving protected shared-memory bytes fits these rules.
 Tape reads are supplied separately for the instruction being executed. -/
 structure Rules (relation : SailJoltState → SailJoltState → Prop) : Prop where
   refl : ∀ state, relation state state
   trans : ∀ before middle after, relation before middle → relation middle after →
     relation before after
-  sail : ∀ state after, relation state { state with sail := after }
+  sail : ∀ (state : SailJoltState) (after : SailState), after.mem = state.sail.mem → relation state { state with sail := after }
   vreg : ∀ state vr value, relation state
     { state with vregs := fun r => if r = vr then value else state.vregs r }
-  store : ∀ state device address value,
-    JoltDevice.store? state.jolt_device address value = some device →
-    relation state { state with jolt_device := device }
+  store : ∀ address value,
+    StatePreservation.Preserves relation (Mmu.store_doubleword address value)
+  halt : ∀ state kind, relation state { state with halted := some kind }
   append : ∀ state bytes, relation state
     { state with adviceTape :=
       { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }
 
 /-- Preservation obligations for primitives other than device stores and tape reads.
-For example, equality of the complete device permits Sail updates, virtual-register
-writes, and tape appends, while its store obligation must depend on the instruction.
-See `jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f. -/
+For example, preserving protected shared-memory bytes permits register effects
+and tape appends; checked stores provide a separate obligation.
+See `tracer/src/emulator/cpu.rs` (`Cpu::tick`) at `504dd78a2`. -/
 structure NonStoreRules (relation : SailJoltState → SailJoltState → Prop) : Prop where
   refl : ∀ state, relation state state
   trans : ∀ before middle after, relation before middle → relation middle after →
     relation before after
-  sail : ∀ state after, relation state { state with sail := after }
+  sail : ∀ (state : SailJoltState) (after : SailState), after.mem = state.sail.mem → relation state { state with sail := after }
   vreg : ∀ state vr value, relation state
     { state with vregs := fun r => if r = vr then value else state.vregs r }
+  halt : ∀ state kind, relation state { state with halted := some kind }
   append : ∀ state bytes, relation state
     { state with adviceTape :=
       { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } }
 
 private theorem Rules.nonStore {relation : SailJoltState → SailJoltState → Prop}
     (rules : Rules relation) : NonStoreRules relation :=
-  ⟨rules.refl, rules.trans, rules.sail, rules.vreg, rules.append⟩
+  ⟨rules.refl, rules.trans, rules.sail, rules.vreg, rules.halt, rules.append⟩
 
 private theorem NonStoreRules.withStore {relation : SailJoltState → SailJoltState → Prop}
     (rules : NonStoreRules relation)
-    (store : ∀ state device address value,
-      JoltDevice.store? state.jolt_device address value = some device →
-      relation state { state with jolt_device := device }) : Rules relation :=
-  ⟨rules.refl, rules.trans, rules.sail, rules.vreg, store, rules.append⟩
+    (store : ∀ address value,
+      StatePreservation.Preserves relation (Mmu.store_doubleword address value)) : Rules relation :=
+  ⟨rules.refl, rules.trans, rules.sail, rules.vreg, store, rules.halt, rules.append⟩
 
 /-- Writing a destination preserves any relation that permits Sail replacement
 and virtual-register writes.
-For example, writing register x5 or virtual register 40 preserves device inputs
+For example, writing register x5 or virtual register 40 preserves input memory
 and leaves the advice tape unchanged. -/
 theorem writeDst_rule (relation : SailJoltState → SailJoltState → Prop)
-    (sail : ∀ state after, relation state { state with sail := after })
+    (sail : ∀ (state : SailJoltState) (after : SailState), after.mem = state.sail.mem → relation state { state with sail := after })
     (vreg : ∀ state vr value, relation state
       { state with vregs := fun r => if r = vr then value else state.vregs r })
     (dst : Dst) (value : BitVec 64) :
@@ -82,15 +89,110 @@ theorem writeDst_rule (relation : SailJoltState → SailJoltState → Prop)
     · cases runs
       exact vreg _ _ _
   | xreg rd =>
-    exact StatePreservation.liftSail_rule (sailRelation := fun _ _ => True)
-      (fun state after _ => sail state after) (fun _ _ _ _ => True.intro)
+    apply StatePreservation.liftSail_rule (sailRelation := fun s t => t.mem = s.mem)
+      (fun state after h => sail state after h)
+    intro s t result runs
+    cases result
+    rw [wX_eq_modify_regs rd value s t runs]
 
 variable {relation : SailJoltState → SailJoltState → Prop}
 
-private theorem lift_rule (rules : NonStoreRules relation) {α : Type} (step : SailM α) :
-    StatePreservation.Preserves relation (liftSail step) :=
-  StatePreservation.liftSail_rule (sailRelation := fun _ _ => True)
-    (fun state after _ => rules.sail state after) (fun _ _ _ _ => True.intro)
+private def SailMemory {α : Type} (step : SailM α) : Prop :=
+  StatePreservation.Preserves (fun s t => t.mem = s.mem) step
+
+private theorem mem_pure {α : Type} (a : α) : SailMemory (pure a) :=
+  StatePreservation.pure_rule
+    (relation := fun (s t : SailState) => t.mem = s.mem) (fun _ => rfl) _
+
+private theorem mem_bind {α β : Type} {m : SailM α} {f : α → SailM β}
+    (hm : SailMemory m) (hf : ∀ a, SailMemory (f a)) : SailMemory (m >>= f) :=
+  StatePreservation.bind_rule (fun _ _ _ h h' => h'.trans h) hm hf
+
+private theorem mem_read (r : Register) : SailMemory (LeanRV64D.readReg r) := by
+  intro s t a h
+  rw [readReg_pure r s a t h]
+
+private theorem mem_write (r : Register) (v : RegisterType r) :
+    SailMemory (LeanRV64D.writeReg r v) := by
+  intro s t a h
+  simp only [LeanRV64D.writeReg, Sail.ConcurrencyInterfaceV1.PreSail.writeReg,
+    modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet] at h
+  cases h
+  rfl
+
+private theorem mem_and {m n : SailM Bool} (hm : SailMemory m) (hn : SailMemory n) :
+    SailMemory (m <&&> n) := by
+  unfold _root_.andM
+  refine mem_bind hm (fun b => ?_)
+  cases b
+  · exact mem_pure _
+  · exact hn
+
+private theorem mem_liftE {ε α : Type} {m : SailM α} (hm : SailMemory m) :
+    SailMemory (ExceptT.run (monadLift m : SailME ε α)) := by
+  intro s t a h
+  simp only [ExceptT.run, monadLift, MonadLift.monadLift, ExceptT.lift,
+    ExceptT.mk, Functor.map, EStateM.map] at h
+  cases hr : m s with
+  | error e u => rw [hr] at h; cases h
+  | ok b u =>
+    rw [hr] at h
+    cases h
+    exact hm s _ b hr
+
+private theorem mem_bindE {ε α β : Type} {m : SailME ε α} {f : α → SailME ε β}
+    (hm : SailMemory (ExceptT.run m)) (hf : ∀ a, SailMemory (ExceptT.run (f a))) :
+    SailMemory (ExceptT.run (m >>= f)) := by
+  simp only [bind, ExceptT.bind, ExceptT.run, ExceptT.mk, ExceptT.bindCont]
+  refine mem_bind hm (fun a => ?_)
+  cases a
+  · exact mem_pure _
+  · exact hf _
+
+private theorem mem_andE {ε : Type} {m n : SailME ε Bool}
+    (hm : SailMemory (ExceptT.run m)) (hn : SailMemory (ExceptT.run n)) :
+    SailMemory (ExceptT.run (m <&&> n)) := by
+  unfold _root_.andM
+  refine mem_bindE hm (fun b => ?_)
+  cases b
+  · exact mem_pure _
+  · exact hn
+
+private theorem mem_runE {ε : Type} {m : SailME ε ε}
+    (hm : SailMemory (ExceptT.run m)) : SailMemory (SailME.run m) := by
+  unfold SailME.run PreSailME.run
+  refine mem_bind hm (fun a => ?_)
+  cases a with
+  | ok value => exact mem_pure _
+  | error e =>
+    cases e with
+    | inl e => exact StatePreservation.throw_rule _ _
+    | inr value => exact mem_pure _
+
+private theorem mem_jump (target : BitVec 64) : SailMemory (jump_to target) := by
+  have henabled : SailMemory (currentlyEnabled extension.Ext_Zca) := by
+    simp only [currentlyEnabled]
+    exact mem_and (mem_pure _) (mem_bind
+      (mem_and (mem_pure _) (mem_bind (mem_read _) (fun _ => mem_pure _)))
+      (fun _ => mem_pure _))
+  have hassert (b : Bool) (msg : String) : SailMemory (LeanRV64D.sail_assert b msg) := by
+    cases b
+    · exact StatePreservation.throw_rule _ _
+    · exact mem_pure _
+  unfold jump_to ext_control_check_pc
+  apply mem_runE
+  refine mem_bindE (mem_liftE (hassert _ _)) (fun _ => ?_)
+  refine mem_bindE (mem_andE (mem_pure _)
+    (mem_bindE (mem_liftE henabled) (fun _ => mem_pure _))) (fun b => ?_)
+  cases b
+  · refine mem_bindE (mem_liftE ?_) (fun _ => mem_pure _)
+    unfold set_next_pc
+    exact mem_bind (mem_write _ _) (fun _ => mem_pure _)
+  · exact mem_pure _
+
+private theorem lift_rule (rules : NonStoreRules relation) {α : Type} (step : SailM α)
+    (hmem : SailMemory step) : StatePreservation.Preserves relation (liftSail step) :=
+  StatePreservation.liftSail_rule rules.sail hmem
 
 private theorem readSrc_rule (rules : NonStoreRules relation) (src : Src) :
     StatePreservation.Preserves relation (readSrc src) := by
@@ -101,7 +203,10 @@ private theorem readSrc_rule (rules : NonStoreRules relation) (src : Src) :
       MonadStateOf.get, EStateM.get, pure, EStateM.pure] at h
     cases h
     exact rules.refl _
-  | xreg rs => exact lift_rule rules _
+  | xreg rs =>
+    apply lift_rule rules _
+    intro s t value runs
+    rw [rX_bits_pure rs s value t runs]
 
 /-- A successful raw byte store preserves the relation using the Sail rule for
 RAM and the device-store rule for I/O.
@@ -109,8 +214,8 @@ For example, storing one byte to RAM changes only Sail memory. -/
 theorem storeRaw_rule
     (sail : ∀ state after, relation state { state with sail := after })
     (store : ∀ state device address value,
-      JoltDevice.store? state.jolt_device address value = some device →
-      relation state { state with jolt_device := device })
+      JoltDevice.store? state.jolt_device state.sail.mem address value = some device →
+      relation state { state with sail := { state.sail with mem := device } })
     (s s' : SailJoltState)
     (address : Nat) (value : BitVec 8)
     (stored : Mmu.store_raw? s address value = some s') : relation s s' := by
@@ -119,17 +224,17 @@ theorem storeRaw_rule
   all_goals first
     | (cases stored; exact sail _ _)
     | cases stored
-    | (cases deviceStore : s.jolt_device.store? address value with
+    | (cases deviceStore : s.jolt_device.store? s.sail.mem address value with
         | none => simp [deviceStore] at stored
         | some device =>
           simp only [deviceStore, Option.map_some] at stored
           cases stored
-          exact store _ _ _ _ deviceStore)
+          exact sail _ _)
 
 /-- A byte-store fold preserves a relation from its original state when each
 listed offset preserves that relation for every reachable intermediate state.
-For example, eight stores avoiding the panic byte preserve a false panic flag.
-See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at 5def437f. -/
+For example, eight accepted byte stores preserve the protected canary bytes.
+See `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at `504dd78a2`. -/
 theorem storeFold_rule_of_step (address : Nat) (value : BitVec 64)
     (s0 : SailJoltState) (offsets : List Nat)
     (step : ∀ k ∈ offsets, ∀ s s', relation s0 s →
@@ -150,18 +255,6 @@ theorem storeFold_rule_of_step (address : Nat) (value : BitVec 64)
       rw [hst] at hs
       exact step k List.mem_cons_self e s (hstart e hst) hs
 
-private theorem storeFold_rule (rules : Rules relation) (address : Nat)
-    (value : BitVec 64) (s0 : SailJoltState) :
-    ∀ (offsets : List Nat) (start : Option SailJoltState),
-      (∀ s, start = some s → relation s0 s) →
-      ∀ s', offsets.foldl (fun current k => current.bind fun s =>
-        Mmu.store_raw? s (address + k) (value.extractLsb' (8 * k) 8)) start = some s' →
-        relation s0 s' := by
-  intro offsets start hstart s' stored
-  exact storeFold_rule_of_step address value s0 offsets
-    (fun _ _ _ _ before stored => rules.trans _ _ _ before
-      (storeRaw_rule rules.sail rules.store _ _ _ _ stored)) start hstart s' stored
-
 private theorem loadDoubleword_rule (rules : NonStoreRules relation) (address : BitVec 64) :
     StatePreservation.Preserves relation (Mmu.load_doubleword address) := by
   intro s t v h
@@ -170,62 +263,43 @@ private theorem loadDoubleword_rule (rules : NonStoreRules relation) (address : 
   all_goals first | (cases h; exact rules.refl _) | cases h
 
 private theorem storeDoubleword_rule (rules : Rules relation) (address value : BitVec 64) :
-    StatePreservation.Preserves relation (Mmu.store_doubleword address value) := by
-  intro s t v h
-  simp only [Mmu.store_doubleword] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; exact rules.sail _ _)
-    | (rename_i heq
-       cases h
-       exact storeFold_rule rules _ value s _ (some s)
-         (fun s1 hs1 => by cases hs1; exact rules.refl _) _ heq)
-    | cases h
+    StatePreservation.Preserves relation (Mmu.store_doubleword address value) :=
+  rules.store address value
 
-private theorem load_rule (rules : NonStoreRules relation) (address : BitVec 64) :
-    StatePreservation.Preserves relation (Mmu.load address) := by
-  intro s t v h
-  simp only [Mmu.load] at h
-  repeat' split at h
-  all_goals first | (cases h; exact rules.refl _) | cases h
-
-private theorem readHostBytes_rule (rules : NonStoreRules relation)
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    StatePreservation.Preserves relation
-      (readHostBytes Mmu.load overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact StatePreservation.pure_rule rules.refl _
-  | succ n ih =>
-    dsimp only [readHostBytes]
-    refine StatePreservation.bind_rule rules.trans (load_rule rules _) (fun result => ?_)
-    cases result with
-    | Err e => exact StatePreservation.pure_rule rules.refl _
-    | Ok byte =>
-      split_ifs
-      · exact StatePreservation.bind_rule rules.trans
-          (StatePreservation.throw_rule relation _) (fun _ => ih _ _)
-      · exact StatePreservation.bind_rule rules.trans
-          (StatePreservation.pure_rule rules.refl _) (fun _ => ih _ _)
+/-- Every host call retires successfully, and its only state change is an
+append to the advice tape.
+For example, a rejected advice write or any print returns the state unchanged,
+and an accepted advice write appends its bytes without moving the read cursor.
+Based on Quang Dao's `execHostIO_result` in PR #73. -/
+theorem execHostIO_result (state : SailJoltState) :
+    execHostIO state = .ok RETIRE_SUCCESS state ∨
+      ∃ bytes, execHostIO state = .ok RETIRE_SUCCESS
+        { state with adviceTape :=
+            { state.adviceTape with bytes := state.adviceTape.bytes ++ bytes } } := by
+  simp only [execHostIO, execHostIOWith, get, getThe, MonadStateOf.get, EStateM.get,
+    bind, EStateM.bind, pure, modify, modifyGet, MonadStateOf.modifyGet]
+  by_cases hadvice : (sourceValue (.xreg (.Regidx 10)) state).setWidth 32 = hostAdviceWriteCall
+  · rw [ite_eq_left hadvice]
+    cases readHostBytes (Mmu.load? state) (sourceValue (.xreg (.Regidx 11)) state).toNat
+        (sourceValue (.xreg (.Regidx 12)) state).toNat (2 ^ 64 - 1) #[] with
+    | none => exact .inl rfl
+    | some bytes => exact .inr ⟨bytes, rfl⟩
+  · rw [ite_eq_right hadvice]
+    simp only [ite_self]
+    exact .inl rfl
 
 private theorem execHostIO_rule (rules : NonStoreRules relation) :
     StatePreservation.Preserves relation execHostIO := by
-  unfold execHostIO execHostIOWith
-  refine StatePreservation.bind_rule rules.trans
-    (StatePreservation.get_rule rules.refl) (fun config => ?_)
-  dsimp only
-  split
-  · exact StatePreservation.pure_rule rules.refl _
-  · refine StatePreservation.bind_rule rules.trans (readSrc_rule rules _) (fun callId => ?_)
-    preservation_auto [readHostBytes_rule rules _ _ _ _ _, readSrc_rule rules _,
-      StatePreservation.pure_rule rules.refl _, StatePreservation.throw_rule relation _,
-      StatePreservation.modify_rule _ (fun state => rules.append state _)]
-      using (StatePreservation.bind_rule rules.trans)
+  intro before after value runs
+  rcases execHostIO_result before with result | ⟨bytes, result⟩ <;>
+    rw [result] at runs <;> cases runs
+  · exact rules.refl _
+  · exact rules.append _ _
 
 /-- Every successful instruction preserves a relation satisfying the non-store
-primitive rules, its tape-read obligation, and byte-store obligations for SD and
+primitive rules, its tape-read obligation, and checked-store obligations for SD and
 the floor-addressed VirtualStoreB, VirtualStoreH, and VirtualStoreW rows.
-For example, equality of device inputs is preserved by all four store kinds.
+For example, input memory is preserved by all four store kinds.
 Each uses `Mmu.store_doubleword`, as in the tracer's `SD::exec` in
 `tracer/src/instruction/sd.rs` and `store` in `tracer/src/instruction/floor_access.rs`.
 For example, a device relation permits every tape read; tape growth uses this
@@ -234,16 +308,12 @@ The read obligation describes only consuming the tape; destination writes use
 the same register-write rule as other instructions. -/
 theorem execInstr_rule_of_store (rules : NonStoreRules relation) (instr : Instr)
     (store : ∀ base source imm, instr = .SD base source imm →
-      ∀ state device address value,
-        JoltDevice.store? state.jolt_device address value = some device →
-        relation state { state with jolt_device := device })
+      ∀ address value, StatePreservation.Preserves relation (Mmu.store_doubleword address value))
     (floorStore : ∀ base source imm fault,
       (instr = .VirtualStoreB base source imm fault ∨
        instr = .VirtualStoreH base source imm fault ∨
        instr = .VirtualStoreW base source imm fault) →
-      ∀ state device address value,
-        JoltDevice.store? state.jolt_device address value = some device →
-        relation state { state with jolt_device := device })
+      ∀ address value, StatePreservation.Preserves relation (Mmu.store_doubleword address value))
     (read : ∀ dst width, instr = .VirtualAdviceLoad dst width →
       ∀ state value tape, readAdviceTape state.adviceTape width = some (value, tape) →
         relation state { state with adviceTape := tape }) :
@@ -262,11 +332,24 @@ theorem execInstr_rule_of_store (rules : NonStoreRules relation) (instr : Instr)
           (writeDst_rule relation rules.sail rules.vreg dst value)
           (fun _ => StatePreservation.pure_rule rules.refl _))
           { s with adviceTape := tape } t v h)
-  all_goals simp only [execInstr]
+  case AUIPC dst imm =>
+    simp only [execInstr]
+    refine StatePreservation.bind_rule rules.trans ?_ (fun pc => ?_)
+    · apply lift_rule rules
+      simpa only [get_arch_pc] using mem_read Register.PC
+    · exact StatePreservation.bind_rule rules.trans
+        (writeDst_rule relation rules.sail rules.vreg dst _)
+        (fun _ => StatePreservation.pure_rule rules.refl _)
+  all_goals simp only [execInstr, execHalt]
   all_goals preservation_auto [readSrc_rule rules _,
     writeDst_rule relation rules.sail rules.vreg _ _,
     StatePreservation.pure_rule rules.refl _, StatePreservation.throw_rule relation _,
-    StatePreservation.get_rule rules.refl, lift_rule rules _, loadDoubleword_rule rules _,
+    StatePreservation.get_rule rules.refl,
+    lift_rule rules (LeanRV64D.readReg _) (mem_read _),
+    lift_rule rules (LeanRV64D.writeReg _ _) (mem_write _ _),
+    lift_rule rules (get_arch_pc ()) (mem_read Register.PC),
+    lift_rule rules (jump_to _) (mem_jump _), loadDoubleword_rule rules _,
+    StatePreservation.modify_rule _ (fun state => rules.halt state _),
     storeDoubleword_rule (rules.withStore (store _ _ _ rfl)) _ _, execHostIO_rule rules]
     using (StatePreservation.bind_rule rules.trans)
   all_goals exact storeDoubleword_rule (rules.withStore

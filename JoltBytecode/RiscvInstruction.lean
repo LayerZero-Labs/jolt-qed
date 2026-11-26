@@ -61,6 +61,9 @@ import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sw_main
 import JoltBytecode.InstructionEquivalence.Instructions.System.Mret
 import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrw
 import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrs
+import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrc
+import JoltBytecode.InstructionEquivalence.Instructions.System.CsrImm
+import JoltBytecode.InstructionEquivalence.Instructions.System.LrSc
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Add
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Addi
 import JoltBytecode.InstructionEquivalence.Instructions.Natives.Addiw
@@ -381,11 +384,11 @@ def equivAssumptions : (instr : RiscvInstruction) → SailJoltState → Type
   | .LD _rd rs1 imm, js =>
       LoadProgramEqSailAssumptions imm rs1 js
   | .SB rs2 rs1 imm, js =>
-      StoreProgramEqSailAssumptions imm rs2 rs1 js
+      StoreProgramEqSailAssumptions imm rs2 rs1 js 1
   | .SH rs2 rs1 imm, js =>
-      StoreProgramEqSailAssumptions imm rs2 rs1 js
+      StoreProgramEqSailAssumptions imm rs2 rs1 js 2
   | .SW rs2 rs1 imm, js =>
-      StoreProgramEqSailAssumptions imm rs2 rs1 js
+      StoreProgramEqSailAssumptions imm rs2 rs1 js 4
   | .SD rs2 rs1 imm, js =>
       StoreProgramEqSailAssumptions imm rs2 rs1 js
   | .MUL _rd rs1 rs2, js =>
@@ -432,8 +435,24 @@ def equivAssumptions : (instr : RiscvInstruction) → SailJoltState → Type
       System.CsrrwSystemAssumptions js csr rs1 rd
   | .CSRRS rd csr rs1, js =>
       System.CsrrsSystemAssumptions js csr rs1 rd
+  | .CSRRC rd csr rs1, js =>
+      System.CsrrcSystemAssumptions js csr rs1 rd
+  | .CSRRWI _rd csr _uimm, js =>
+      System.CsrImmSystemAssumptions js csr
+  | .CSRRSI _rd csr _uimm, js =>
+      System.CsrImmSystemAssumptions js csr
+  | .CSRRCI _rd csr _uimm, js =>
+      System.CsrImmSystemAssumptions js csr
   | .MRET, js =>
       System.MretProgramEqSailAssumptions js
+  | .LR_W _rd rs1 _aq _rl, js =>
+      ReservationReadEqAssumptions false rs1 js
+  | .LR_D _rd rs1 _aq _rl, js =>
+      ReservationReadEqAssumptions true rs1 js
+  | .SC_W _rd rs1 rs2 _aq _rl, js =>
+      ReservationStoreEqAssumptions false rs2 rs1 js
+  | .SC_D _rd rs1 rs2 _aq _rl, js =>
+      ReservationStoreEqAssumptions true rs2 rs1 js
   | _, _ => Unit
 
 /-- Given RISC-V instruction and assumptions return the proposition that we prove-/
@@ -568,10 +587,10 @@ def equivalenceStatement :
       remwProgramEqSailStatement rs2 rs1 rd quotientMagnitude js _h
     | .REMUW rd rs1 rs2 quotient =>
       remuwProgramEqSailStatement rs2 rs1 rd quotient js _h
-    | .LR_W _rd _rs1 _aq _rl =>
-      False -- WARNING: unwired instruction equivalence
-    | .SC_W _rd _rs1 _rs2 _aq _rl =>
-      False -- WARNING: unwired instruction equivalence
+    | .LR_W rd rs1 aq rl =>
+      System.lrwProgramEqSailStatement rd rs1 aq rl js _h
+    | .SC_W rd rs1 rs2 aq rl =>
+      System.scwProgramEqSailStatement rd rs1 rs2 aq rl js _h
     | .SB rs2 rs1 imm =>
       SB_main.sbProgramEqSailStatement imm rs2 rs1 js _h
     | .SH rs2 rs1 imm =>
@@ -598,10 +617,10 @@ def equivalenceStatement :
       AtomicFamily.amominuwProgramEqSailStatement rs2 rs1 rd js _h
     | .AMOMAXU_W rd rs1 rs2 _aq _rl =>
       AtomicFamily.amomaxuwProgramEqSailStatement rs2 rs1 rd js _h
-    | .LR_D _rd _rs1 _aq _rl =>
-      False -- WARNING: unwired instruction equivalence
-    | .SC_D _rd _rs1 _rs2 _aq _rl =>
-      False -- WARNING: unwired instruction equivalence
+    | .LR_D rd rs1 aq rl =>
+      System.lrdProgramEqSailStatement rd rs1 aq rl js _h
+    | .SC_D rd rs1 rs2 aq rl =>
+      System.scdProgramEqSailStatement rd rs1 rs2 aq rl js _h
     | .AMOSWAP_D rd rs1 rs2 _aq _rl =>
       AtomicFamily.amoswapdProgramEqSailStatement rs2 rs1 rd js _h
     | .AMOADD_D rd rs1 rs2 _aq _rl =>
@@ -624,6 +643,14 @@ def equivalenceStatement :
       System.csrrwProgramEqSailStatement js csr rs1 rd _h
     | .CSRRS rd csr rs1 =>
       System.csrrsProgramEqSailStatement js csr rs1 rd _h
+    | .CSRRC rd csr rs1 =>
+      System.csrrcProgramEqSailStatement js csr rs1 rd _h
+    | .CSRRWI rd csr uimm =>
+      System.csrrwiProgramEqSailStatement js csr uimm rd _h
+    | .CSRRSI rd csr uimm =>
+      System.csrrsiProgramEqSailStatement js csr uimm rd _h
+    | .CSRRCI rd csr uimm =>
+      System.csrrciProgramEqSailStatement js csr uimm rd _h
     | .MRET =>
       System.mretProgramEqSailStatement js _h
 
@@ -803,6 +830,14 @@ theorem equivalenceStatement_holds :
       System.csrrwProgram_eq_sail_projected js csr rs1 rd h
   | .CSRRS rd csr rs1, js, h =>
       System.csrrsProgram_eq_sail_projected js csr rs1 rd h
+  | .CSRRC rd csr rs1, js, h =>
+      System.csrrcProgram_eq_sail_projected js csr rs1 rd h
+  | .CSRRWI rd csr uimm, js, h =>
+      System.csrrwiProgram_eq_sail_projected js csr uimm rd h
+  | .CSRRSI rd csr uimm, js, h =>
+      System.csrrsiProgram_eq_sail_projected js csr uimm rd h
+  | .CSRRCI rd csr uimm, js, h =>
+      System.csrrciProgram_eq_sail_projected js csr uimm rd h
   -- Jolt does not support User mode even with user extension enabled.
   -- See: https://randomwalks.xyz/blog/csrrw-bug/#mret-issue
   | .MRET, js, h =>
@@ -816,12 +851,12 @@ theorem equivalenceStatement_holds :
    -- load_reservation
    -- cancel_resevation 
    -- match_reservation 
-  | .LR_W _rd _rs1 _aq _rl, _js, _h => by
-      sorry
-  | .SC_W _rd _rs1 _rs2 _aq _rl, _js, _h => by
-      sorry
-  | .LR_D _rd _rs1 _aq _rl, _js, _h => by
-      sorry
-  | .SC_D _rd _rs1 _rs2 _aq _rl, _js, _h => by
-      sorry
+  | .LR_W rd rs1 aq rl, js, h =>
+      System.lrwProgram_eq_sail_projected rd rs1 aq rl js h
+  | .SC_W rd rs1 rs2 aq rl, js, h =>
+      System.scwProgram_eq_sail_projected rd rs1 rs2 aq rl js h
+  | .LR_D rd rs1 aq rl, js, h =>
+      System.lrdProgram_eq_sail_projected rd rs1 aq rl js h
+  | .SC_D rd rs1 rs2 aq rl, js, h =>
+      System.scdProgram_eq_sail_projected rd rs1 rs2 aq rl js h
 end RiscvInstruction

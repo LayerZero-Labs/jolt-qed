@@ -37,6 +37,19 @@ noncomputable section
 
 namespace JoltISA
 
+/-- Jolt's `Cpu::halt` (`tracer/src/emulator/cpu.rs:549` at Jolt `504dd78a2`).
+Sail's `PC` holds the halting instruction's address and `nextPC` holds Jolt's
+`self.pc`, which Jolt has already advanced past the instruction.
+For example, a halt at address 0x100 with `link = v40` writes 0x104 to v40,
+sets `nextPC` back to 0x100 and records `halted := some kind`. -/
+def execHalt (kind : JoltHaltKind) (address : BitVec 64) (link : Dst) :
+    JoltMonad ExecutionResult := do
+  let pc ← liftSail (LeanRV64D.readReg Register.nextPC)   -- Jolt's self.pc
+  writeDst link pc                                        -- write_register(link, self.pc)
+  liftSail (LeanRV64D.writeReg Register.nextPC address)   -- self.pc = address
+  modify fun state => { state with halted := some kind }  -- self.halted = Some(kind)
+  pure RETIRE_SUCCESS
+
 /-- Execute one Jolt row on the combined Sail, virtual-register and device state.
 The result records retirement or an architectural exception.
 For example, `VirtualLoadW` at effective address 12 reads the entire doubleword
@@ -157,6 +170,14 @@ def execInstr : Instr → JoltMonad ExecutionResult
         pure RETIRE_SUCCESS
   | .FENCE =>
       pure RETIRE_SUCCESS
+  | .JoltPanic rd _ _ => do
+      -- Jolt's `JoltPanic::exec` (`tracer/src/instruction/jolt_panic.rs:25`).
+      let address ← liftSail (LeanRV64D.readReg Register.PC)   -- self.address
+      execHalt .panic address rd
+  | .JoltSuccess rd _ _ => do
+      -- Jolt's `JoltSuccess::exec` (`tracer/src/instruction/jolt_success.rs:27`).
+      let address ← liftSail (LeanRV64D.readReg Register.PC)   -- self.address
+      execHalt .success address rd
   | .ADD dst lhs rhs => do
       let x ← readSrc lhs
       let y ← readSrc rhs
@@ -603,9 +624,14 @@ inductive JoltExecution where
   | expandedInstr (program : Program)
   deriving Repr
 
-noncomputable def JoltExecution.run : JoltExecution → JoltMonad ExecutionResult
-  | .nativeInstr instr => execInstr instr
-  | .expandedInstr program => execProgram program
+/-- One tick of Jolt's CPU (`Cpu::tick`, `tracer/src/emulator/cpu.rs:586` at Jolt `504dd78a2`):
+after a halt, every later tick does nothing.
+For example, after `JoltSuccess` has run, the next tick leaves the state unchanged. -/
+noncomputable def JoltExecution.run (execution : JoltExecution) : JoltMonad ExecutionResult :=
+  fun state => if state.halted.isSome then .ok RETIRE_SUCCESS state else
+    match execution with
+    | .nativeInstr instr => execInstr instr state
+    | .expandedInstr program => execProgram program state
 
 end JoltISA
 

@@ -15,6 +15,7 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Splice
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
+import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 open LeanRV64D
 
@@ -620,7 +621,7 @@ theorem setupBlock (rest : JoltISA.Program)
         (by rw [haddr_ld]; exact hbytes)
         (by rw [haddr_ld]; exact hpmp)
         (by rw [haddr_ld]; exact hmmio)
-        (by rw [haddr_ld]; exact ⟨hjolt.below_heap_end⟩))
+        (by rw [haddr_ld]; exact ⟨hjolt.below_backing_end⟩))
   refine ⟨js_load, ?_, rfl, ?_, ?_, ?_, rfl⟩
   · rw [JoltISA.execProgram_instr_run_retire _ _ js js0 haddi]
     rw [JoltISA.execProgram_instr_run_retire _ _ js0 js1 handi]
@@ -668,6 +669,21 @@ The width-specific identities with byte, halfword and word splices are proved
 in `StoreSplice.fusedByteSplice_eq`, `fusedHalfwordSplice_eq`, and `fusedWordSplice_eq`. -/
 def fusedSpliceValue (width : JoltISA.AccessWidth) (dword value ea : BitVec 64) : BitVec 64 :=
   (dword &&& ~~~(fusedWindowValue width ea)) + fusedShiftValue width value ea
+
+/-- The number of bytes a narrow store of this width writes.
+For example, `.halfword` writes 2 bytes. -/
+def accessBytes : JoltISA.AccessWidth → Nat
+  | .byte => 1
+  | .halfword => 2
+  | .word => 4
+
+/-- The doubleword named in the store assumption is the one the splice rows compute.
+For example, at byte width both clear the addressed byte and add the shifted low byte. -/
+theorem storeDwordValue_eq_fusedSpliceValue (width : JoltISA.AccessWidth)
+    (dword value ea : BitVec 64) :
+    JoltISA.storeDwordValue (accessBytes width) ea dword value =
+      fusedSpliceValue width dword value ea := by
+  cases width <;> rfl
 
 private theorem fusedWindow_run (width : JoltISA.AccessWidth) (lane : JoltISA.VReg)
     (rs1 : regidx) (imm baseValue : BitVec 64) (js : SailJoltState)
@@ -812,7 +828,10 @@ theorem laneStoreProgram_run (width : JoltISA.AccessWidth) (imm : BitVec 12)
     (hbytes : MemBytesPresentAt js.sail (compute_aligned_dword_base_address baseValue imm) 8)
     (hram : JoltISA.RAM_START_ADDRESS ≤ (compute_aligned_dword_base_address baseValue imm).toNat)
     (hload : Assumptions.JoltRamLoadOk (compute_aligned_dword_base_address baseValue imm) js)
-    (hstore : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address baseValue imm) js) :
+    (hstore : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address baseValue imm) js
+      (JoltISA.storeDwordValue (accessBytes width) (load_effective_address baseValue imm)
+        (loaded_dword_at js.sail (compute_aligned_dword_base_address baseValue imm) hbytes haligned.no_ovf)
+        value) 8) :
     ∃ js', JoltISA.Program.Run (laneStoreProgram width rs1 rs2 (sign_extend (m := 64) imm)) js js' ∧
       js'.sail = state_after_dword_store js.sail (compute_aligned_dword_base_address baseValue imm)
         (fusedSpliceValue width
@@ -832,13 +851,18 @@ theorem laneStoreProgram_run (width : JoltISA.AccessWidth) (imm : BitVec 12)
     fusedSpliceBlock width 40 41 (by decide) (by unfold WritableVReg; decide)
       (by unfold WritableVReg; decide) rs1 rs2 (sign_extend (m := 64) imm)
       baseValue value js_load hbase hvalue
-  have hstore' : Assumptions.JoltRamStoreOk base js_splice :=
-    ⟨by rw [hdevice]; exact hstore.below_heap_end,
-     by rw [hdevice]; exact hstore.outside_canary⟩
+  rw [storeDwordValue_eq_fusedSpliceValue] at hstore
+  have hcode : js_splice.code_guard = js.code_guard :=
+    JoltIOSetupFrame.code_guard_of_program_run (s := js_load) hsplice
+  have hstore' : Assumptions.JoltRamStoreOk base js_splice (js_splice.vregs 40) 8 := by
+    rw [hdword]
+    simpa [js_load, stateAfterVRegWrite, dword, load_effective_address] using
+      hstore.transfer (congrArg JoltDevice.memory_layout hdevice) hcode
+        (congrArg (fun s : SailState => s.mem) hsail)
   have hmem' : JoltISA.Mmu.store_doubleword base (js_splice.vregs 40) js_splice =
       .ok (.Ok true) { js_splice with sail := state_after_dword_store js_splice.sail base (js_splice.vregs 40) } := by
     rw [JoltISA.Mmu.store_doubleword_ram js_splice base (js_splice.vregs 40)
-      haligned.align hram (JoltISA.Mmu.effective_address_ok_of_store hram hstore'),
+      haligned.align hram (JoltISA.Mmu.effective_address_ok_of_store hram hstore') hstore'.preserves_protected,
       JoltISA.Mmu.write_ram_doubleword_eq]
   have hlast := floorStore_run width rs1 40 (sign_extend (m := 64) imm) baseValue
     (ExceptionType.E_SAMO_Addr_Align ()) js_splice _ (by rw [hsail]; exact hbase) halign hmem'
@@ -1671,7 +1695,7 @@ theorem sdWriteBlock (rest : JoltISA.Program)
     (hmprv : Assumptions.MstatusMprvZero js_store.sail)
     (hpmp : Assumptions.StorePmpOk base 8 js_store.sail)
     (hmmio : Assumptions.NotWritableMmio base 8 js_store.sail)
-    (hjolt : Assumptions.JoltRamStoreOk base js_store) :
+    (hjolt : Assumptions.JoltRamStoreOk base js_store dword_new 8) :
     ∃ js_write : SailJoltState,
       (JoltISA.execProgram (.instr (JoltISA.Encoded.SD (.vreg JoltISA.inlineTmp1) (.vreg JoltISA.inlineTmp2) 0) rest)).run js_store =
         (JoltISA.execProgram rest).run js_write ∧
@@ -1706,7 +1730,7 @@ theorem sdWriteBlock (rest : JoltISA.Program)
         hpriv hmprv
         (by rw [haddr]; exact hpmp)
         (by rw [haddr]; exact hmmio)
-        (by rw [haddr]; exact hjolt))
+        (by rw [haddr, hdword]; exact hjolt))
   refine ⟨js_write, ?_, rfl, rfl⟩
   rw [JoltISA.execProgram_instr_run_retire _ _ js_store js_write hsd]
 

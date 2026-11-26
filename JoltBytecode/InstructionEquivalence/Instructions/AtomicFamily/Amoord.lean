@@ -74,15 +74,15 @@ private theorem amoordProgram_core_eq_sail
   have hbytes : MemBytesPresentAt js.sail addr 8 := by
     simpa [addr] using Assumptions.DwordPresent.memBytesPresentAt h.dword_present
   have hload_pmp : Assumptions.LoadPmpOk addr 8 js.sail := by
-    simpa [addr] using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hstore_pmp : Assumptions.StorePmpOk addr 8 js.sail := by
-    simpa [addr] using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hatomic_pmp : Assumptions.AtomicPmpOk amoop.AMOOR addr 8 js.sail := by
-    simpa [addr] using h.atomic_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.atomic_pmp.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail := by
-    simpa [addr] using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail := by
-    simpa [addr] using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   by_cases h_align : addr &&& (7 : BitVec 64) = 0
   · exact
       amo_dword_double_binop_program_eq_sail_aligned
@@ -92,7 +92,9 @@ private theorem amoordProgram_core_eq_sail
           (amo_dword_aligned_no_ovf addr h_align))
         h.rs1_read h.rs2_read h.rdReadable.exists_value
         hbytes hload_pmp hstore_pmp hatomic_pmp hread_mmio hwrite_mmio
-        h_align h.jolt_ram_load h.jolt_ram_store (by decide) h.linkedCSRs
+        h_align h.jolt_ram_load
+        (by simpa only [JoltISA.amoDwordStoreValue, BitVec.or_comm] using
+          amo_dword_bundle_store_ok h hbytes (amo_dword_aligned_no_ovf addr h_align)) (by decide) h.linkedCSRs
         (amoordProgramCore_doesNotWriteProtectedVRegs rs2 rs1 rd)
         (amo_dword_or_middle_after_load_into rs2 js addr rs2Val
           (loaded_dword_at js.sail addr hbytes

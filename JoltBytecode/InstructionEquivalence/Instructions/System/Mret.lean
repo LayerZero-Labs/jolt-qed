@@ -1,5 +1,9 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.Instructions.System.Common
+import JoltBytecode.InstructionEquivalence.ProofSupport.SailMret
+import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
+import JoltBytecode.JoltISA.ExpansionsAutomated
+import JoltBytecode.JoltISA.Semantics
 
 open LeanRV64D
 
@@ -11,110 +15,71 @@ noncomputable section
 
 namespace System
 
-/-- Writing the MRET link value to Jolt's system scratch virtual register
-succeeds and updates only the virtual-register file. -/
-private theorem writeDst_systemScratchVReg_run
-    (js : SailJoltState) (nextPC target : BitVec 64) :
-    JoltISA.writeDst (JoltISA.Dst.vreg JoltISA.inlineTmp0) nextPC
-        { js with sail := setNextPCState js.sail target } =
-      .ok ()
-        { js with
-          sail := setNextPCState js.sail target,
-          vregs := fun r =>
-            if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } := by
-  unfold JoltISA.writeDst
-  exact writeVReg_run_of_writable JoltISA.inlineTmp0 nextPC
-    { js with sail := setNextPCState js.sail target }
-    (by
-      unfold JoltISA.inlineTmp0 JoltISA.inlineTmp0 JoltISA.inlineTmp
-        WritableVReg JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
-        JoltISA.riscvRegisterCount JoltISA.numReservedVirtualRegisters
-      decide)
-
-/-- The Jolt-side MRET expansion runs through its JALR row and terminates with
-`RETIRE_SUCCESS`. -/
-private theorem mretProgram_jolt_run
-    (js : SailJoltState) (nextPC : BitVec 64)
-    (hNextPCReadable :
-      js.sail.regs.get? Register.nextPC =
-        some (nextPC : RegisterType Register.nextPC)) :
-    (JoltISA.execProgram JoltISA.mretProgramAuto).run js =
+/-- Jolt's MRET rows shift MPIE into MIE, set MPIE, and jump to the saved exception PC.
+The old fall-through PC is saved in scratch v40; for example, a saved PC of
+16 makes the new `nextPC` equal to 16.
+Jolt: `crates/jolt-program/src/expand/control_flow/mret.rs` at `504dd78a2`.
+Based on Quang Dao's `mretProgram_run` in PR #73. -/
+theorem mretProgram_run (js : SailJoltState) (next : BitVec 64)
+    (hn : js.sail.regs.get? Register.nextPC = some next) :
+    JoltISA.execProgram JoltISA.mretProgramAuto js =
       .ok RETIRE_SUCCESS
         { js with
           sail := setNextPCState js.sail
-            (BitVec.update
-              (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
-              0 0#1),
+            (jolt_jalr_target64 (js.vregs JoltISA.mepcVReg) 0#64)
           vregs := fun r =>
-            if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } := by
-  simp only [EStateM.run, JoltISA.execProgram, JoltISA.mretProgramAuto,
-    JoltISA.execInstr, bind, EStateM.bind]
-  -- Read sail register next_pc successfully (use assumptions that it's readable)
-  have hGetNextPC : liftSail (LeanRV64D.readReg Register.nextPC) js = .ok nextPC js := by
-    unfold liftSail
-    rw [readReg_eq_of_get? Register.nextPC js.sail nextPC hNextPCReadable]
-  simp only [hGetNextPC]
-  -- Read virtual register mepc
-  have hReadMepc : JoltISA.readSrc (JoltISA.Src.vreg JoltISA.mepcVReg) js =
-        .ok (js.vregs JoltISA.mepcVReg) js := by
-    simp only [JoltISA.readSrc_vreg, readVReg_run]
-  simp only [hReadMepc, jolt_jalr_target64, JoltISA.addWide_low]
-  -- Rust's JALR writes its target directly to cpu.pc, represented by nextPC.
-  have hWriteNextPC :
-      liftSail (LeanRV64D.writeReg Register.nextPC
-        (BitVec.update
-          (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
-          0 0#1)) js =
-      .ok () { js with
-        sail := setNextPCState js.sail
-          (BitVec.update
-            (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
-            0 0#1) } := by
-    rfl
-  simp only [hWriteNextPC]
-  -- Write to DST scratchVreg succeeds the contents of NextPC
-  have hWriteScratch :=
-    writeDst_systemScratchVReg_run js nextPC
-      (BitVec.update
-        (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
-        0 0#1)
-  simp only [hWriteScratch, pure, EStateM.pure, RETIRE_SUCCESS]
+            if r = JoltISA.inlineTmp0 then next
+            else if r = JoltISA.mstatusVReg then
+              (js.vregs JoltISA.mstatusVReg >>> 4) ||| 0x80#64
+            else js.vregs r } := by
+  have h0 : sign_extend (m := 64) (0#12) = 0#64 := by decide
+  have h128 : sign_extend (m := 64) (128#12) = 128#64 := by decide
+  simp (config := { contextual := true }) [h0, h128, RETIRE_SUCCESS, JoltISA.mretProgramAuto,
+    JoltISA.execProgram, JoltISA.execInstr,
+    JoltISA.readSrc, readVReg, JoltISA.writeDst, writeVReg,
+    JoltISA.mstatusVReg, JoltISA.mepcVReg, JoltISA.inlineTmp0,
+    JoltISA.srliBitmask, jolt_virtual_srli_value, ctz,
+    Riscv.ori, liftSail, readReg_eq_of_get? _ _ _ hn,
+    bind, EStateM.bind, pure, EStateM.pure, get, getThe, MonadStateOf.get,
+    EStateM.get, modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet,
+    Step.writeReg_run, Step.setReg, setNextPCState,
+    JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount, JoltISA.inlineTmp,
+    JoltISA.inlineRegisterBase, JoltISA.numReservedVirtualRegisters]
+  rfl
 
-/-- MRET's final local scratch write does not affect `systemProject`; only the
-embedded Sail `nextPC` write is projected. -/
-private theorem systemProject_mretJoltFinal
-    (js : SailJoltState) (nextPC target : BitVec 64) :
-    systemProject
-        { js with
-          sail := setNextPCState js.sail target,
-          vregs := fun r =>
-            if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } =
-      { systemProject js with
-        regs := (systemProject js).regs.insert Register.nextPC target } := by
-  have hMtvec : JoltISA.trapHandlerVReg ≠ JoltISA.inlineTmp0 := by
-    decide
-  have hMscratch : JoltISA.mscratchVReg ≠ JoltISA.inlineTmp0 := by
-    decide
-  have hMepc : JoltISA.mepcVReg ≠ JoltISA.inlineTmp0 := by
-    decide
-  have hMcause : JoltISA.mcauseVReg ≠ JoltISA.inlineTmp0 := by
-    decide
-  have hMtval : JoltISA.mtvalVReg ≠ JoltISA.inlineTmp0 := by
-    decide
-  have hMstatus : JoltISA.mstatusVReg ≠ JoltISA.inlineTmp0 := by
-    decide
-  have hScratchIgnored :
-      systemProject
-          { js with
-            sail := setNextPCState js.sail target,
-            vregs := fun r =>
-              if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } =
-        systemProject { js with sail := setNextPCState js.sail target } := by
-    unfold systemProject
-    simp only [hMtvec, hMscratch, hMepc, hMcause, hMtval, hMstatus,
-      ite_false]
-  rw [hScratchIgnored]
-  exact systemProject_setNextPCState js target
+/-- When v39 holds only MIE and MPIE, Jolt's MRET shift is Sail's privilege-stack update.
+For example, v39 = 0x80 (MPIE set) produces architectural mstatus `0x1888`.
+Based on Quang Dao's version in PR #73. -/
+theorem mretMstatus_eq (m : BitVec 64) (hm : m &&& ~~~(0x88#64) = 0#64) :
+    ((m >>> 4) ||| 0x80#64) ||| 0x1800#64 = Step.mretMstatus (m ||| 0x1800#64) := by
+  have hmasked : m &&& 0x88#64 = m := by
+    simpa using BitVec.and_not_eq_self_of_and_eq_zero m (~~~(0x88#64)) hm
+  conv_lhs => rw [← hmasked]
+  conv_rhs => rw [← hmasked]
+  simp [Step.mretMstatus, BitVec.and_or_distrib_right, BitVec.and_assoc,
+    BitVec.ushiftRight_and_distrib]
+
+/-- The projected mstatus always has MPP = Machine, because the projection adds 0x1800.
+For example, v39 = 0 projects to mstatus `0x1800`.
+Based on Quang Dao's version in PR #73. -/
+theorem mstatus_mpp_machine (raw : BitVec 64) :
+    (raw ||| 0x1800#64) &&& 0x1800#64 = 0x1800#64 := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  simp only [BitVec.getLsbD_and, BitVec.getLsbD_or]
+  cases raw.getLsbD i <;> cases (0x1800#64).getLsbD i <;> rfl
+
+/-- A zero-offset JALR clears bit zero of its target; for example, 17 becomes 16.
+Based on Quang Dao's version in PR #73. -/
+theorem jalr_zero_target (v : BitVec 64) :
+    jolt_jalr_target64 v 0#64 = v &&& ~~~(1#64) := by
+  simp only [jolt_jalr_target64, JoltISA.addWide_low, BitVec.add_zero]
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  by_cases hz : i = 0
+  · subst i
+    simp [Sail.BitVec.update, Sail.BitVec.updateSubrange']
+  · simp [Sail.BitVec.update, Sail.BitVec.updateSubrange', hi, Bool.and_comm]
 
 /-- MRET equivalence statement.
 
@@ -130,38 +95,47 @@ theorem mretProgram_eq_sail_projected
     (js : SailJoltState) (h : MretProgramEqSailAssumptions js) :
     mretProgramEqSailStatement js h := by
   unfold mretProgramEqSailStatement
-  obtain ⟨nextPC, hNextPCReadable⟩ := h.nextPC_readable.exists_value
-  rw [mretProgram_jolt_run js nextPC hNextPCReadable]
-  simp only [EStateM.run, execute_MRET, bind, EStateM.bind]
-  -- First step read reg curr privilege issucceeds 
-  have hCurPrivilegeProject :
-      (systemProject js).regs.get? Register.cur_privilege =
-        some (Privilege.Machine : RegisterType Register.cur_privilege) := by
-    exact systemProject_cur_privilege_read js h.cur_privilege_machine.value
-  simp only [readReg_eq_of_get? Register.cur_privilege (systemProject js)
-    Privilege.Machine hCurPrivilegeProject]
-  -- Second setep tat it's machine so else the lese block. 
-  have hMachineNeFalse :
-      (!instBEqPrivilege.beq Privilege.Machine Privilege.Machine) = false := by
-    decide
-  simp only [bne, BEq.beq, hMachineNeFalse, ext_check_xret_priv,
-    sail_not_true, Bool.false_eq_true, ↓reduceIte,
-    plat_reservation_invalidate_on_xret]
-  -- Read current privilege again inside the MRET trap-return postlude.
-  simp only [EStateM.bind, readReg_eq_of_get? Register.cur_privilege
-    (systemProject js) Privilege.Machine hCurPrivilegeProject]
-  -- Read PC successfully before entering the MRET exception handler.
-  obtain ⟨pc, hPCReadable⟩ := h.pc_readable.exists_value
-  have hPCProject :
-      (systemProject js).regs.get? Register.PC =
-        some (pc : RegisterType Register.PC) := by
-    exact systemProject_pc_read js pc hPCReadable
-  simp only [readReg_eq_of_get? Register.PC (systemProject js) pc hPCProject]
-  -- TODO: prove the real generated-Sail MRET postlude state, or weaken this
-  -- statement so it does not require Sail's architectural `mstatus` updates to
-  -- equal Jolt's restricted `pc := mepc` model.
-  unfold exception_handler
-  sorry 
+  obtain ⟨next, hn⟩ := h.nextPC_readable.exists_value
+  obtain ⟨pc, hpc⟩ := h.pc_readable.exists_value
+  obtain ⟨misa, hmisa⟩ := h.misa_readable.exists_value
+  have hpriv : (systemProject js).regs.get? Register.cur_privilege =
+      some Privilege.Machine := by
+    rw [systemProject_get?_of_not_overlaid js _ (by decide)]
+    exact h.cur_privilege_machine.value
+  have hpcp : (systemProject js).regs.get? Register.PC = some pc := by
+    rw [systemProject_get?_of_not_overlaid js _ (by decide)]
+    exact hpc
+  have hmisap : (systemProject js).regs.get? Register.misa = some misa := by
+    rw [systemProject_get?_of_not_overlaid js _ (by decide)]
+    exact hmisa
+  have hm : (systemProject js).regs.get? Register.mstatus =
+      some (js.vregs JoltISA.mstatusVReg ||| 0x1800#64) := by
+    simp [systemProject, Std.ExtDHashMap.get?_insert]
+  have he : (systemProject js).regs.get? Register.mepc =
+      some (js.vregs JoltISA.mepcVReg) := by
+    simp [systemProject, Std.ExtDHashMap.get?_insert]
+  have halign : align_pc (js.vregs JoltISA.mepcVReg) (systemProject js) =
+      .ok (js.vregs JoltISA.mepcVReg) (systemProject js) :=
+    Step.align_pc_of_misa hmisa hmisap h.mepc_read_aligned.value_eq
+  simp only [EStateM.run]
+  rw [Step.execute_MRET_machine _ _ _ misa pc hpriv hpcp hm he hmisap halign
+      (mstatus_mpp_machine _),
+    mretProgram_run js next hn]
+  have ht : jolt_jalr_target64 (js.vregs JoltISA.mepcVReg) 0#64 = js.vregs JoltISA.mepcVReg := by
+    rw [jalr_zero_target]
+    apply BitVec.and_not_eq_self_of_and_eq_zero
+    rw [BitVec.and_one_eq_setWidth_ofBool_getLsbD, h.mepc_legal.mepc_align]
+    rfl
+  simp only [systemProjectResult]
+  rw [ht, ← mretMstatus_eq _ h.mstatus_legal.mstatus_bits]
+  simp [systemProject, Step.setReg, setNextPCState,
+    JoltISA.mstatusVReg, JoltISA.trapHandlerVReg, JoltISA.mscratchVReg,
+    JoltISA.mepcVReg, JoltISA.mcauseVReg, JoltISA.mtvalVReg,
+    JoltISA.reservationWReg, JoltISA.reservationDReg, JoltISA.inlineTmp0,
+    JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount, JoltISA.inlineTmp,
+    JoltISA.inlineRegisterBase, JoltISA.numReservedVirtualRegisters,
+    extDHashMap_insert_insert_same, extDHashMap_insert_comm_of_ne]
+
 end System
 
 end

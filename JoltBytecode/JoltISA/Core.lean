@@ -38,17 +38,26 @@ structure JoltAdviceTape where
   bytes : Array (BitVec 8)
   readPosition : Nat
 
-/-- Rust `tracer::emulator::cpu::HostIo`: replay suppresses host effects. -/
 inductive JoltHostIOMode where
   | live
   | replay
   deriving DecidableEq, Repr
 
-/-- Host execution settings. Unchecked arithmetic matches Rust's release
-profile; test/build-fast profiles enable overflow checks. -/
 structure JoltHostIOConfig where
   mode : JoltHostIOMode := .live
-  overflowChecks : Bool := false
+
+/-- How Jolt's tracer ended a run (`HaltKind`, `tracer/src/emulator/cpu.rs:206`
+at Jolt `504dd78a2`).
+`success` is a normal end (the program ran `jolt.success`); `panic` is a failure.
+For example, EBREAK ends the run with `panic`. -/
+inductive JoltHaltKind where
+  | success
+  | panic
+  deriving DecidableEq, Repr
+
+structure CodeGuard where
+  region : Nat × Nat
+  instructions : List Nat
 
 structure SailJoltState where
   sail : SailState
@@ -57,6 +66,48 @@ structure SailJoltState where
   jolt_device : JoltDevice
   adviceTape : JoltAdviceTape
   hostIO : JoltHostIOConfig := {}
+  code_guard : Option CodeGuard := none
+  /-- The halt that ended the run, if any (`Cpu.halted`, `tracer/src/emulator/cpu.rs:340`
+  at Jolt `504dd78a2`). `none` while the program runs.
+  For example, after EBREAK it is `some .panic`. -/
+  halted : Option JoltHaltKind := none
+
+namespace JoltISA
+
+def source_word_intervals (source_extents : List (BitVec 64 × Bool)) (lowest_address : Nat) :
+    Option (List (Nat × Nat)) := do
+  guard (lowest_address % 8 == 0)
+  (source_extents.filter fun (address, _) => address != 0).mapM fun (address, is_compressed) => do
+    let stop ← MemoryLayout.checkedAdd address.toNat (if is_compressed then 2 else 4)
+    let offset ← MemoryLayout.checkedSub address.toNat lowest_address
+    guard (address.toNat % 2 == 0)
+    pure (offset / 8, (stop - lowest_address + 7) / 8)
+
+def code_region (source_extents : List (BitVec 64 × Bool)) (lowest_address : Nat) :
+    Option (Nat × Nat) := do
+  let intervals ← source_word_intervals source_extents lowest_address
+  let words := intervals.foldl (fun words (start, stop) =>
+    match words with
+    | none => some (start, stop)
+    | some (left, right) => some (min left start, max right stop)) none
+  pure (words.getD (0, 0))
+
+end JoltISA
+
+def CodeGuard.new (sources : List (BitVec 64 × Bool)) (lowest_address : Nat) :
+    Option CodeGuard := do
+  let region ← JoltISA.code_region sources lowest_address
+  let instructions := (sources.map fun (address, _) => address.toNat).mergeSort
+  pure { region, instructions }
+
+namespace JoltISA
+
+def protect_code (state : SailJoltState) (sources : List (BitVec 64 × Bool)) :
+    Option SailJoltState := do
+  let guard ← CodeGuard.new sources state.jolt_device.memory_layout.get_lowest_address.toNat
+  pure { state with code_guard := some guard }
+
+end JoltISA
 
 abbrev JoltMonad (α : Type) := EStateM (Error exception) SailJoltState α
 

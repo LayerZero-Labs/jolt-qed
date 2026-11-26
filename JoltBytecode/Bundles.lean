@@ -38,65 +38,6 @@ set_option autoImplicit true
 
 noncomputable section
 
-/-- Operand domains for the parameterized primitive assumptions. Memory windows
-are ordinary RAM dwords; CSR domains contain the values used by the relevant
-reads and writes. Keeping these domains explicit avoids asserting, for example,
-that device addresses are RAM or that every possible CSR write is legal. -/
-structure AssumptionOperands where
-  memoryWindows : BitVec 64 → Prop
-  mtvecWrites : BitVec 64 → Prop
-  mepcReads : BitVec 64 → Prop
-  mepcWrites : BitVec 64 → Prop
-  mstatusWrites : BitVec 64 → BitVec 64 → Prop
-
-/-- The conjunction of every primitive assumption in `Assumptions.lean`.
-The source-read carriers live in `Type`, so their propositional assertions use
-`Nonempty`. Address- and value-dependent assumptions retain their operand scope.
--/
-def all_assumptions (js : SailJoltState) (operands : AssumptionOperands) : Prop :=
-  (∀ r, Assumptions.SailRegReadable r js.sail) ∧
-  (∀ r, Assumptions.XRegReadable r js.sail) ∧
-  (∀ r, Nonempty (Assumptions.UnarySourceReadAssumptions r js.sail)) ∧
-  (∀ r₂ r₁, Nonempty (Assumptions.BinarySourceReadAssumptions r₂ r₁ js.sail)) ∧
-  (∀ addr, operands.memoryWindows addr →
-    Assumptions.DwordPresent addr js.sail ∧
-    Assumptions.LoadPmpOk addr 8 js.sail ∧
-    Assumptions.LoadPmpOkWindow addr 8 js.sail ∧
-    Assumptions.StorePmpOk addr 8 js.sail ∧
-    Assumptions.StorePmpOkWindow addr 8 js.sail ∧
-    (∀ op, Assumptions.AtomicPmpOk op addr 8 js.sail) ∧
-    (∀ op, Assumptions.AtomicPmpOkWindow op addr 8 js.sail) ∧
-    Assumptions.NotReadableMmio addr 8 js.sail ∧
-    Assumptions.NotReadableMmioWindow addr 8 js.sail ∧
-    Assumptions.NotWritableMmio addr 8 js.sail ∧
-    Assumptions.NotWritableMmioWindow addr 8 js.sail ∧
-    Assumptions.JoltRamLoadOk addr js ∧
-    Assumptions.JoltRamStoreOk addr js) ∧
-  Assumptions.CurPrivilegeMachine js.sail ∧
-  Assumptions.MisaUserEnabled js.sail ∧
-  Assumptions.MstatusMprvZero js.sail ∧
-  Assumptions.ZicfilpDisabled js.sail ∧
-  Assumptions.MstatusVRegMatchesSail js ∧
-  Assumptions.MtvecVRegMatchesSail js ∧
-  Assumptions.MscratchVRegMatchesSail js ∧
-  Assumptions.MepcVRegMatchesSail js ∧
-  Assumptions.McauseVRegMatchesSail js ∧
-  Assumptions.MtvalVRegMatchesSail js ∧
-  (∀ value, operands.mtvecWrites value → Assumptions.MtvecWriteDirectMode value) ∧
-  (∀ value, operands.mepcReads value → Assumptions.MepcReadAligned value js.sail) ∧
-  (∀ value, operands.mepcWrites value → Assumptions.MepcWriteLegalized value) ∧
-  (∀ old value, operands.mstatusWrites old value →
-    Assumptions.MstatusWriteLegalized old value js.sail) ∧
-  Assumptions.MstatusMppMachine js
-
-theorem all_assumptions.curPrivilege {js : SailJoltState} {ops : AssumptionOperands}
-    (h : all_assumptions js ops) : Assumptions.CurPrivilegeMachine js.sail :=
-  h.2.2.2.2.2.1
-
-theorem all_assumptions.mstatusMprv {js : SailJoltState} {ops : AssumptionOperands}
-    (h : all_assumptions js ops) : Assumptions.MstatusMprvZero js.sail :=
-  h.2.2.2.2.2.2.2.1
-
 -- ============================================================================
 -- Source-register bundles
 -- ============================================================================
@@ -121,7 +62,8 @@ abbrev LinkedCSRs (js : SailJoltState) : Prop :=
   Assumptions.MscratchVRegMatchesSail js ∧
   Assumptions.MepcVRegMatchesSail js ∧
   Assumptions.McauseVRegMatchesSail js ∧
-  Assumptions.MtvalVRegMatchesSail js
+  Assumptions.MtvalVRegMatchesSail js ∧
+  Assumptions.ReservationVRegsMatchSail js
 
 /-- Fieldwise carrier for the public linked-CSR invariant. -/
 private structure LinkedCSRRegisterAssumptions (js : SailJoltState) where
@@ -131,6 +73,7 @@ private structure LinkedCSRRegisterAssumptions (js : SailJoltState) where
   mepc_matches : Assumptions.MepcVRegMatchesSail js
   mcause_matches : Assumptions.McauseVRegMatchesSail js
   mtval_matches : Assumptions.MtvalVRegMatchesSail js
+  reservation_matches : Assumptions.ReservationVRegsMatchSail js
 
 /-- No source-register reads, plus persistent CSR virtual-register agreement. -/
 structure NoSourceReadWithLinkedCSRs
@@ -154,7 +97,7 @@ theorem LinkedCSRRegisterAssumptions.linkedCSRs
     (h : LinkedCSRRegisterAssumptions js) :
     LinkedCSRs js :=
   ⟨h.mstatus_matches, h.mtvec_matches, h.mscratch_matches, h.mepc_matches,
-    h.mcause_matches, h.mtval_matches⟩
+    h.mcause_matches, h.mtval_matches, h.reservation_matches⟩
 
 theorem NoSourceReadWithLinkedCSRs.linkedCSRs
     {js : SailJoltState}
@@ -211,15 +154,12 @@ theorem JalInstrEqSailAssumptions.linkedCSRs
 
 /-- Public assumptions for native JALR equivalence.
 
-Generated Sail runs `update_elp_state rs1` before the ordinary JALR body; Jolt
-does not model Zicfilp/ELP state, so this bundle records that the generated
-Zicfilp hook is disabled in the Jolt profile.
+Generated Sail runs `update_elp_state rs1` before the ordinary JALR body.
 Rust reads the old cpu.pc and writes the target without an alignment check.
 The existing readability and alignment predicates ensure Sail can match this.
 -/
 structure JalrInstrEqSailAssumptions (imm : BitVec 12) (rs1 : regidx) (js : SailJoltState)
     extends UnarySourceReadWithLinkedCSRs rs1 js where
-  zicfilp_disabled : Assumptions.ZicfilpDisabled js.sail
   nextPC_readable : Assumptions.SailRegReadable Register.nextPC js.sail
   -- Rust clears bit 0 but does not check Sail's remaining alignment requirement.
   target_aligned : Assumptions.MepcReadAligned
@@ -277,12 +217,7 @@ structure LoadProgramEqSailAssumptions (imm : BitVec 12) (rs1 : regidx)
 theorem LoadProgramEqSailAssumptions.linkedCSRs
     {imm : BitVec 12} {rs1 : regidx} {js : SailJoltState}
     (h : LoadProgramEqSailAssumptions imm rs1 js) :
-    Assumptions.MstatusVRegMatchesSail js ∧
-    Assumptions.MtvecVRegMatchesSail js ∧
-    Assumptions.MscratchVRegMatchesSail js ∧
-    Assumptions.MepcVRegMatchesSail js ∧
-    Assumptions.McauseVRegMatchesSail js ∧
-    Assumptions.MtvalVRegMatchesSail js :=
+    LinkedCSRs js :=
   h.toUnarySourceReadWithLinkedCSRs.linkedCSRs
 
 /-- Public assumptions for store-family equivalence theorems.
@@ -290,23 +225,17 @@ theorem LoadProgramEqSailAssumptions.linkedCSRs
 Stores reuse the load-family enclosing-dword read assumptions, then add the
 second source register and write-side memory window. -/
 structure StoreProgramEqSailAssumptions
-    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState)
+    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState) (storeWidth : Nat := 8)
     extends LoadProgramEqSailAssumptions imm rs1 js,
+      Assumptions.BinarySourceReadAssumptions rs2 rs1 js.sail,
       DwordWriteWindowAssumptions
         (compute_aligned_dword_base_address rs1_val imm) js.sail where
-  rs2_val : BitVec 64
-  rs2_read : rX_bits rs2 js.sail = .ok rs2_val js.sail
-  jolt_ram_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js
+  jolt_store : Assumptions.JoltStoreOk (load_effective_address rs1_val imm) rs2_val storeWidth js
 
 theorem StoreProgramEqSailAssumptions.linkedCSRs
-    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
-    Assumptions.MstatusVRegMatchesSail js ∧
-    Assumptions.MtvecVRegMatchesSail js ∧
-    Assumptions.MscratchVRegMatchesSail js ∧
-    Assumptions.MepcVRegMatchesSail js ∧
-    Assumptions.McauseVRegMatchesSail js ∧
-    Assumptions.MtvalVRegMatchesSail js :=
+    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState} {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth) :
+    LinkedCSRs js :=
   h.toLoadProgramEqSailAssumptions.linkedCSRs
 
 -- ============================================================================
@@ -343,7 +272,7 @@ structure AmoDwordProgramEqSailAssumptions
   cur_privilege : Assumptions.CurPrivilegeMachine js.sail
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram_load : Assumptions.JoltRamLoadOk rs1_val js
-  jolt_ram_store : Assumptions.JoltRamStoreOk rs1_val js
+  jolt_store : Assumptions.JoltAmoDwordStoreOk op rs1_val rs2_val js
 
 theorem AmoDwordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
@@ -366,7 +295,7 @@ structure AmoWordProgramEqSailAssumptions
   cur_privilege : Assumptions.CurPrivilegeMachine js.sail
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram_load : Assumptions.JoltRamLoadOk (amoWordBase rs1_val) js
-  jolt_ram_store : Assumptions.JoltRamStoreOk (amoWordBase rs1_val) js
+  jolt_store : Assumptions.JoltAmoWordStoreOk op rs1_val rs2_val js
 
 theorem AmoWordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
@@ -397,10 +326,10 @@ structure MretProgramEqSailAssumptions (js : SailJoltState) : Type where
   cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
   pc_readable : Assumptions.SailRegReadable Register.PC js.sail
   misa_readable : Assumptions.SailRegReadable Register.misa js.sail
-  misa_user_enabled : Assumptions.MisaUserEnabled js.sail
-  mstatus_mpp_machine : Assumptions.MstatusMppMachine js
   mepc_read_aligned :
     Assumptions.MepcReadAligned (js.vregs JoltISA.mepcVReg) js.sail
+  mstatus_legal : Assumptions.MstatusVRegLegal js
+  mepc_legal : Assumptions.MepcVRegLegal js
 
 /-- Public assumptions for CSRRW equivalence over the supported System CSR
 whitelist.
@@ -413,19 +342,9 @@ file. -/
 structure CsrrwSystemAssumptions
     (js : SailJoltState) (csr : JoltISA.SystemCSR) (rs1 rd : regidx)
     extends Assumptions.UnarySourceReadAssumptions rs1 js.sail where
-  mtvec_write_direct :
-    csr = JoltISA.SystemCSR.mtvec →
-      Assumptions.MtvecWriteDirectMode rs1_val
   mepc_read_aligned :
     csr = JoltISA.SystemCSR.mepc →
       Assumptions.MepcReadAligned (js.vregs JoltISA.mepcVReg) js.sail
-  mepc_write_legalized :
-    csr = JoltISA.SystemCSR.mepc →
-      Assumptions.MepcWriteLegalized rs1_val
-  mstatus_write_legalized :
-    csr = JoltISA.SystemCSR.mstatus →
-      Assumptions.MstatusWriteLegalized
-        (js.vregs JoltISA.mstatusVReg) rs1_val js.sail
   cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
   linked_csrs :
     Assumptions.MstatusVRegMatchesSail js ∧
@@ -433,37 +352,22 @@ structure CsrrwSystemAssumptions
     Assumptions.MscratchVRegMatchesSail js ∧
     Assumptions.MepcVRegMatchesSail js ∧
     Assumptions.McauseVRegMatchesSail js ∧
-    Assumptions.MtvalVRegMatchesSail js
+    Assumptions.MtvalVRegMatchesSail js ∧
+    Assumptions.ReservationVRegsMatchSail js
+  mstatus_legal : Assumptions.MstatusVRegLegal js
+  mtvec_legal : Assumptions.MtvecVRegLegal js
+  mepc_legal : Assumptions.MepcVRegLegal js
 
 /-- Public assumptions for CSRRS equivalence over the supported System CSR
 whitelist.
 
-This has the same envelope as `CsrrwSystemAssumptions`, except CSRRS writes
-`old CSR | rs1` when `rs1 != x0`, so write-side legalization assumptions are
-stated over that read-set value. -/
+This has the same envelope as `CsrrwSystemAssumptions`. -/
 structure CsrrsSystemAssumptions
     (js : SailJoltState) (csr : JoltISA.SystemCSR) (rs1 rd : regidx)
     extends Assumptions.UnarySourceReadAssumptions rs1 js.sail where
-  mtvec_write_direct :
-    csr = JoltISA.SystemCSR.mtvec →
-      (rs1 == zreg) = false →
-        Assumptions.MtvecWriteDirectMode
-          (js.vregs (JoltISA.SystemCSR.vreg csr) ||| rs1_val)
   mepc_read_aligned :
     csr = JoltISA.SystemCSR.mepc →
       Assumptions.MepcReadAligned (js.vregs JoltISA.mepcVReg) js.sail
-  mepc_write_legalized :
-    csr = JoltISA.SystemCSR.mepc →
-      (rs1 == zreg) = false →
-        Assumptions.MepcWriteLegalized
-          (js.vregs (JoltISA.SystemCSR.vreg csr) ||| rs1_val)
-  mstatus_write_legalized :
-    csr = JoltISA.SystemCSR.mstatus →
-      (rs1 == zreg) = false →
-        Assumptions.MstatusWriteLegalized
-          (js.vregs JoltISA.mstatusVReg)
-          (js.vregs (JoltISA.SystemCSR.vreg csr) ||| rs1_val)
-          js.sail
   cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
   linked_csrs :
     Assumptions.MstatusVRegMatchesSail js ∧
@@ -471,8 +375,93 @@ structure CsrrsSystemAssumptions
     Assumptions.MscratchVRegMatchesSail js ∧
     Assumptions.MepcVRegMatchesSail js ∧
     Assumptions.McauseVRegMatchesSail js ∧
-    Assumptions.MtvalVRegMatchesSail js
+    Assumptions.MtvalVRegMatchesSail js ∧
+    Assumptions.ReservationVRegsMatchSail js
+  mstatus_legal : Assumptions.MstatusVRegLegal js
+  mtvec_legal : Assumptions.MtvecVRegLegal js
+  mepc_legal : Assumptions.MepcVRegLegal js
+
+/-- Public assumptions for CSRRC equivalence over the supported System CSR
+whitelist.
+
+This has the same envelope as `CsrrsSystemAssumptions`. -/
+structure CsrrcSystemAssumptions
+    (js : SailJoltState) (csr : JoltISA.SystemCSR) (rs1 rd : regidx)
+    extends Assumptions.UnarySourceReadAssumptions rs1 js.sail where
+  mepc_read_aligned :
+    csr = JoltISA.SystemCSR.mepc →
+      Assumptions.MepcReadAligned (js.vregs JoltISA.mepcVReg) js.sail
+  cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
+  linked_csrs :
+    Assumptions.MstatusVRegMatchesSail js ∧
+    Assumptions.MtvecVRegMatchesSail js ∧
+    Assumptions.MscratchVRegMatchesSail js ∧
+    Assumptions.MepcVRegMatchesSail js ∧
+    Assumptions.McauseVRegMatchesSail js ∧
+    Assumptions.MtvalVRegMatchesSail js ∧
+    Assumptions.ReservationVRegsMatchSail js
+  mstatus_legal : Assumptions.MstatusVRegLegal js
+  mtvec_legal : Assumptions.MtvecVRegLegal js
+  mepc_legal : Assumptions.MepcVRegLegal js
+
+/-- Public assumptions for CSRRWI, CSRRSI and CSRRCI equivalence over the
+supported System CSR whitelist.
+These instructions read no architectural register, so they need no source read
+and no CSR link: the Sail side runs on the projected state. -/
+structure CsrImmSystemAssumptions (js : SailJoltState) (csr : JoltISA.SystemCSR) : Type where
+  mepc_read_aligned :
+    csr = JoltISA.SystemCSR.mepc →
+      Assumptions.MepcReadAligned (js.vregs JoltISA.mepcVReg) js.sail
+  cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
+  mstatus_legal : Assumptions.MstatusVRegLegal js
+  mtvec_legal : Assumptions.MtvecVRegLegal js
+  mepc_legal : Assumptions.MepcVRegLegal js
 
 end System
+
+-- ============================================================================
+-- LR/SC theorem bundles
+-- ============================================================================
+
+/-- The doubleword containing an LR/SC address: the address itself for `.D`,
+and the address rounded down to a multiple of 8 for `.W`.
+For example, LR.W at 12 uses the doubleword at 8. -/
+abbrev reservationBase (double : Bool) (addr : BitVec 64) : BitVec 64 :=
+  if double then addr else amoWordBase addr
+
+/-- Public assumptions for LR.W (`double = false`) and LR.D (`double = true`). -/
+structure ReservationReadEqAssumptions (double : Bool) (rs1 : regidx) (js : SailJoltState) : Type
+    extends UnarySourceReadWithLinkedCSRs rs1 js where
+  cur_privilege : Assumptions.CurPrivilegeMachine js.sail
+  mstatus_mprv : Assumptions.MstatusMprvZero js.sail
+  aligned : Assumptions.LrScAligned double rs1_val
+  dword_present : Assumptions.DwordPresent (reservationBase double rs1_val) js.sail
+  not_readable_mmio : Assumptions.NotReadableMmioWindow (reservationBase double rs1_val) 8 js.sail
+  jolt_ram : Assumptions.JoltRamLoadOk (reservationBase double rs1_val) js
+  reserved_access : Assumptions.LoadReservedPmpOk rs1_val (if double then 8 else 4) js.sail
+
+theorem ReservationReadEqAssumptions.linkedCSRs {double : Bool} {rs1 : regidx}
+    {js : SailJoltState} (h : ReservationReadEqAssumptions double rs1 js) : LinkedCSRs js :=
+  h.toUnarySourceReadWithLinkedCSRs.linkedCSRs
+
+/-- Public assumptions for SC.W (`double = false`) and SC.D (`double = true`).
+Jolt's SC rows load the old doubleword before storing, so the bundle covers both. -/
+structure ReservationStoreEqAssumptions (double : Bool) (rs2 rs1 : regidx) (js : SailJoltState) : Type
+    extends BinarySourceReadWithLinkedCSRs rs2 rs1 js where
+  cur_privilege : Assumptions.CurPrivilegeMachine js.sail
+  mstatus_mprv : Assumptions.MstatusMprvZero js.sail
+  aligned : Assumptions.LrScAligned double rs1_val
+  dword_present : Assumptions.DwordPresent (reservationBase double rs1_val) js.sail
+  not_readable_mmio : Assumptions.NotReadableMmioWindow (reservationBase double rs1_val) 8 js.sail
+  not_writable_mmio : Assumptions.NotWritableMmioWindow (reservationBase double rs1_val) 8 js.sail
+  jolt_ram : Assumptions.JoltRamLoadOk (reservationBase double rs1_val) js
+  conditional_access : Assumptions.StoreConditionalPmpOk rs1_val (if double then 8 else 4) js.sail
+  jolt_store : if double then Assumptions.JoltScDwordStoreOk rs1_val rs2_val js
+    else Assumptions.JoltScWordStoreOk rs1_val rs2_val js
+  reservation_legal : Assumptions.ReservationVRegsLegal js
+
+theorem ReservationStoreEqAssumptions.linkedCSRs {double : Bool} {rs2 rs1 : regidx}
+    {js : SailJoltState} (h : ReservationStoreEqAssumptions double rs2 rs1 js) : LinkedCSRs js :=
+  h.toBinarySourceReadWithLinkedCSRs.linkedCSRs
 
 end
