@@ -41,9 +41,9 @@ whole-run theorems of `docs/whole-run-theorem.md`. -/
   "joltField : JoltField F"
   "joltInstance : JoltInstance SourceInstruction"
   "params : WitnessParams"
-  "privateInputs : JoltPrivateInputs"
+  "untrustedAdvice : ℕ → F"
   "witness : WitnessType F params"
-  "satisfied : JoltConstraints.AllConstraints joltInstance privateInputs witness"
+  "satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness"
 
 #expect_binders JoltInstance.completeness
   "F : Type"
@@ -80,9 +80,9 @@ whole-run theorems of `docs/whole-run-theorem.md`. -/
   "joltField : JoltField F"
   "joltInstance : JoltInstance SourceInstruction"
   "params : WitnessParams"
-  "givenInputs : JoltPrivateInputs"
+  "untrustedAdvice : ℕ → F"
   "witness : WitnessType F params"
-  "satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness"
+  "satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness"
   "elf : WholeRun.ElfSections"
   "hdecoded : joltInstance.program.DecodedFrom elf"
 

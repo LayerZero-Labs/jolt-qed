@@ -12,9 +12,9 @@ open scoped BigOperators
 Each final RAM word equals its initial value plus all write increments.
 Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs -/
 def ramValFinalEqInitialPlusRamInc {F : Type} [Field F] {params : WitnessParams}
-    (initialRam : Nat → BitVec 64) (witness : WitnessType F params) : Prop :=
+    (initialValue : Nat → F) (witness : WitnessType F params) : Prop :=
   ∀ address : Fin params.ramSize,
-    witness.RamValFinal address = ramInitialValue initialRam address.val +
+    witness.RamValFinal address = initialValue address.val +
       ∑ cycle : Fin params.traceLength, witness.RamRa address cycle * witness.RamInc cycle
 
 end JoltConstraints

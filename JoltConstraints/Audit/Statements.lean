@@ -59,21 +59,23 @@ expect r#"
 statement JoltInstance.soundness
   ∀ {F : Type} [inst : Field F],
     JoltField F →
-      ∀ (joltInstance : JoltInstance SourceInstruction) {params : WitnessParams} (privateInputs : JoltPrivateInputs)
+      ∀ (joltInstance : JoltInstance SourceInstruction) {params : WitnessParams} (untrustedAdvice : ℕ → F)
         (witness : WitnessType F params),
-        JoltConstraints.AllConstraints joltInstance privateInputs witness → joltInstance.InLanguage
+        JoltConstraints.AllConstraints joltInstance untrustedAdvice witness → joltInstance.InLanguage
 statement JoltInstance.completeness
   ∀ {F : Type} [inst : Field F] (joltInstance : JoltInstance SourceInstruction) (privateInputs : JoltPrivateInputs)
     (trace : HonestTrace joltInstance privateInputs),
     Trace.matches_outputs joltInstance trace.toTrace →
       trace.SpoilAssertsPass →
         ∀ (config : ProverConfig) (proverAccepts : Trace.prover_config joltInstance trace.toTrace = some config),
-          JoltConstraints.AllConstraints joltInstance privateInputs
+          JoltConstraints.AllConstraints joltInstance
+            (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
+              (TraceWitness.initialRamWord trace.toTrace))
             (HonestTrace.honestWitness (trace.witness_params config proverAccepts) trace)
 statement JoltInstance.completeness_someWitness
   ∀ {F : Type} [inst : Field F] (joltInstance : JoltInstance SourceInstruction),
     joltInstance.InLanguage →
-      ∃ privateInputs params witness, JoltConstraints.AllConstraints joltInstance privateInputs witness
+      ∃ untrustedAdvice params witness, JoltConstraints.AllConstraints joltInstance untrustedAdvice witness
 statement WholeRun.HonestTrace.sail_reproduces
   ∀ {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) {elf : WholeRun.ElfSections},
@@ -93,9 +95,9 @@ statement WholeRun.HonestTrace.sail_reproduces
 statement JoltInstance.sail_soundness
   ∀ {F : Type} [inst : Field F],
     JoltField F →
-      ∀ (joltInstance : JoltInstance SourceInstruction) {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+      ∀ (joltInstance : JoltInstance SourceInstruction) {params : WitnessParams} (untrustedAdvice : ℕ → F)
         (witness : WitnessType F params),
-        JoltConstraints.AllConstraints joltInstance givenInputs witness →
+        JoltConstraints.AllConstraints joltInstance untrustedAdvice witness →
           ∀ {elf : WholeRun.ElfSections},
             joltInstance.program.DecodedFrom elf →
               ∃ privateInputs trace,
@@ -186,13 +188,13 @@ fingerprint 8888146fe7865c67 HonestWitness.RamVal
 fingerprint 52c263b0f7eb423d InstructionFlags
 fingerprint 1ba9089b05439314 InstructionFlags.ctorIdx
 fingerprint 3a97234127a9dfb3 JoltAdviceTape
-fingerprint 82c234d2ae61b7da JoltConstraints.AllConstraints
+fingerprint 83eb366a5dc84400 JoltConstraints.AllConstraints
 fingerprint b4b4f81063df92ef JoltConstraints.Audit.blockConformsRiscv_not_implied
 fingerprint 7532bd5d075703d2 JoltConstraints.Audit.joltField_not_implied
 fingerprint 5be478c9737dd4b6 JoltConstraints.Audit.memoryInitInProgram_not_derived
 fingerprint d5bf9c571a9d14ee JoltConstraints.CanonicalInstructionAddress
 fingerprint 1b4536ee680ef4d9 JoltConstraints.ConstraintContext
-fingerprint cdba7d85142ccfc6 JoltConstraints.ConstraintEquations
+fingerprint 8260af24489c4c7e JoltConstraints.FieldConstraintEquations
 fingerprint e7522cd82290f336 JoltConstraints.VerifierSizes.adviceVars
 fingerprint 5d807eece99a4241 JoltConstraints.VerifierSizes.checkedNextPowerOfTwo
 fingerprint 19cc0c72019617ac JoltConstraints.VerifierSizes.committedLogKChunk
@@ -201,6 +203,7 @@ fingerprint 412704d2ac96f7f7 JoltConstraints.VerifierSizes.maxRamSize
 fingerprint 0c4269fe5b9fc7a8 JoltConstraints.VerifierSizes.minRamSize
 fingerprint f889ef9e793c7e7c JoltConstraints.VerifierSizes.remapWordAddress
 fingerprint a4b1c104eb8ccad9 JoltConstraints.addressOffsetTableEntry
+fingerprint 6b36cb99f53638f9 JoltConstraints.adviceBlockWords
 fingerprint c3ed2bf8efe1198b JoltConstraints.andTableEntry
 fingerprint 55ff1082f2e16941 JoltConstraints.andnTableEntry
 fingerprint b153467c03a26bb9 JoltConstraints.assertLookupOne
@@ -220,6 +223,7 @@ fingerprint 352c8f984924d9b5 JoltConstraints.bytecodeRegisterSelector
 fingerprint d4280a3ff4d6893e JoltConstraints.bytecodeRow
 fingerprint 31eb01df39c4d29b JoltConstraints.bytecodeRs1Register
 fingerprint 30160db270b41fe7 JoltConstraints.bytecodeRs2Register
+fingerprint 8d539af71346de9c JoltConstraints.committedInitialValue
 fingerprint ac772f6900ce83a6 JoltConstraints.equalTableEntry
 fingerprint eab8fcc7c98c4262 JoltConstraints.haltEndRule
 fingerprint 51d8a085d273a35e JoltConstraints.immEqBytecodeRead
@@ -281,8 +285,8 @@ fingerprint 3dcb42277c9d40fc JoltConstraints.ramRaEqChunkProduct
 fingerprint 8a60a96fed37c973 JoltConstraints.ramReadEqRamWriteIfLoad
 fingerprint 84d1614d2449a81c JoltConstraints.ramReadEqRdWriteIfLoad
 fingerprint 76e382d8c6503145 JoltConstraints.ramReadValueEqRamRead
-fingerprint bc5a6857577a3f53 JoltConstraints.ramValEqInitialPlusPrefixRamInc
-fingerprint 680c631d5ab18106 JoltConstraints.ramValFinalEqInitialPlusRamInc
+fingerprint bcdebe26df308e55 JoltConstraints.ramValEqInitialPlusPrefixRamInc
+fingerprint c909a099df87f340 JoltConstraints.ramValFinalEqInitialPlusRamInc
 fingerprint 8a16bf20598ef097 JoltConstraints.ramWriteProtected
 fingerprint e7b04517dafe9843 JoltConstraints.ramWriteProtectedMask
 fingerprint bc63a8c4868911fc JoltConstraints.ramWriteValueEqRamReadWrite
@@ -321,6 +325,7 @@ fingerprint 6de19bd2c8f0a2b8 JoltConstraints.uninterleave
 fingerprint a370d89cd8783605 JoltConstraints.unsignedGreaterThanEqualTableEntry
 fingerprint c05af18a855738ef JoltConstraints.unsignedLessThanEqualTableEntry
 fingerprint 847ceab3a715477c JoltConstraints.unsignedLessThanTableEntry
+fingerprint 16bc20c1ac33ab71 JoltConstraints.untrustedAdviceWordIndex?
 fingerprint 50b0dc438362976e JoltConstraints.upperHalfAllOnes
 fingerprint 7e67969ea722a7c2 JoltConstraints.upperWordTableEntry
 fingerprint b62ec98816866382 JoltConstraints.validDiv0TableEntry
@@ -556,16 +561,16 @@ fingerprint 97e901951075f58f JoltInstance
 fingerprint 96870fa52d635144 JoltInstance.InLanguage
 fingerprint f5225139defedc5b JoltInstance.RamRegionFits
 fingerprint 846aa3fa461fb4ce JoltInstance.bytecode
-fingerprint 99e8b86b28a56aa1 JoltInstance.completeness
-fingerprint 12899078341d4c7a JoltInstance.completeness_someWitness
+fingerprint 052afcc936d7a797 JoltInstance.completeness
+fingerprint 6a47616c059a2190 JoltInstance.completeness_someWitness
 fingerprint d2a81868d78c24e6 JoltInstance.initial_state
 fingerprint c2cf38db2def1990 JoltInstance.memory_layout
 fingerprint 60f26ebc5c882574 JoltInstance.one_hot_fits_setup
 fingerprint 716bc56a18818986 JoltInstance.public_io
 fingerprint f940de405774e031 JoltInstance.ramRegionFits
 fingerprint 093b6a70d53010e6 JoltInstance.ram_size_in_bounds
-fingerprint ad23e02ee275295b JoltInstance.sail_soundness
-fingerprint 6c0955e9e94edcfa JoltInstance.soundness
+fingerprint 2f6f6df4326cb3ca JoltInstance.sail_soundness
+fingerprint f34cd7d0b356c5d7 JoltInstance.soundness
 fingerprint 64b129d2ccc27442 JoltInstance.validate_inputs
 fingerprint 6cdfbf8e504ab90b JoltInstance.verifier_ram_bounds
 fingerprint 4008e874e4d73954 JoltInstructionRow
@@ -580,6 +585,7 @@ fingerprint 470965882406853d JoltMetadata.lookupTableFlag
 fingerprint fa534ef5fc9ac785 JoltMetadata.opcodeFlag
 fingerprint c50b2e8a3a417cbb JoltMonad
 fingerprint fbfd18ad19f363b5 JoltPrivateInputs
+fingerprint 6170e5e3158b1710 JoltPrivateInputs.noUntrustedAdvice
 fingerprint a330427fe3af8171 JoltPublicIo
 fingerprint 357aad2fcef4cd02 LookupTableKind
 fingerprint 490d6e41b82f456a LookupTableKind.ctorIdx

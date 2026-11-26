@@ -169,6 +169,26 @@ upstream = ""
 bug_report = ""
 
 [[entry]]
+name = "TrustedAdviceAsBytes"
+lean = "JoltInstance.trusted_advice"
+kind = "correspondence"
+anchors = [
+  "crates/jolt-verifier/src/stages/stage4/ram_val_check.rs (ram_val_check_advice_block)",
+  "crates/jolt-verifier/src/stages/stage4/ram_val_check.rs (ram_val_check_init_structure)",
+]
+no_witness_reason = """Correspondence gap: the model takes the trusted advice as packed \
+bytes in the instance (JoltInstance.trusted_advice), and initial_state installs them in the \
+trusted-advice region. Jolt's verifier holds only a commitment to the trusted advice and adds \
+the committed block to the initial RAM evaluation (ram_val_check_init_structure, \
+ram_val_check_advice_block), so each committed trusted-advice word can be any field element. \
+The headline theorems therefore hold when the trusted party commits to the packed bytes of \
+JoltInstance.trusted_advice. The untrusted advice is modelled as committed field elements \
+(JoltConstraints.committedInitialValue); the same treatment for trusted advice is a \
+follow-up. No Lean object can witness the trusted party's behaviour."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
 name = "HostAllocation"
 lean = "JoltISA.readHostBytes"
 kind = "correspondence"
@@ -310,6 +330,7 @@ appears_in = [
 ]
 anchors = [
   "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (rv64_trace_constraints)",
+  "crates/jolt-verifier/src/stages/stage4/ram_val_check.rs (ram_val_check_init_structure)",
 ]
 no_witness_reason = "The hypothesis of soundness: the constraints accept the witness."
 upstream = ""
@@ -407,12 +428,25 @@ name = "data.privateInputs"
 lean = "JoltPrivateInputs"
 kind = "data"
 appears_in = [
-  "JoltInstance.soundness (privateInputs)",
   "JoltInstance.completeness (privateInputs)",
   "WholeRun.HonestTrace.sail_reproduces (privateInputs)",
-  "JoltInstance.sail_soundness (givenInputs)",
 ]
 anchors = []
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.untrustedAdvice"
+lean = "Nat → F"
+kind = "data"
+appears_in = [
+  "JoltInstance.soundness (untrustedAdvice)",
+  "JoltInstance.sail_soundness (untrustedAdvice)",
+]
+# The committed untrusted-advice words: Jolt's verifier holds only a commitment to them.
+anchors = [
+  "crates/jolt-verifier/src/stages/stage4/ram_val_check.rs (ram_val_check_advice_block)",
+]
 upstream = ""
 bug_report = ""
 

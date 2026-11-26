@@ -54,7 +54,8 @@ theorem selected_halt_of_next_padding {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {params : WitnessParams} {witness : WitnessType F params}
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) (row : JoltInstructionRow)
     (atRow : bytecodeRow context.bytecode chosen.val = some row)
@@ -81,7 +82,8 @@ theorem nextIsNoop_zero_or_one {F : Type} [Field F]
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     {params : WitnessParams} {witness : WitnessType F params}
     (context : ConstraintContext inst inputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) :
     witness.NextIsNoop t = 0 ∨ witness.NextIsNoop t = 1 := by
   rw [equations.nextIsNoopEqShift t]
@@ -130,7 +132,8 @@ theorem selected_halt_forces_next_padding {F : Type} [Field F]
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     {params : WitnessParams} {witness : WitnessType F params}
     (context : ConstraintContext inst inputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (slot : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness slot t = 1) (row : JoltInstructionRow)
     (atRow : bytecodeRow context.bytecode slot.val = some row)

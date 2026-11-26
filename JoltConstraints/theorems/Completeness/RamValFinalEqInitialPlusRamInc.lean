@@ -23,7 +23,7 @@ theorem honestWitness_ramValFinalEqInitialPlusRamInc
     (validAccesses : ramAccessesValid trace)
     (traceFits : params.ProverPaddedFor trace.rows.size)
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
-    : ramValFinalEqInitialPlusRamInc (TraceWitness.initialRamWord trace)
+    : ramValFinalEqInitialPlusRamInc (ramInitialValue (TraceWitness.initialRamWord trace))
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro address
   change ((TraceWitness.finalRamWord trace address.val).toNat : F) =

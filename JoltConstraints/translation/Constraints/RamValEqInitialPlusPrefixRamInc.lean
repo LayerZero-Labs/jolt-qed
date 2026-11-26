@@ -12,9 +12,9 @@ open scoped BigOperators
 Before cycle t, each word equals its initial value plus strictly earlier write increments.
 Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs -/
 def ramValEqInitialPlusPrefixRamInc {F : Type} [Field F] {params : WitnessParams}
-    (initialRam : Nat → BitVec 64) (witness : WitnessType F params) : Prop :=
+    (initialValue : Nat → F) (witness : WitnessType F params) : Prop :=
   ∀ (address : Fin params.ramSize) (t : Fin params.traceLength),
-    witness.RamVal address t = ramInitialValue initialRam address.val +
+    witness.RamVal address t = initialValue address.val +
       ∑ cycle : Fin params.traceLength,
         if cycle.val < t.val then witness.RamRa address cycle * witness.RamInc cycle else 0
 

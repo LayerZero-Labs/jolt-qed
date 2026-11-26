@@ -48,7 +48,8 @@ private theorem bytecodeAddress_ne_four (charAbove2pow127 : 2 ^ 127 < ringChar F
 bytecode selector. Such a selector would instead give PC zero. -/
 private theorem unexpandedPC_ne_four (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) : witness.UnexpandedPC t ≠ 4 := by
   rw [equations.unexpandedPCEqBytecodeRead t]
   rcases bytecodeRa_zero_or_unique charAbove2pow127 context equations t with zero | ⟨chosen, one, _⟩
@@ -60,7 +61,8 @@ private theorem unexpandedPC_ne_four (charAbove2pow127 : 2 ^ 127 < ringChar F)
 ordinary PC-update equation forces the next unexpanded PC to four. -/
 private theorem nextUnexpandedPC_eq_four_of_bytecodeRa_zero
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (zero : ∀ address, bytecodeRa witness address t = 0) :
     witness.NextUnexpandedPC t = 4 := by
   have current : witness.UnexpandedPC t = 0 := by
@@ -87,7 +89,8 @@ by `stages/stage3/spartan_shift.rs` using `crates/jolt-poly/src/eq_plus_one.rs`.
 Its no-wrap successor polynomial is zero for every output at the last cycle. -/
 theorem bytecodeRa_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) : ∃! address, bytecodeRa witness address t = 1 := by
   rcases bytecodeRa_zero_or_unique charAbove2pow127 context equations t with zero | selected
   · have next := nextUnexpandedPC_eq_four_of_bytecodeRa_zero context equations t zero

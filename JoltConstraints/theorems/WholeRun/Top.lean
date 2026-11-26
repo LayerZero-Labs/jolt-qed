@@ -206,9 +206,9 @@ For example, a panic-ending trace is covered with public panic true.
 Jolt at `ff6fc6568`: `rv64_trace_constraints` halt lane and `Cpu::halt`. -/
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -226,7 +226,7 @@ theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField 
               joltInstance.panic = (kind == JoltHaltKind.panic) ∧
               (SailHalted joltInstance.program s kind ∨ halt = final)) := by
   obtain ⟨privateInputs, trace, hmo, hcfg, hspoil⟩ :=
-    JoltInstance.soundness joltField joltInstance givenInputs witness
+    JoltInstance.soundness joltField joltInstance untrustedAdvice witness
       satisfied
   obtain ⟨pre, halt, final, hp⟩ := trace.haltPrefix
   refine ⟨privateInputs, trace, hmo, hcfg, hspoil, pre, halt, final, hp, fun hconf => ?_⟩

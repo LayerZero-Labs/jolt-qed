@@ -44,7 +44,8 @@ variable {F : Type} [Field F]
 
 private theorem instructionRa_boolean
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (chunk : Fin params.virtualInstructionChunks)
     (address : Fin (2 ^ params.virtualChunkBits)) (t : Fin params.traceLength) :
     witness.InstructionRa chunk address t * (witness.InstructionRa chunk address t - 1) = 0 := by
@@ -55,7 +56,8 @@ private theorem instructionRa_boolean
 /-- Every entry of the full 128-bit lookup selector is zero or one. -/
 theorem instructionLookupRa_zero_or_one
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (address : Fin (2 ^ 128)) (t : Fin params.traceLength) :
     instructionLookupRa witness address t = 0 ∨ instructionLookupRa witness address t = 1 :=
   boolean_prod_zero_or_one _ (fun chunk =>
@@ -64,7 +66,8 @@ theorem instructionLookupRa_zero_or_one
 /-- The full lookup selector selects at most one 128-bit address. -/
 theorem instructionLookupRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (a b : Fin (2 ^ 128))
     (selectedA : instructionLookupRa witness a t = 1)
     (selectedB : instructionLookupRa witness b t = 1) : a = b := by
@@ -81,7 +84,8 @@ theorem instructionLookupRa_at_most_one (charAbove2pow127 : 2 ^ 127 < ringChar F
 from the lookup chunks, without requiring `2^128 < ringChar F`. -/
 theorem instructionLookupRa_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) : ∃! address, instructionLookupRa witness address t = 1 := by
   classical
   have each : ∀ chunk : Fin params.virtualInstructionChunks,
@@ -101,7 +105,8 @@ theorem instructionLookupRa_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
 `instructionLookupRa_unique` supplies the selected address at every cycle. -/
 theorem instruction_read_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (value : Fin (2 ^ 128) → F)
     (chosen : Fin (2 ^ 128)) (selected : instructionLookupRa witness chosen t = 1) :
     (∑ address, instructionLookupRa witness address t * value address) = value chosen := by
@@ -120,7 +125,8 @@ theorem instruction_read_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
 Identifying the active table and proving its operation are Layer 4 obligations. -/
 theorem lookupOutput_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ 128))
     (selected : instructionLookupRa witness chosen t = 1) :
     witness.LookupOutput t =
@@ -132,7 +138,8 @@ theorem lookupOutput_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
 odd bit positions, counted from the least significant bit. At flag 1 it is zero. -/
 theorem leftLookupOperand_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ 128))
     (selected : instructionLookupRa witness chosen t = 1) :
     witness.LeftLookupOperand t =
@@ -149,7 +156,8 @@ whole 128-bit address cast into the field; injectivity of that cast is a separat
 Layer 4 obligation. -/
 theorem rightLookupOperand_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ 128))
     (selected : instructionLookupRa witness chosen t = 1) :
     witness.RightLookupOperand t =
@@ -168,7 +176,8 @@ same field element as 5, but its upper half is all ones, so (63) rejects it. -/
 theorem identityAddress_lt_char
     (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ 128))
     (selected : instructionLookupRa witness chosen t = 1)
     (raf : witness.InstructionRafFlag t = 1) :
