@@ -14,6 +14,10 @@ with whether the run could monitor Jolt main, then lists:
   whose name no longer appears in the file at REV;
 - every other Jolt file the Lean sources cite (scripts/jolt_citations.py) that changed, with
   the Lean files that cite it, and the citations that resolve to no file at the pin;
+- every other changed production Rust file or build input (`*.rs` outside tests, benches and
+  examples, `Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, `build.rs`) in a directory the model
+  depends on, as "unclassified": a change the citations miss, such as a new instruction's
+  `exec` in a file no comment cites, still shows (see `classify_changes`);
 - `git diff --stat` of all those files;
 - the result of regenerating the constraint data from REV, labelled by whether the generator
   produced new files, when the caller passes it;
@@ -45,6 +49,54 @@ ANCHOR = re.compile(r"^(?P<path>[\w./-]+) \((?P<name>[\w:]+)\)$")
 MAX_DIFF = 30000
 MAX_BODY = 64000  # GitHub limits an issue body to 65536 characters.
 MAX_LIST = 60
+
+# Directories whose production Rust and build inputs the model depends on. Every directory
+# that holds a cited file (see `watched_directories`) is watched too.
+WATCHED = (
+    "tracer/", "common/", "crates/jolt-program/", "crates/jolt-riscv/", "crates/jolt-verifier/",
+    "crates/jolt-verifier-derive/", "crates/jolt-prover/", "crates/jolt-claims/",
+    "crates/jolt-claims-derive/", "crates/jolt-claim-expr/", "crates/jolt-witness/",
+    "crates/jolt-witness-derive/", "crates/jolt-lookup-tables/", "crates/jolt-r1cs/",
+)
+BUILD_INPUTS = re.compile(r"(?:^|/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|build\.rs)$")
+NOT_PRODUCTION = re.compile(r"(?:^|/)(?:tests|benches|examples)/")
+
+
+def watched_directories(cited):
+    """`WATCHED` plus the directory of each cited file: `crates/<name>/` for a crate, otherwise
+    the top-level directory (`jolt-platform/`)."""
+    found = set(WATCHED)
+    for path in cited:
+        parts = path.split("/")
+        if parts[0] == "crates" and len(parts) > 2:
+            found.add(f"crates/{parts[1]}/")
+        elif len(parts) > 1:
+            found.add(f"{parts[0]}/")
+    return sorted(found)
+
+
+def classify_changes(changed, anchor_paths, cited, watched):
+    """Sort every changed path into "anchored", "cited", "unclassified" and "other".
+
+    A path is "unclassified" when no anchor or citation names it and it is a build input at the
+    top level of Jolt or in a watched directory, or production Rust (`*.rs` outside `tests/`,
+    `benches/` and `examples/`) in a watched directory. Everything else is "other": tests,
+    documentation, and directories the model does not depend on.
+    """
+    groups = {"anchored": [], "cited": [], "unclassified": [], "other": []}
+    for path in sorted(changed):
+        if path in anchor_paths:
+            group = "anchored"
+        elif path in cited:
+            group = "cited"
+        else:
+            in_watched = any(path.startswith(d) for d in watched)
+            build_input = BUILD_INPUTS.search(path) and ("/" not in path or in_watched)
+            production = (in_watched and path.endswith(".rs")
+                          and not NOT_PRODUCTION.search(path))
+            group = "unclassified" if build_input or production else "other"
+        groups[group].append(path)
+    return groups
 
 
 def git(jolt_dir, *args):
@@ -78,8 +130,11 @@ def anchor_sections(out, jolt_dir, main, pin, entries):
               "`assumptions.toml`).")
     anchor_paths = {ANCHOR.match(a).group("path") for e in entries for a in e["anchors"]}
     cited, unresolved = resolved_citations(jolt_dir, pin)
-    paths = sorted(anchor_paths | cited.keys())
-    changed = set(git(jolt_dir, "diff", "--name-only", pin, head, "--", *paths).split())
+    # --no-renames lists a renamed file under its old and its new path.
+    all_changed = set(git(jolt_dir, "diff", "--name-only", "--no-renames", "-z", pin,
+                          head).split("\0")) - {""}
+    groups = classify_changes(all_changed, anchor_paths, cited, watched_directories(cited))
+    changed = set(groups["anchored"]) | set(groups["cited"])
 
     out.append("## Registry entries whose anchor files changed")
     out.append("")
@@ -130,10 +185,35 @@ def anchor_sections(out, jolt_dir, main, pin, entries):
         out.append("\n</details>")
         out.append("")
 
+    unclassified = groups["unclassified"]
+    out.append("## Unclassified changed files")
+    out.append("")
+    out.append(f"{len(all_changed)} Jolt files changed between the pin and main: "
+               f"{len(groups['anchored'])} anchored, {len(groups['cited'])} cited by the Lean "
+               f"sources, {len(unclassified)} unclassified and {len(groups['other'])} other. "
+               "An unclassified file is production Rust or a build input (`Cargo.toml`, "
+               "`Cargo.lock`, `rust-toolchain*`, `build.rs`) in a directory the model depends "
+               "on that no anchor or citation names; read each one and decide whether the model "
+               "transcribes it. The other files are tests, documentation and directories the "
+               "model does not depend on.")
+    out.append("")
+    for path in unclassified[:MAX_LIST]:
+        status = ("added" if file_at(jolt_dir, pin, path) is None else
+                  "deleted" if file_at(jolt_dir, head, path) is None else "modified")
+        out.append(f"- `{path}` ({status})")
+    if len(unclassified) > MAX_LIST:
+        out.append(f"- … and {len(unclassified) - MAX_LIST} more (the run's log has the full list)")
+    if not unclassified:
+        out.append("None.")
+    out.append("")
+
     out.append("## Changed files")
     out.append("")
-    stat = git(jolt_dir, "diff", "--stat", pin, head, "--", *paths).strip()
-    out.append("```text\n" + (stat or "no anchor or cited file changed") + "\n```")
+    paths = sorted(changed | set(unclassified))
+    stat = git(jolt_dir, "diff", "--stat", "--no-renames", pin, head, "--", *paths).strip() \
+        if paths else ""
+    out.append("```text\n" + (stat or "no anchored, cited or unclassified file changed")
+               + "\n```")
     out.append("")
 
 

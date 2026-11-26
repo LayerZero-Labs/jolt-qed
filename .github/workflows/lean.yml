@@ -108,7 +108,8 @@ jobs:
       # native_decide, bv_decide, decide +kernel, maxHeartbeats, synthInstance
       # options, respectTransparency false, and maxRecDepth outside the five
       # generated Sail options in scripts/lean-policy-allowlist.toml. The tests
-      # in scripts/tests/ check that the scanner rejects known bypasses.
+      # in scripts/tests/ check that the scanner rejects known bypasses and that
+      # the drift report lists uncited changed Jolt files.
       - name: Check the Lean source policy
         run: |
           python3 scripts/check-lean-policy.py

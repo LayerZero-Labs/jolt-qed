@@ -114,7 +114,8 @@ The theorems are proved about one Jolt commit, the pin.
 On every re-pin:
 
 1. Read the open issue "Drift against Jolt main" (label `jolt-drift`).
-   The nightly workflow `.github/workflows/jolt-main-drift.yml` writes it: the registry entries whose anchor files changed since the pin, the regenerated constraint data, and the state of each upstream issue.
+   The nightly workflow `.github/workflows/jolt-main-drift.yml` writes it: the registry entries whose anchor files changed since the pin, the other cited Jolt files that changed, the unclassified changed files (production Rust and build inputs that no anchor or citation names), the regenerated constraint data, and the state of each upstream issue.
+   Read every unclassified file and decide whether the model transcribes it; if it does, cite it in the Lean source.
 2. Move the pin in one commit: `jolt_rev` in `assumptions.toml`, `JOLT_REV` in `.github/workflows/constraint-generation.yml`, and the pin in `methods/soundness.md`.
    `scripts/check-assumptions.py` fails when the first two differ.
 3. Run `python3 scripts/check-assumptions.py --jolt-dir <Jolt checkout>`.
