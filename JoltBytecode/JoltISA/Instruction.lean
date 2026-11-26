@@ -56,7 +56,7 @@ def LoadFaultClass.alignFault : LoadFaultClass → ExceptionType
 -- Preserve immediate fields even when execution ignores them: Rust's Imm witness
 -- still records them. Zero defaults describe the existing generated expansions;
 -- importing a Rust row must supply its actual immediate.
--- Rust: [instruction formats](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
+-- Rust: instruction formats in `tracer/src/instruction/format/`.
 -- Final immediates are already decoded; inline expansion may emit full u64
 -- operands (e.g. ADDI with 4096). Source encoding widths belong in Encoded below.
 -- Rust: `crates/jolt-program/src/expand/inline.rs` (`emit_i`, `emit_ld`) at ff6fc6568
@@ -314,7 +314,7 @@ def Instr.CompactImmediateFits : Instr → Prop
 /-- Source instructions that Rust expands before final Jolt bytecode.
 
 This mirrors the built-in `SourceInstructionKind` cases handled by
-`/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/expand/mod.rs`
+`crates/jolt-program/src/expand/mod.rs`
 in `expand_source_only_instruction`. -/
 inductive Expanded where
   | MULH (dst : Dst) (lhs rhs : Src)

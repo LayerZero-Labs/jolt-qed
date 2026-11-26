@@ -48,9 +48,18 @@ def withReg (js : SailJoltState) (r : Register) (v : RegisterType r) : SailJoltS
   { js with sail := Step.setReg js.sail r v }
 
 /-- Patch advice values into the VirtualAdvice instructions of a list, in
-order; a VirtualAdvice with no value left keeps its placeholder. This is what
-Jolt's tracer does with the values of `SourceInstruction.honestTracerAdvice`
-(`honestTracerAdviceAtStepN`). -/
+order. This is what Jolt's tracer does with the values of
+`SourceInstruction.honestTracerAdvice` (`honestTracerAdviceAtStepN`).
+The patch does not check the number of values: a VirtualAdvice with no value
+left keeps its placeholder, and values left over are dropped. Rust's
+`trace_inline_sequence_with_advice` (`tracer/src/instruction/mod.rs:226-249`),
+called by DIV, DIVU, REM, REMU and their word forms, panics instead in both
+cases: when a VirtualAdvice row finds no value left, and when it filled at least
+one row but fewer rows than there are values. The two agree when the sequence
+has no VirtualAdvice row or exactly one per value. No theorem here proves that
+each division expansion meets this condition; the expansions with `rd = x0` have
+no VirtualAdvice row and the others have one, matching the one value
+`honestTracerAdvice` gives. -/
 def patchAdvice : List (BitVec 64) → List JoltISA.Instr → List JoltISA.Instr
   | _, [] => []
   | values, .VirtualAdvice dst placeholder imm :: rest =>

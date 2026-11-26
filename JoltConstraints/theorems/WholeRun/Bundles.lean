@@ -457,22 +457,23 @@ private def jalrBundle (js : SailJoltState) (hinv : Step.StepInvariant js.sail)
     target_aligned := even_aligned js hinv _ (by rw [clear_bit_zero]; simp) }
 
 
-private def reservedLoadRow (double : Bool) (dst : JoltISA.Dst) (rs1 : regidx) : JoltISA.Instr :=
+private def reservedLoadRow (double : Bool) (dst : JoltISA.Dst) (rs1 : regidx)
+    (fault : ExceptionType) : JoltISA.Instr :=
   if double then .LD .amo dst (.xreg rs1) 0#64
-  else .VirtualLoadW .amo dst (.xreg rs1) 0#64 (.E_SAMO_Addr_Align ())
+  else .VirtualLoadW .amo dst (.xreg rs1) 0#64 fault
 
 private theorem reservedLoad_conditions (double : Bool) (dst : JoltISA.Dst) (rs1 : regidx)
-    (s t : SailJoltState)
+    (fault : ExceptionType) (s t : SailJoltState)
     (hram : JoltISA.RAM_START_ADDRESS ≤
       (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)).toNat)
-    (hrun : JoltISA.execInstr (reservedLoadRow double dst rs1) s = .ok RETIRE_SUCCESS t) :
+    (hrun : JoltISA.execInstr (reservedLoadRow double dst rs1 fault) s = .ok RETIRE_SUCCESS t) :
     JoltISA.sourceValue (.xreg rs1) s &&& (if double then 7#64 else 3#64) = 0#64 ∧
       Assumptions.JoltRamLoadOk
         (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)) s := by
   cases double with
   | false =>
     have hg := JoltConstraints.floor_load_access _ .amo dst (.xreg rs1) 0#64 3#64
-      (.E_SAMO_Addr_Align ()) (Or.inr (Or.inr ⟨rfl, rfl⟩)) () s t hrun
+      fault (Or.inr (Or.inr ⟨rfl, rfl⟩)) () s t hrun
     simp only [BitVec.add_zero] at hg
     obtain ⟨value, u, hload, _⟩ := bind_success _ _ s t RETIRE_SUCCESS hg.2
     exact ⟨hg.1, JoltConstraints.Soundness.ramLoad_guard_of_run _ s u value hram hload⟩
@@ -487,8 +488,8 @@ private theorem reservedLoad_conditions (double : Bool) (dst : JoltISA.Dst) (rs1
     · cases hb
 
 private inductive ReservationLoadPlan (double : Bool) (rs1 : regidx) : JoltISA.Program → Prop where
-  | load (dst : JoltISA.Dst) (rest : JoltISA.Program) :
-      ReservationLoadPlan double rs1 (.instr (reservedLoadRow double dst rs1) rest)
+  | load (dst : JoltISA.Dst) (fault : ExceptionType) (rest : JoltISA.Program) :
+      ReservationLoadPlan double rs1 (.instr (reservedLoadRow double dst rs1 fault) rest)
   | scratch (i : JoltISA.Instr) (rest : JoltISA.Program) (hi : ScratchRow i)
       (htail : ReservationLoadPlan double rs1 rest) :
       ReservationLoadPlan double rs1 (.instr i rest)
@@ -503,9 +504,9 @@ private theorem reservationLoadPlan_conditions (double : Bool) (rs1 : regidx)
       Assumptions.JoltRamLoadOk
         (SystemProofs.reservationBase double (JoltISA.sourceValue (.xreg rs1) s)) s := by
   induction hp generalizing s t with
-  | load dst rest =>
+  | load dst fault rest =>
     obtain ⟨u, hload, _⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
-    exact reservedLoad_conditions double dst rs1 s u hram hload
+    exact reservedLoad_conditions double dst rs1 fault s u hram hload
   | scratch i rest hi htail ih =>
     obtain ⟨u, hstep, hrest⟩ := JoltISA.execProgram_instr_run_retire_inv _ _ s t hrun
     obtain ⟨hregs, hdev⟩ := scratchRow_frozen i hi s u _ hstep
@@ -524,7 +525,8 @@ private theorem reservation_load_plan (store double : Bool) (rd rs1 rs2 : regidx
     JoltISA.scwProgramAuto, JoltISA.scdProgramAuto]
   all_goals split
   all_goals repeat' first
-    | exact ReservationLoadPlan.load _ _
+    | exact ReservationLoadPlan.load _ _ _
+    | exact ReservationLoadPlan.load _ (ExceptionType.E_SAMO_Addr_Align ()) _
     | apply ReservationLoadPlan.scratch _ _ (by simp [ScratchRow])
 
 private structure ReservationMemory (store double : Bool) (rs1 rs2 : regidx)

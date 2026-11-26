@@ -592,7 +592,7 @@ theorem expand_memoryOk : ∀ (source : SourceInstruction) (expanded : ExpandedS
   | .jolt (.AdviceLD rd), _, h => by cases h; exact ofProgram_memoryOk _ (adviceld_memoryOk ..)
 
 /-- Each materialized expansion passes the memory checks on its instructions.
-For example, the three rows of `SW x3, 4(x2)` pass. -/
+For example, the six rows of `SW x3, 4(x2)` pass. -/
 theorem expand_instruction_memoryRowsOk (source : SourceInstructionRow SourceInstruction)
     (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
     memoryRowsOk (rows.map (·.instruction)) = true := by

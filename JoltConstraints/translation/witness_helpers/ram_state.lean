@@ -13,7 +13,7 @@ noncomputable def finalTraceState (trace : Trace) : SailJoltState :=
     (getElem trace.rows (trace.rows.size - 1) (Nat.sub_lt nonempty (by decide))).postState
   else trace.initialState
 
--- Rust: [populate_ram_bytes](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:289).
+-- Rust: `crates/jolt-witness/src/backend/trace/ram.rs` (`populate_ram_bytes`).
 -- Pack a witness memory image in little-endian order. Missing image bytes are
 -- intentionally zero: Rust starts with a zero array and zero-pads partial words.
 -- This is image encoding, not an ISA read of possibly missing execution memory.

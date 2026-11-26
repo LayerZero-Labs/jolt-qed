@@ -159,7 +159,7 @@ proofs using this predicate are intentionally about the ordinary RAM path, not
 device I/O.
 -/
 structure NotReadableMmio (addr : BitVec 64) (width : Nat) (s : SailState) : Prop where
-  -- Rust: [device/RAM split](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/mmu.rs:523).
+  -- Rust: device/RAM split, `tracer/src/emulator/mmu.rs` (`load_raw`, `traced_doubleword`).
   -- Excluding Sail's devices alone does not exclude Jolt's device address region.
   ram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat
   sail : within_mmio_readable (physaddr.Physaddr addr) width s = .ok false s

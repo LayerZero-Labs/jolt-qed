@@ -98,7 +98,7 @@ def lrReadRows (double : Bool) (rd rs1 : regidx) : JoltISA.Program :=
   let dst := JoltISA.sideEffectingRdZeroDst rd
   if double then .instr (JoltISA.Encoded.LD .amo dst (.xreg rs1) 0#12) (.done RETIRE_SUCCESS)
   else .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg scratch) (.xreg rs1) 0#12
-      (ExceptionType.E_SAMO_Addr_Align ()))
+      (ExceptionType.E_Load_Addr_Align ()))
     (.instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (scratch + 1#7)) (.xreg rs1) 0#12)
       (.instr (.VirtualPextSigned dst (.vreg scratch) (.vreg (scratch + 1#7))) (.done RETIRE_SUCCESS)))
 
@@ -169,6 +169,7 @@ theorem lrReadRows_run (double : Bool) (rd rs1 : regidx)
       have hne : scratch ≠ scratch + 1#7 := by
         cases hd : JoltISA.isX0 rd <;> simp [scratch, hd]
       have hld := AtomicFamily.amo_word_floor_load_aligned_run rs1 scratch js addr value hr ha hload hw
+        (ExceptionType.E_Load_Addr_Align ())
       have hmask := JoltISA.virtual_window_mask_w_run_vreg_xreg (scratch + 1#7) rs1 0#12 loaded addr hr hm
       have hpext : (JoltISA.execInstr (.VirtualPextSigned (JoltISA.sideEffectingRdZeroDst rd)
           (.vreg scratch) (.vreg (scratch + 1#7)))).run masked =
