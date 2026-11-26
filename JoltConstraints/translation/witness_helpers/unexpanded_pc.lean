@@ -9,7 +9,7 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [UnexpandedPc](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/pc.rs:36).
+-- Rust: `crates/jolt-witness/src/witnesses/pc.rs` (`UnexpandedPc`).
 -- The source instruction's memory address, taken from the selected bytecode row.
 -- Rows in one virtual sequence share this address, even though their expanded PCs differ.
 -- Padding contributes zero, as in Rust's default trace row.

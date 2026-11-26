@@ -13,8 +13,10 @@ open LeanRV64D
 This file contains the lightweight CSR whitelist/type shared by decoded
 RISC-V instructions, proof bundles, and the System expansion programs.
 
-Proof-side `@[simp]` rfl-projection laws against the underlying virtual-register
-projectors live in `InstructionEquivalence/ProofSupport/SystemCSR.lean`.
+The lemmas that relate CSRs to their virtual registers live elsewhere:
+`InstructionEquivalence/ProofSupport/Projection.lean` proves that `systemProject`
+agrees with the plain projection when the CSRs are linked, and `InstructionEquivalence/Instructions/System/Csr.lean`
+unfolds `SystemCSR.vreg` and `SystemCSR.address` in the CSR proofs.
 -/
 
 namespace JoltISA

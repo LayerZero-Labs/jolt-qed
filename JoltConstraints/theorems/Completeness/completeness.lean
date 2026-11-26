@@ -1,8 +1,10 @@
 /-
 The base completeness statement: for every instance and every honest trace that puts
 it in Jolt's language, the witness Jolt's prover builds, at the sizes Jolt's prover
-picks, satisfies every modeled constraint. The statement assumes nothing about the
-instance: a program whose run Jolt's prover accepts is not empty
+picks, satisfies every modeled constraint. The statement assumes one thing about the
+instance: its maximum padded trace length is at most `2^63`, so that the default
+Dory setup exists (`VerifierSizes.dorySetupLogN`). It needs no premise that the
+program is nonempty: a program whose run passes the prover's sizing is not empty
 (`HonestTrace.prover_config_image_nonempty`).
 The address-wrap cases of a16z/jolt#1949 are proved: honest memory rows never
 wrap their effective address. The shared-memory RAM-history obligations are proved.
@@ -70,8 +72,15 @@ Jolt's prover picks.
 For any instance `joltInstance`, take any private inputs `privateInputs` and any honest
 trace `trace` of the instance on them that meets the three conditions of
 `JoltInstance.InLanguage`: it ends with the claimed outputs (`claimsRunOutputs`), no spoil
-assert fails (`spoilAssertsPass`), and Jolt's prover accepts it with config `config`
-(`proverAccepts`).
+assert fails (`spoilAssertsPass`), and the prover's sizing succeeds
+(`derive_from_dimensions`) with config `config` (`proverAccepts`). Jolt's prover can
+still refuse such a run in stage 0 (`crates/jolt-prover/src/dory/stages/stage0.rs:134-156`),
+when an advice grid is wider than the main commitment grid; this theorem says only that
+the constraints accept the honest witness.
+Assume also that the instance's maximum padded trace length is at most `2^63`
+(`setupSized`). Above that, `max_padded_trace_length.next_power_of_two()` overflows
+`usize` in `setup_total_vars` (`crates/jolt-prover/src/dory/preprocessing.rs:196-210`),
+so Jolt's preprocessing builds no default Dory setup.
 Then the honest witness at Jolt's witness sizes (`HonestTrace.witness_params`) satisfies
 `AllConstraints` with the words of the untrusted-advice block of the run's initial RAM as
 the committed advice (`JoltConstraints.adviceBlockWords`), the words an honest prover
@@ -93,7 +102,7 @@ theorem JoltInstance.completeness {F : Type} [Field F]
     (config : ProverConfig)
     (proverAccepts : trace.prover_config joltInstance = some config) 
     -- In the language end.
-    :
+    (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63) :
     JoltConstraints.AllConstraints joltInstance
       (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
         (TraceWitness.initialRamWord trace))
@@ -101,7 +110,7 @@ theorem JoltInstance.completeness {F : Type} [Field F]
   obtain ⟨slots, preprocessed⟩ := trace.exists_preprocessed
   obtain ⟨io, publicIo⟩ := trace.exists_public_io
   obtain ⟨context, equations⟩ := trace.allConstraintsOnBytes_prover_sizes (F := F) config
-    proverAccepts slots preprocessed
+    proverAccepts setupSized slots preprocessed
     ⟨TraceWitness.bytecodePc trace 0, trace.entry_lt_bytecode_domain config proverAccepts⟩
     (trace.first_pc_eq_entry slots preprocessed) spoilAssertsPass
     joltInstance.program.next_pc_no_wrap claimsRunOutputs io publicIo
@@ -114,15 +123,16 @@ theorem JoltInstance.completeness {F : Type} [Field F]
   exact satisfied
 
 /-- Completeness, existential form: every instance in Jolt's language
-(`JoltInstance.InLanguage`) has committed untrusted-advice words and a witness, at some
-sizes, that satisfy every constraint.
+(`JoltInstance.InLanguage`) whose maximum padded trace length is at most `2^63` has
+committed untrusted-advice words and a witness, at some sizes, that satisfy every constraint.
 It follows from `JoltInstance.completeness` by unpacking `InLanguage`: the witness is the
 honest one at Jolt's sizes.
 For example, an instance whose program writes its claimed output and ends in `jolt.success` has
 the honest witness of that run as its witness. -/
 theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
-    (inLanguage : joltInstance.InLanguage) :
+    (inLanguage : joltInstance.InLanguage)
+    (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63) :
     ∃ (untrustedAdvice : Nat → F) (params : WitnessParams)
       (witness : WitnessType F params),
       JoltConstraints.AllConstraints joltInstance untrustedAdvice witness := by
@@ -130,4 +140,4 @@ theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
     inLanguage
   obtain ⟨config, accepted⟩ := Option.isSome_iff_exists.mp proverAccepts
   exact ⟨_, _, _, JoltInstance.completeness joltInstance privateInputs
-    trace claimsRunOutputs spoilAssertsPass config accepted⟩
+    trace claimsRunOutputs spoilAssertsPass config accepted setupSized⟩

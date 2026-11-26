@@ -6,7 +6,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [register domain](/Users/ari.biswas/Work-with-A16z/jolt/common/src/constants.rs).
+-- Rust: register domain, `common/src/constants.rs` (`REGISTER_COUNT`).
 -- Architectural and virtual operands use the same 128-address witness domain.
 -- An explicit x0 is address zero; it is not an absent operand.
 def sourceRegisterAddress : JoltISA.Src → Fin 128

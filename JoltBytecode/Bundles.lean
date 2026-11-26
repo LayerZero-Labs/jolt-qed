@@ -15,17 +15,30 @@ open LeanRV64D
 /-!
 # Jolt proof bundles
 
-A bundle is just a subset of assumptions from Assumptions.lean.
-Each main equivalence theorem gets a bundle, which states everything 
-we must assume to prove the theorem. 
-A bundle should NEVER invent assumptions, it can only import them from 
-Assumptions.lean.
-
-Thus, the entire assumption surface lives in Assumption.lean.
-We could have passed the entire list of assumptions to every theorem, 
+Each main equivalence theorem gets a bundle, which states everything
+we must assume to prove the theorem.
+The bundles in this file only collect assumptions from Assumptions.lean.
+We could have passed the entire list of assumptions to every theorem,
 but then it is not clear which theorems use which assumptions.
-The bundles are a clean way to show that memory equivalence proofs 
+The bundles are a clean way to show that memory equivalence proofs
 require far more assumptions than ALU expansions.
+
+Assumptions.lean is not the whole assumption surface. Some bundles outside
+this file add their own premises about the machine state:
+
+* `MretEqAssumptions`, `CsrEqAssumptions` and `CsrRegEqAssumptions` in
+  RiscvInstruction.lean ask for the step invariant, legal mstatus bits, a
+  legal mtvec mode and an even mepc.
+* `ReservationReadEqAssumptions` in
+  InstructionEquivalence/Instructions/System/Reservation.lean and
+  `ReservationStoreEqAssumptions` in
+  InstructionEquivalence/Instructions/System/Sc.lean ask that Sail's physical
+  access check passes at the reserved address, and SC also asks for a legal
+  reservation pair in v32 and v33.
+
+The whole-run proof discharges every bundle, these included, in
+`WholeRun.equivAssumptions_of_retire`
+(JoltConstraints/theorems/WholeRun/Bundles.lean).
 
 -/
 

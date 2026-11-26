@@ -222,7 +222,7 @@ def opcodeFlag (instruction : JoltISA.Instr) (flag : CircuitFlags) : Bool :=
   | .IsFirstInSequence => false
   | .IsLastInSequence => false
 
--- Rust: [LookupQuery operand packing](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/traits.rs:93).
+-- Rust: LookupQuery operand packing, `crates/jolt-lookup-tables/src/traits.rs` (`LookupQuery::to_instruction_inputs`).
 -- These flags select a single combined lookup operand: (0, lookup index).
 -- All remaining instructions pass their two instruction inputs through.
 def hasCombinedLookupOperands (instruction : JoltISA.Instr) : Bool :=

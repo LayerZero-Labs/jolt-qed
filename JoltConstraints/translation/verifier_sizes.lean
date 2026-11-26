@@ -48,16 +48,20 @@ def adviceVars (bytes : Nat) : Nat :=
   let words := max (bytes / 8) 1
   if words = 1 then 0 else Nat.log 2 (words - 1) + 1
 
-/-- The number of variables of the verifier's Dory setup: `setup_total_vars` in
-`crates/jolt-prover/src/dory/preprocessing.rs:196-210`, rounded up to even by
+/-- The number of variables of the verifier's default Dory setup: `setup_total_vars`
+in `crates/jolt-prover/src/dory/preprocessing.rs:196-210`, rounded up to even by
 `canonical_setup_log_n` in `crates/jolt-dory/src/scheme.rs:120-126`. Programs
-committed in preprocessing add more candidates; they are not modeled. -/
-def dorySetupLogN (layout : MemoryLayout) (maxPaddedTraceLength : Nat) : Nat :=
-  let maxLogT := Nat.clog 2 maxPaddedTraceLength
+committed in preprocessing add more candidates; they are not modeled.
+It is `none` when `max_padded_trace_length.next_power_of_two()` overflows `usize`,
+that is, when the maximum padded trace length exceeds `2^63`. Rust panics there in
+debug builds and computes `0.ilog2()`, which panics, in release builds. -/
+def dorySetupLogN (layout : MemoryLayout) (maxPaddedTraceLength : Nat) : Option Nat := do
+  let rounded ← checkedNextPowerOfTwo maxPaddedTraceLength
+  let maxLogT := Nat.log 2 rounded
   let vars := max (maxLogT + committedLogKChunk maxLogT)
     (max (adviceVars layout.max_trusted_advice_size.toNat)
       (adviceVars layout.max_untrusted_advice_size.toNat))
-  if vars % 2 = 0 then vars else vars + 1
+  return if vars % 2 = 0 then vars else vars + 1
 
 end JoltConstraints.VerifierSizes
 
@@ -78,17 +82,22 @@ def JoltInstance.ram_size_in_bounds {Source : Type} (joltInstance : JoltInstance
   | some (minimum, maximum) => decide (minimum ≤ ramSize ∧ ramSize ≤ maximum)
 
 /-- Whether one-hot chunks of `chunkBits` bits over `2^logT` cycles fit the verifier's
-Dory setup. Dory's verifier rejects an opening point with more coordinates than its
-setup has variables, and Jolt opens the committed one-hot chunks at a point with
-`logT + chunkBits` coordinates. The prover picks `chunkBits`; the setup is the
-verifier's.
-Rust: dory-pcs-0.4.2/src/evaluation_proof.rs:341-352, 394-399 (point size, setup bound)
-      crates/jolt-claims/src/protocols/jolt/geometry/committed_openings.rs:164-203
+Dory setup. Jolt opens the committed one-hot chunks at a point with
+`n = logT + chunkBits` coordinates and fixes Dory's column count to
+`sigma = ceil(n / 2)`. Dory's verifier rejects `sigma > max_log_n / 2`, and the
+setup's `max_log_n` is even, so the check is `n ≤ max_log_n`. The prover picks
+`chunkBits`; the setup is the verifier's. A layout or setup that does not exist
+fails the check.
+Rust: dory-pcs-0.5.0/src/evaluation_proof.rs:341-352, 394-399 (point size, setup bound)
+      crates/jolt-dory/src/scheme.rs:277-285, 457-474 (`verify`, `matrix_shape`, `check_matrix_shape`)
+      crates/jolt-claims/src/protocols/jolt/geometry/committed_openings.rs:164-213
       crates/jolt-verifier/src/stages/stage8/verify.rs:142-145 -/
 def JoltInstance.one_hot_fits_setup {Source : Type} (joltInstance : JoltInstance Source)
     (logT chunkBits : Nat) : Bool :=
   match joltInstance.memory_layout with
   | none => false
-  | some layout => decide (logT + chunkBits ≤
-      JoltConstraints.VerifierSizes.dorySetupLogN layout
-        joltInstance.max_padded_trace_length.toNat)
+  | some layout =>
+    match JoltConstraints.VerifierSizes.dorySetupLogN layout
+        joltInstance.max_padded_trace_length.toNat with
+    | none => false
+    | some setupLogN => decide (logT + chunkBits ≤ setupLogN)

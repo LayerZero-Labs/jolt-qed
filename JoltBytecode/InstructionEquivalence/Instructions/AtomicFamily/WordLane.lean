@@ -31,16 +31,18 @@ abbrev amoWordLaneOld (addr dword : BitVec 64) : BitVec 64 :=
 
 /-- An aligned floor load performs the containing-doubleword read and writes
 its result, as in `floor_access::load` in `tracer/src/instruction/floor_access.rs`.
-For example, an effective address of 12 reads the doubleword at 8. -/
+For example, an effective address of 12 reads the doubleword at 8. The
+misalignment exception `fault` plays no part on this path. AMO expansions use
+the default `E_SAMO_Addr_Align`, and LR.W passes `E_Load_Addr_Align`. -/
 theorem amo_word_floor_load_aligned_run
     (rs1 : regidx) (dst : JoltISA.VReg) (js : SailJoltState)
     (addr dword : BitVec 64)
     (hread : rX_bits rs1 js.sail = .ok addr js.sail)
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hload : JoltISA.Mmu.load_doubleword (amoWordBase addr) js = .ok (.Ok dword) js)
-    (hw : WritableVReg dst) :
-    (JoltISA.execInstr (.VirtualLoadW .amo (.vreg dst) (.xreg rs1) 0
-      (ExceptionType.E_SAMO_Addr_Align ()))).run js =
+    (hw : WritableVReg dst)
+    (fault : ExceptionType := ExceptionType.E_SAMO_Addr_Align ()) :
+    (JoltISA.execInstr (.VirtualLoadW .amo (.vreg dst) (.xreg rs1) 0 fault)).run js =
       .ok RETIRE_SUCCESS (stateAfterVRegWrite js dst dword) := by
   unfold JoltISA.execInstr JoltISA.readSrc liftSail
   simp only [hread, bind, EStateM.bind, EStateM.run]

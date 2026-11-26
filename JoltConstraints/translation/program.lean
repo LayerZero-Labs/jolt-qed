@@ -222,7 +222,7 @@ def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Sour
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
 -- The program is not empty: its memory image loads at least one byte.
--- Every program whose run Jolt's prover accepts meets this
+-- Every program whose run passes the prover's sizing meets this
 -- (`HonestTrace.prover_config_image_nonempty`): the prover rejects an empty trace,
 -- and a program with an instruction loads that instruction's bytes.
 def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
@@ -352,8 +352,9 @@ def program_image_len_words (memory_init : List (BitVec 64 × BitVec 8)) : Nat :
 -- its size is the total memory size rounded up to a multiple of 8.
 -- See : jolt/tracer/src/emulator/mod.rs:320-336 at ff6fc6568
 --       jolt/tracer/src/emulator/memory.rs:76-78 (init_with_capacity)
--- TODO: (claude) the tracer loads RAM from the ELF section headers, while
--- preprocessing uses decode_elf's memory_init; check that they always agree.
+-- The tracer loads RAM from the ELF section headers, while preprocessing uses
+-- decode_elf's memory_init, and the two do not always agree: see "Initial memory
+-- is preprocessing's, not the tracer's" in docs/whole-run-theorem.md.
 def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 8)) :
     Array (BitVec 8) :=
   let zeros := Array.replicate (8 * ((layout.get_total_memory_size.toNat + 7) / 8)) 0

@@ -120,10 +120,10 @@ abbrev CsrAddr := BitVec 12
 
 Sources:
 * Jolt accepted source instruction list:
-  `/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-riscv/src/lib.rs`,
+  `crates/jolt-riscv/src/lib.rs`,
   `for_each_instruction_kind!`.
 * Jolt source extension assignment:
-  `/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-riscv/src/kind.rs`,
+  `crates/jolt-riscv/src/kind.rs`,
   `source_extension_for_marker`.
 * RV32I base integer instructions:
   https://docs.riscv.org/reference/isa/v20260120/unpriv/rv32.html

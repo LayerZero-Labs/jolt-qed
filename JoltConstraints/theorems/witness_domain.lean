@@ -5,7 +5,7 @@ open LeanRV64D
 
 set_option autoImplicit false
 
--- Rust: [remapped_ram_address](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:260).
+-- Rust: `crates/jolt-witness/src/backend/trace/ram.rs` (`remapped_ram_address`).
 -- Every nonzero RAM access must remap successfully and fit the chosen witness
 -- domain. This includes device I/O. Rust treats raw address zero as no access;
 -- a nonzero address below the layout's lowest address is an error, not padding.
@@ -70,7 +70,7 @@ theorem MemoryLayout.get_lowest_address_toNat (layout : MemoryLayout) :
   unfold MemoryLayout.get_lowest_address
   split <;> omega
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), its RAM size
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), its RAM size
 `config.ram_K` is a power of two.
 For example, a run touching word 1000 gets `ram_K = 1024 = 2^10`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,

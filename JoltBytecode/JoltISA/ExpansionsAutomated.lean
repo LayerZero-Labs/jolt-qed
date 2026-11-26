@@ -425,7 +425,7 @@ def lrwProgramAuto (rd rs1 _rs2 : regidx) : Program :=
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 128)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 32)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 33)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
-    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_Load_Addr_Align ())) <|
     .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.VirtualPextSigned (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .done RETIRE_SUCCESS
@@ -434,7 +434,7 @@ def lrwProgramAuto (rd rs1 _rs2 : regidx) : Program :=
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 128)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 32)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 33)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
-    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_Load_Addr_Align ())) <|
     .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.VirtualPextSigned (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS

@@ -9,7 +9,7 @@ open LeanRV64D
 
 set_option autoImplicit false
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the base-two logarithm
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), the base-two logarithm
 of its padded length `config.trace_length` is below 64: the length is a power of two at
 most the instance's 64-bit maximum.
 For example, a 300-row run pads to `512 = 2^9`, and `9 < 64`.
@@ -27,7 +27,7 @@ theorem HonestTrace.prover_config_log_trace_length_lt
   rw [isPadded, isPower] at fitsMaximum
   exact (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (by omega)
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the base-two logarithm
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), the base-two logarithm
 of its RAM size `config.ram_K` is below 64: Jolt's prover checks that the rounded size
 fits in 64 bits (`HonestTrace.prover_config_ram_K`).
 For example, `ram_K = 1024 = 2^10` gives `10 < 64`.
@@ -54,7 +54,7 @@ theorem HonestTrace.log_bytecode_size_lt
   have atMost := Nat.clog_le_of_le_pow (b := 2) (y := 32) (by omega : trace.bytecode.size + 1 ≤ 2 ^ 32)
   omega
 
-/-- The witness sizes Jolt's prover uses for the honest trace, when it accepts the trace
+/-- The witness sizes Jolt's prover uses for the honest trace, when its sizing succeeds
 with config `config` (`proverAccepts`):
 `logT` and `logRamK` are the base-two logarithms of the config's padded length
 `config.trace_length` and RAM size `config.ram_K`;
