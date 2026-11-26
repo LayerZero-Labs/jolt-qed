@@ -104,12 +104,16 @@ jobs:
         run: python3 scripts/check-assumptions.py
       # The build checks the axioms of the audited theorems (#audit_statements in
       # JoltConstraints/Audit/Statements.lean). This step rejects the mechanisms
-      # anywhere in the source: sorry, admit, unlisted axioms, native_decide,
-      # bv_decide, decide +kernel, maxHeartbeats, synthInstance options,
-      # respectTransparency false, and maxRecDepth outside the five generated
-      # Sail options in scripts/lean-policy-allowlist.toml.
+      # anywhere in the source: sorry, sorryAx, admit, unlisted axioms,
+      # native_decide, bv_decide, decide +kernel, maxHeartbeats, synthInstance
+      # options, respectTransparency false, and maxRecDepth outside the five
+      # generated Sail options in scripts/lean-policy-allowlist.toml. The tests
+      # in scripts/tests/ check that the scanner rejects known bypasses and that
+      # the drift report lists uncited changed Jolt files.
       - name: Check the Lean source policy
-        run: python3 scripts/check-lean-policy.py
+        run: |
+          python3 scripts/check-lean-policy.py
+          python3 -m unittest discover -s scripts/tests -v
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         with:
           build: true

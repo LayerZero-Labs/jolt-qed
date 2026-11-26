@@ -5,6 +5,7 @@ Usage:
   scripts/jolt-drift-report.py [--jolt-dir PATH] [--main REV] [--monitor NAME=OUTCOME]...
       [--generation-status N] [--generated yes|partial|copy-failed|no] [--generated-stat FILE]
       [--generated-diff FILE] [--equiv-status N] [--upstream] [--run-url URL]
+      [--evidence-dir DIR]
 
 PATH is a Jolt checkout that holds both the pinned commit (`jolt_rev` in assumptions.toml)
 and REV (default: HEAD, which the nightly job checks out from Jolt main). The report starts
@@ -14,10 +15,27 @@ with whether the run could monitor Jolt main, then lists:
   whose name no longer appears in the file at REV;
 - every other Jolt file the Lean sources cite (scripts/jolt_citations.py) that changed, with
   the Lean files that cite it, and the citations that resolve to no file at the pin;
+- every other changed production Rust file or build input (`*.rs` outside tests, benches and
+  examples, `Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, `build.rs`) in a directory the model
+  depends on, as "unclassified": a change the citations miss, such as a new instruction's
+  `exec` in a file no comment cites, still shows (see `classify_changes`);
 - `git diff --stat` of all those files;
 - the result of regenerating the constraint data from REV, labelled by whether the generator
   produced new files, when the caller passes it;
 - with --upstream, the state of each upstream issue, read with `gh api`.
+
+The issue body has a size limit, so the report shortens long lists and diffs. With
+--evidence-dir it also writes the full data to DIR, which the nightly job uploads as the run's
+`drift-evidence` artifact, and each shortened part points there:
+
+- `report.md`: the report before any shortening;
+- `changed-files.tsv`: every Jolt file changed between the pin and REV, with its group
+  (anchored, cited, unclassified, other);
+- `unresolved-citations.txt`: the citations that resolve to no file at the pin;
+- `jolt-diff.stat` and `jolt-diff.patch`: `git diff --stat` of every changed file, and the full
+  diff of the anchored, cited and unclassified ones;
+- `generated.stat` and `generated.diff`: the comparison of the regenerated constraint data
+  with the committed files, when the caller passes them.
 
 Each --monitor NAME=OUTCOME records the outcome (`success`, `failure`, `skipped`, …) of a step
 the report depends on, such as checking out Jolt main. Any outcome other than `success` or
@@ -45,6 +63,55 @@ ANCHOR = re.compile(r"^(?P<path>[\w./-]+) \((?P<name>[\w:]+)\)$")
 MAX_DIFF = 30000
 MAX_BODY = 64000  # GitHub limits an issue body to 65536 characters.
 MAX_LIST = 60
+ARTIFACT = "drift-evidence"
+
+# Directories whose production Rust and build inputs the model depends on. Every directory
+# that holds a cited file (see `watched_directories`) is watched too.
+WATCHED = (
+    "tracer/", "common/", "crates/jolt-program/", "crates/jolt-riscv/", "crates/jolt-verifier/",
+    "crates/jolt-verifier-derive/", "crates/jolt-prover/", "crates/jolt-claims/",
+    "crates/jolt-claims-derive/", "crates/jolt-claim-expr/", "crates/jolt-witness/",
+    "crates/jolt-witness-derive/", "crates/jolt-lookup-tables/", "crates/jolt-r1cs/",
+)
+BUILD_INPUTS = re.compile(r"(?:^|/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|build\.rs)$")
+NOT_PRODUCTION = re.compile(r"(?:^|/)(?:tests|benches|examples)/")
+
+
+def watched_directories(cited):
+    """`WATCHED` plus the directory of each cited file: `crates/<name>/` for a crate, otherwise
+    the top-level directory (`jolt-platform/`)."""
+    found = set(WATCHED)
+    for path in cited:
+        parts = path.split("/")
+        if parts[0] == "crates" and len(parts) > 2:
+            found.add(f"crates/{parts[1]}/")
+        elif len(parts) > 1:
+            found.add(f"{parts[0]}/")
+    return sorted(found)
+
+
+def classify_changes(changed, anchor_paths, cited, watched):
+    """Sort every changed path into "anchored", "cited", "unclassified" and "other".
+
+    A path is "unclassified" when no anchor or citation names it and it is a build input at the
+    top level of Jolt or in a watched directory, or production Rust (`*.rs` outside `tests/`,
+    `benches/` and `examples/`) in a watched directory. Everything else is "other": tests,
+    documentation, and directories the model does not depend on.
+    """
+    groups = {"anchored": [], "cited": [], "unclassified": [], "other": []}
+    for path in sorted(changed):
+        if path in anchor_paths:
+            group = "anchored"
+        elif path in cited:
+            group = "cited"
+        else:
+            in_watched = any(path.startswith(d) for d in watched)
+            build_input = BUILD_INPUTS.search(path) and ("/" not in path or in_watched)
+            production = (in_watched and path.endswith(".rs")
+                          and not NOT_PRODUCTION.search(path))
+            group = "unclassified" if build_input or production else "other"
+        groups[group].append(path)
+    return groups
 
 
 def git(jolt_dir, *args):
@@ -71,15 +138,26 @@ def read(path):
     return pathlib.Path(path).read_text() if path and pathlib.Path(path).exists() else ""
 
 
-def anchor_sections(out, jolt_dir, main, pin, entries):
+def anchor_sections(out, jolt_dir, main, pin, entries, evidence=None,
+                   full="a run with --evidence-dir"):
+    """Append the anchor and citation sections to `out`. Put the full lists and diffs into
+    `evidence` ({file name: text}); `full` says where a reader finds them."""
+    evidence = {} if evidence is None else evidence
     head = git(jolt_dir, "rev-parse", main).strip()
     git(jolt_dir, "cat-file", "-e", f"{pin}^{{commit}}")
     out[0] = (f"Jolt main `{head}` compared with the pin `{pin[:9]}` (`jolt_rev` in "
               "`assumptions.toml`).")
     anchor_paths = {ANCHOR.match(a).group("path") for e in entries for a in e["anchors"]}
     cited, unresolved = resolved_citations(jolt_dir, pin)
-    paths = sorted(anchor_paths | cited.keys())
-    changed = set(git(jolt_dir, "diff", "--name-only", pin, head, "--", *paths).split())
+    # --no-renames lists a renamed file under its old and its new path.
+    all_changed = set(git(jolt_dir, "diff", "--name-only", "--no-renames", "-z", pin,
+                          head).split("\0")) - {""}
+    groups = classify_changes(all_changed, anchor_paths, cited, watched_directories(cited))
+    changed = set(groups["anchored"]) | set(groups["cited"])
+    evidence["changed-files.tsv"] = "".join(f"{group}\t{path}\n" for group in groups
+                                            for path in groups[group])
+    evidence["unresolved-citations.txt"] = "".join(
+        f"{citation}\t{', '.join(sorted(files))}\n" for citation, files in sorted(unresolved.items()))
 
     out.append("## Registry entries whose anchor files changed")
     out.append("")
@@ -120,7 +198,8 @@ def anchor_sections(out, jolt_dir, main, pin, entries):
         gone = " (gone at main)" if file_at(jolt_dir, head, path) is None else ""
         out.append(f"- `{path}`{gone}: cited by {', '.join(f'`{f}`' for f in sorted(cited[path]))}")
     if len(other) > MAX_LIST:
-        out.append(f"- … and {len(other) - MAX_LIST} more (the run's log has the full list)")
+        out.append(f"- … and {len(other) - MAX_LIST} more ({full} has the full list in "
+                   "`changed-files.tsv`)")
     out.append("")
     if unresolved:
         out.append(f"<details><summary>{len(unresolved)} citations resolve to no file at the pin "
@@ -130,14 +209,45 @@ def anchor_sections(out, jolt_dir, main, pin, entries):
         out.append("\n</details>")
         out.append("")
 
+    unclassified = groups["unclassified"]
+    out.append("## Unclassified changed files")
+    out.append("")
+    out.append(f"{len(all_changed)} Jolt files changed between the pin and main: "
+               f"{len(groups['anchored'])} anchored, {len(groups['cited'])} cited by the Lean "
+               f"sources, {len(unclassified)} unclassified and {len(groups['other'])} other. "
+               "An unclassified file is production Rust or a build input (`Cargo.toml`, "
+               "`Cargo.lock`, `rust-toolchain*`, `build.rs`) in a directory the model depends "
+               "on that no anchor or citation names; read each one and decide whether the model "
+               "transcribes it. The other files are tests, documentation and directories the "
+               "model does not depend on.")
+    out.append("")
+    for path in unclassified[:MAX_LIST]:
+        status = ("added" if file_at(jolt_dir, pin, path) is None else
+                  "deleted" if file_at(jolt_dir, head, path) is None else "modified")
+        out.append(f"- `{path}` ({status})")
+    if len(unclassified) > MAX_LIST:
+        out.append(f"- … and {len(unclassified) - MAX_LIST} more ({full} has the full list "
+                   "in `changed-files.tsv`)")
+    if not unclassified:
+        out.append("None.")
+    out.append("")
+
     out.append("## Changed files")
     out.append("")
-    stat = git(jolt_dir, "diff", "--stat", pin, head, "--", *paths).strip()
-    out.append("```text\n" + (stat or "no anchor or cited file changed") + "\n```")
+    paths = sorted(changed | set(unclassified))
+    stat = git(jolt_dir, "diff", "--stat", "--no-renames", pin, head, "--", *paths).strip() \
+        if paths else ""
+    out.append("```text\n" + (stat or "no anchored, cited or unclassified file changed")
+               + "\n```")
+    out.append(f"{full[0].upper() + full[1:]} has the full diff of these files (`jolt-diff.patch`) and the statistic "
+               "of every changed file (`jolt-diff.stat`).")
     out.append("")
+    evidence["jolt-diff.stat"] = git(jolt_dir, "diff", "--stat=200", "--no-renames", pin, head)
+    evidence["jolt-diff.patch"] = (git(jolt_dir, "diff", "--no-renames", pin, head, "--", *paths)
+                                   if paths else "")
 
 
-def generation_section(out, args):
+def generation_section(out, args, full="a run with --evidence-dir"):
     out.append("## Constraint data regenerated from Jolt main")
     out.append("")
     status = args.generation_status
@@ -171,7 +281,7 @@ def generation_section(out, args):
     diff = read(args.generated_diff)
     if diff:
         if len(diff) > MAX_DIFF:
-            diff = diff[:MAX_DIFF] + "\n… (cut; the run's log has the rest)\n"
+            diff = diff[:MAX_DIFF] + f"\n… (cut; {full} has the full diff in `generated.diff`)\n"
         out.append("")
         out.append("<details><summary>Diff of the generated files</summary>\n")
         out.append("```diff\n" + diff + "```\n</details>")
@@ -190,12 +300,21 @@ def main():
     parser.add_argument("--equiv-status")
     parser.add_argument("--upstream", action="store_true")
     parser.add_argument("--run-url", default="")
+    parser.add_argument("--evidence-dir", type=pathlib.Path,
+                        help="write the full report, lists and diffs here (see above)")
     args = parser.parse_args()
 
     registry = tomllib.loads((ROOT / "assumptions.toml").read_text())
     pin = registry["jolt_rev"]
     entries = registry["entry"]
 
+    evidence = {}
+    if args.run_url:
+        full = f"the [`{ARTIFACT}` artifact]({args.run_url}#artifacts) of this run"
+    elif args.evidence_dir:
+        full = f"`{args.evidence_dir}`"
+    else:
+        full = "a run with --evidence-dir"
     failures = []
     for item in args.monitor:
         name, _, outcome = item.partition("=")
@@ -213,7 +332,7 @@ def main():
     else:
         anchors.append("")
         try:
-            anchor_sections(anchors, args.jolt_dir, args.main, pin, entries)
+            anchor_sections(anchors, args.jolt_dir, args.main, pin, entries, evidence, full)
         except (subprocess.CalledProcessError, OSError) as exc:
             failures.append(f"comparing the anchors failed: {exc}")
             anchors = []
@@ -234,7 +353,7 @@ def main():
         out.append("Not computed: this run has no usable Jolt checkout.")
         out.append("")
 
-    generation_section(out, args)
+    generation_section(out, args, full)
 
     if args.upstream:
         out.append("## Upstream issues")
@@ -251,8 +370,18 @@ def main():
         out.append("")
 
     report = "\n".join(out)
+    if args.evidence_dir:
+        evidence["report.md"] = report + "\n"
+        for name, source in (("generated.stat", args.generated_stat),
+                             ("generated.diff", args.generated_diff)):
+            if read(source):
+                evidence[name] = read(source)
+        args.evidence_dir.mkdir(parents=True, exist_ok=True)
+        for name, text in evidence.items():
+            (args.evidence_dir / name).write_text(text)
     if len(report) > MAX_BODY:
-        report = report[:MAX_BODY] + "\n\n… (cut to fit an issue; the run's log has the rest)\n"
+        report = (report[:MAX_BODY] + f"\n\n… (cut to fit an issue; {full} has the full report "
+                  "in `report.md`)\n")
     print(report)
     return 3 if failures else 0
 

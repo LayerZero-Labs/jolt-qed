@@ -68,14 +68,16 @@ statement JoltInstance.completeness
     Trace.matches_outputs joltInstance trace.toTrace →
       trace.SpoilAssertsPass →
         ∀ (config : ProverConfig) (proverAccepts : Trace.prover_config joltInstance trace.toTrace = some config),
-          JoltConstraints.AllConstraints joltInstance
-            (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
-              (TraceWitness.initialRamWord trace.toTrace))
-            (HonestTrace.honestWitness (trace.witness_params config proverAccepts) trace)
+          joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63 →
+            JoltConstraints.AllConstraints joltInstance
+              (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
+                (TraceWitness.initialRamWord trace.toTrace))
+              (HonestTrace.honestWitness (trace.witness_params config proverAccepts) trace)
 statement JoltInstance.completeness_someWitness
   ∀ {F : Type} [inst : Field F] (joltInstance : JoltInstance SourceInstruction),
     joltInstance.InLanguage →
-      ∃ untrustedAdvice params witness, JoltConstraints.AllConstraints joltInstance untrustedAdvice witness
+      joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63 →
+        ∃ untrustedAdvice params witness, JoltConstraints.AllConstraints joltInstance untrustedAdvice witness
 statement WholeRun.HonestTrace.sail_reproduces
   ∀ {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) {elf : WholeRun.ElfSections},
@@ -185,7 +187,7 @@ fingerprint b6fd46cab918e022 HonestTraceRow
 fingerprint 42d9711eb3bf5f3a HonestWitness.RamInc
 fingerprint e7f3151d09e69b79 HonestWitness.RamReadValue
 fingerprint 8888146fe7865c67 HonestWitness.RamVal
-fingerprint 52c263b0f7eb423d InstructionFlags
+fingerprint 4d08a04362f5dd5a InstructionFlags
 fingerprint 1ba9089b05439314 InstructionFlags.ctorIdx
 fingerprint 3a97234127a9dfb3 JoltAdviceTape
 fingerprint 83eb366a5dc84400 JoltConstraints.AllConstraints
@@ -198,7 +200,7 @@ fingerprint 8260af24489c4c7e JoltConstraints.FieldConstraintEquations
 fingerprint e7522cd82290f336 JoltConstraints.VerifierSizes.adviceVars
 fingerprint 5d807eece99a4241 JoltConstraints.VerifierSizes.checkedNextPowerOfTwo
 fingerprint 19cc0c72019617ac JoltConstraints.VerifierSizes.committedLogKChunk
-fingerprint 5c2617ffca30b924 JoltConstraints.VerifierSizes.dorySetupLogN
+fingerprint bcb0f1af1b19c197 JoltConstraints.VerifierSizes.dorySetupLogN
 fingerprint 412704d2ac96f7f7 JoltConstraints.VerifierSizes.maxRamSize
 fingerprint 0c4269fe5b9fc7a8 JoltConstraints.VerifierSizes.minRamSize
 fingerprint f889ef9e793c7e7c JoltConstraints.VerifierSizes.remapWordAddress
@@ -347,7 +349,7 @@ fingerprint 9aa598b4087c86b5 JoltConstraints.windowMaskWTableEntry
 fingerprint 2dfbd99d2b85d0ce JoltConstraints.windowSignBit
 fingerprint d7edae453b2e78da JoltConstraints.xorTableEntry
 fingerprint f58ce5dd00c40e93 JoltCustomInstruction
-fingerprint 65401a555d6ae643 JoltDevice
+fingerprint 5371e91284c11647 JoltDevice
 fingerprint 9d84a6211ce3aa98 JoltDevice.initialMem
 fingerprint 9bf7d73e13f8b9a9 JoltDevice.is_input
 fingerprint abf2d01a7b69e73f JoltDevice.is_io_gap
@@ -499,7 +501,7 @@ fingerprint 9ed378d4708799cd JoltISA.lbuProgramAuto
 fingerprint e4eeccfa22897f8f JoltISA.lhProgramAuto
 fingerprint 584d7fa48aa13421 JoltISA.lhuProgramAuto
 fingerprint 2ceae9a3c6f4a345 JoltISA.lrdProgramAuto
-fingerprint 84e5558001e13708 JoltISA.lrwProgramAuto
+fingerprint 5d0ee099e38094bb JoltISA.lrwProgramAuto
 fingerprint 48e3df1974c1b082 JoltISA.luiValue
 fingerprint 890f92d3a3a9d56f JoltISA.lwProgramAuto
 fingerprint 0f812b7d28909583 JoltISA.lwuProgramAuto
@@ -557,15 +559,15 @@ fingerprint c8770d41201a084b JoltISA.systemScratchVReg
 fingerprint c876168fa1055359 JoltISA.trace_doubleword?
 fingerprint c0180697f69cc438 JoltISA.trapHandlerVReg
 fingerprint 9f2d1915f805785f JoltISA.writeDst
-fingerprint 97e901951075f58f JoltInstance
+fingerprint 82d04651a02cddbb JoltInstance
 fingerprint 96870fa52d635144 JoltInstance.InLanguage
 fingerprint f5225139defedc5b JoltInstance.RamRegionFits
 fingerprint 846aa3fa461fb4ce JoltInstance.bytecode
-fingerprint 052afcc936d7a797 JoltInstance.completeness
-fingerprint 6a47616c059a2190 JoltInstance.completeness_someWitness
+fingerprint 99ccd1c20e21de39 JoltInstance.completeness
+fingerprint cfd9d9341a7c9097 JoltInstance.completeness_someWitness
 fingerprint d2a81868d78c24e6 JoltInstance.initial_state
 fingerprint c2cf38db2def1990 JoltInstance.memory_layout
-fingerprint 60f26ebc5c882574 JoltInstance.one_hot_fits_setup
+fingerprint e4ed76d6ee0e2df1 JoltInstance.one_hot_fits_setup
 fingerprint 716bc56a18818986 JoltInstance.public_io
 fingerprint f940de405774e031 JoltInstance.ramRegionFits
 fingerprint 093b6a70d53010e6 JoltInstance.ram_size_in_bounds
@@ -591,7 +593,7 @@ fingerprint 357aad2fcef4cd02 LookupTableKind
 fingerprint 490d6e41b82f456a LookupTableKind.ctorIdx
 fingerprint f97696b8c367c520 MAX_FINAL_ROWS_PER_SOURCE
 fingerprint 0d67af59ab2d52d9 MemoryConfig
-fingerprint 7cac5ac6959bdc83 MemoryLayout
+fingerprint 4ef3f75baf8a8500 MemoryLayout
 fingerprint ae1748e51ee026bc MemoryLayout.adviceRegions
 fingerprint be5f22bcc53ff697 MemoryLayout.alignUp8
 fingerprint 59af07e5a43c068b MemoryLayout.checkedAdd
@@ -604,7 +606,7 @@ fingerprint 98031abcba0b8a70 MemoryLayout.max_ram_k?
 fingerprint b61f705999617dac MemoryLayout.new
 fingerprint 19a789d92f1151c0 MemoryLayout.powerOfTwoOrZero
 fingerprint 4e31ed22116983f8 MemoryLayout.ram_size
-fingerprint cf792b0dd42c3811 ProverConfig
+fingerprint bc0bead1fc044839 ProverConfig
 fingerprint a62e1b76e4871da2 ProverConfig.checkedRamSize
 fingerprint 8379c26817dea3a7 ProverConfig.checkedTouched
 fingerprint 061245ec79ecb0da ProverConfig.checkedTraceLength
@@ -613,7 +615,7 @@ fingerprint 3ae9653df243c784 Riscv.andi
 fingerprint 629db0006fe4f782 Riscv.ori
 fingerprint 17fda5c60f459dd7 RiscvInstruction
 fingerprint 8c6f410858f63758 RiscvInstruction.ctorIdx
-fingerprint 897abd19305fa883 Rv64ProgramImage
+fingerprint ead665c09f2cdd88 Rv64ProgramImage
 fingerprint 4968616a106a7913 Rv64ProgramImage.DecodedFrom
 fingerprint 6e0c8db96111ea32 Rv64ProgramImage.DecodedFrom.instructionLoaded
 fingerprint 0d7bb8aa42ccacc5 Rv64ProgramImage.DecodedFrom.nextPCNoWrap
@@ -629,7 +631,7 @@ fingerprint d9b43089d25fa5d0 SourceInstruction.DecodesFrom
 fingerprint 7e9f8717a8dc1f6a SourceInstruction.ctorIdx
 fingerprint 1330692acb211bd1 SourceInstruction.expand
 fingerprint 9830898c2702e7b3 SourceInstruction.honestTracerAdvice
-fingerprint 88809ebc5f9cc8ca SourceInstructionRow
+fingerprint befa5ddb58959cfd SourceInstructionRow
 fingerprint b2abb398c9fbd2b6 Step.StepInvariant
 fingerprint b88e9d81455e049e Step.setReg
 fingerprint 8bba91dfc400da07 System.reservationWidth

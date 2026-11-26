@@ -55,12 +55,14 @@ whole-run theorems of `docs/whole-run-theorem.md`. -/
   "spoilAssertsPass : trace.SpoilAssertsPass"
   "config : ProverConfig"
   "proverAccepts : Trace.prover_config joltInstance trace.toTrace = some config"
+  "setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63"
 
 #expect_binders JoltInstance.completeness_someWitness
   "F : Type"
   "inst : Field F"
   "joltInstance : JoltInstance SourceInstruction"
   "inLanguage : joltInstance.InLanguage"
+  "setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63"
 
 #expect_binders WholeRun.HonestTrace.sail_reproduces
   "joltInstance : JoltInstance SourceInstruction"

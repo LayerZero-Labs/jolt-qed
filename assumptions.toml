@@ -27,7 +27,7 @@
 #                                   the Jolt functions its proof depends on watched;
 #                      sorry:       an unproved lemma;
 #                      statement:   what the theorem is about (the constraints accept, the
-#                                   instance is in Jolt's language, Jolt's prover accepts);
+#                                   instance is in Jolt's language, the prover's sizing succeeds);
 #                      data:        an ordinary quantified object.
 #   appears_in         where it is a binder or field: "<theorem or structure> (<name>)",
 #                      exactly as in JoltConstraints/Audit/Premises.lean. Entries that are not
@@ -141,6 +141,35 @@ an Akita build pads to 4096 and always uses log_k_chunk = 4 in one_hot_config. T
 inequalities and the constraint algebra cover Akita's field; trace sizing, one-hot chunking \
 and acceptance are Dory-specific. Follow-up: parameterize ProverConfig and the witness \
 construction by protocol mode."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "DefaultDorySetup"
+lean = "JoltInstance.one_hot_fits_setup"
+kind = "scope"
+anchors = [
+  "crates/jolt-prover/src/dory/preprocessing.rs (from_shared)",
+  "crates/jolt-prover/src/dory/preprocessing.rs (from_shared_parts)",
+  "crates/jolt-prover/src/dory/preprocessing.rs (setup_total_vars)",
+  "crates/jolt-verifier/src/preprocessing.rs (new)",
+  "crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs (try_from)",
+  "crates/jolt-dory/src/scheme.rs (verify)",
+]
+no_witness_reason = """Scope boundary, not a premise: the model checks the one-hot opening against the setup that Jolt's automatic constructor picks (from_shared, setup_total_vars). from_shared_parts accepts any Dory setup, and JoltVerifierPreprocessing::new never compares its size with that default. The verifier's chunk checks (JoltFormulaDimensions::try_from) require only that the committed width divides the virtual width and that the virtual width divides 128, so a committed width of 128 passes. Example: logT = 8, both widths 128, and a setup with max_log_n = 136 pass every verifier check, while JoltField only gives 2^128 - 2^64 < char, which does not bound 2^128 by the characteristic. The soundness theorems therefore cover verifiers built with the default setup. Closing this needs a Jolt-side bound on the committed chunk width or the setup size."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "SetupSized"
+lean = "joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63"
+kind = "premise"
+appears_in = [
+  "JoltInstance.completeness (setupSized)",
+  "JoltInstance.completeness_someWitness (setupSized)",
+]
+anchors = ["crates/jolt-prover/src/dory/preprocessing.rs (setup_total_vars)"]
+no_witness_reason = """Completeness only. Jolt's default Dory setup rounds the maximum padded trace length with next_power_of_two, which panics above 2^63; there is then no setup for the honest prover, and the model's dorySetupLogN returns none. Soundness needs no such premise."""
 upstream = ""
 bug_report = ""
 
@@ -381,7 +410,9 @@ appears_in = [
   "JoltInstance.completeness (proverAccepts)",
 ]
 anchors = ["crates/jolt-prover/src/config.rs (derive_from_dimensions)"]
-no_witness_reason = """Part of JoltInstance.InLanguage: Jolt's prover accepts the trace. \
+no_witness_reason = """Part of JoltInstance.InLanguage: the prover's sizing \
+(derive_from_dimensions) succeeds on the trace. Stage 0 of the prover can still refuse an \
+instance whose advice grid is wider than the main grid. \
 JoltInstance.sail_soundness obtains it from JoltInstance.soundness. The Sail reproduction \
 (WholeRun.HonestTrace.sail_reproduces) does not need it and no longer takes it."""
 upstream = ""
