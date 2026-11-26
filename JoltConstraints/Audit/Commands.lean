@@ -256,12 +256,15 @@ def hex16 (h : UInt64) : String :=
   let digits := (Nat.toDigits 16 h.toNat)
   String.ofList (List.replicate (16 - digits.length) '0' ++ digits)
 
-/-- The printed name of a declaration, without the `_private.<module>.0.` prefix. -/
-def shownName (name : Name) : String := toString (privateToUserName name)
+/-- The key of a declaration in the table: its full name, which no other declaration has. A
+private name keeps its `_private.<module>.0.` prefix, so two private declarations with the same
+name in different modules get a line each; for example `private def allowed` in the namespace
+`Foo` of the module `JoltConstraints.A` has the key `_private.JoltConstraints.A.0.Foo.allowed`. -/
+def tableKey (name : Name) : String := toString name
 
 /-- The table `#audit_statements` compares: each root's statement, pretty-printed at width 100,
-then one line `<fingerprint> <declaration>` per declaration in the union of the closures.
-For example:
+then one line `<fingerprint> <declaration>` per owner (see `ownerName`) in the union of the
+closures of all roots, with the declaration written as its `tableKey`. For example:
 
 ```text
 statement JoltInstance.soundness
@@ -310,23 +313,34 @@ syntax (name := auditStatements)
   "#audit_statements" (ppLine ident ident)* ppLine "expect" ppSpace str : command
 
 /-- Compute the actual table for `roots`, and for each fingerprinted declaration the roots whose
-closure contains it. -/
+closure contains it.
+
+The fingerprints are computed once, over the union of the closures of all roots, so that the
+fingerprint of an owner covers every member that any root reaches, and the table does not
+depend on the order of the roots. Computing them per root and keeping the last would let a root
+that reaches only some members of an owner (a structure without its projections, say) replace
+the fingerprint of a root that reaches more. `JoltConstraints/Audit/Test/Fingerprints.lean`
+tests this, and that private declarations with the same name get separate lines. -/
 def actualTable (roots : Array Name) :
     CommandElabM (StatementTable × Std.HashMap String (Array Name)) := do
   let env ← getEnv
   let mut statements := #[]
-  let mut prints : Std.HashMap String String := {}
+  let mut closure : Std.HashMap Name UInt64 := {}
   let mut users : Std.HashMap String (Array Name) := {}
   for root in roots do
     let type := (← getConstInfo root).type
     let text ← liftTermElabM <| withOptions (fun o => o.set `format.width (100 : Nat)) do
       return toString (← ppExpr type)
     statements := statements.push (toString root, text)
-    for (owner, hash) in ownerFingerprints env (statementClosure env root) do
-      let key := shownName owner
-      prints := prints.insert key (hex16 hash)
+    let mut owners : Std.HashSet Name := {}
+    for (name, hash) in statementClosure env root do
+      closure := closure.insert name hash
+      owners := owners.insert (ownerName env name)
+    for owner in owners do
+      let key := tableKey owner
       users := users.insert key ((users.getD key #[]).push root)
-  let fingerprints := prints.toArray.qsort (fun a b => a.1 < b.1) |>.map fun (n, h) => (n, h)
+  let fingerprints := (ownerFingerprints env closure).toArray.map (fun (owner, hash) =>
+    (tableKey owner, hex16 hash)) |>.qsort (fun a b => a.1 < b.1)
   return ({ statements, fingerprints }, users)
 
 /-- Describe how `actual` differs from `expected`. -/
