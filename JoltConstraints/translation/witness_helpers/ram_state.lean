@@ -33,6 +33,31 @@ private theorem ramImageWord_getLsbD (byte : Nat → BitVec 8) (start : Nat)
   all_goals congr 1
   all_goals omega
 
+/-- Packing the eight little-endian bytes of a word gives the word back.
+For example, if bytes `start` through `start + 7` are `0x02, 0x01, 0, 0, 0, 0, 0, 0`,
+the packed word is `0x0102`. -/
+theorem ramImageWord_of_bytes (word : BitVec 64) (byte : Nat → BitVec 8) (start : Nat)
+    (bytes : ∀ offset < 8, byte (start + offset) = word.extractLsb' (8 * offset) 8) :
+    ramImageWord byte start = word := by
+  apply BitVec.eq_of_getLsbD_eq
+  intro i inRange
+  have split : i = 8 * (i / 8) + i % 8 := (Nat.div_add_mod i 8).symm
+  rw [split, ramImageWord_getLsbD byte start ⟨i / 8, by omega⟩ (i % 8)
+    (Nat.mod_lt _ (by decide)), bytes (i / 8) (by omega), BitVec.getLsbD_extractLsb']
+  simp only [show i % 8 < 8 from Nat.mod_lt _ (by decide), decide_true, Bool.true_and]
+
+/-- Two byte maps that agree on the eight bytes of two words pack them to the same word.
+For example, changing a byte outside `start` through `start + 7` keeps the word. -/
+theorem ramImageWord_congr (f g : Nat → BitVec 8) (start start' : Nat)
+    (same : ∀ offset < 8, f (start + offset) = g (start' + offset)) :
+    ramImageWord f start = ramImageWord g start' := by
+  unfold ramImageWord
+  rw [same 7 (by decide), same 6 (by decide), same 5 (by decide), same 4 (by decide),
+    same 3 (by decide), same 2 (by decide), same 1 (by decide)]
+  have zero := same 0 (by decide)
+  rw [Nat.add_zero, Nat.add_zero] at zero
+  rw [zero]
+
 /-- Equal packed words have equal bytes at every offset from zero through seven. -/
 theorem ramImageWord_injective_byte (f g : Nat → BitVec 8) (start : Nat)
     (same : ramImageWord f start = ramImageWord g start) :

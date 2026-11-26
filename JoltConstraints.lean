@@ -1,7 +1,12 @@
 import JoltConstraints.theorems.Completeness.All
 import JoltConstraints.theorems.Completeness.completeness
 import JoltConstraints.theorems.advice_inputs
+import JoltConstraints.theorems.untrusted_advice_block
 import JoltConstraints.theorems.Soundness.soundness
+import JoltConstraints.theorems.Soundness.UntrustedAdvice.LoadWords
+import JoltConstraints.theorems.Soundness.UntrustedAdvice.RegisterWords
+import JoltConstraints.theorems.Soundness.UntrustedAdvice.ShiftWitness
+import JoltConstraints.theorems.Soundness.UntrustedAdvice.Bytes
 import JoltConstraints.theorems.Soundness.FieldModuli
 import JoltConstraints.theorems.Soundness.Layer0.Bounds
 import JoltConstraints.theorems.Soundness.Layer0.Words

@@ -26,9 +26,9 @@ theorem HonestTrace.sail_reproduces {joltInstance : JoltInstance SourceInstructi
 
 theorem JoltInstance.sail_soundness {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    {params : WitnessParams} (givenInputs : JoltPrivateInputs)
+    {params : WitnessParams} (untrustedAdvice : Nat → F)
     (witness : WitnessType F params)
-    (satisfied : JoltConstraints.AllConstraints joltInstance givenInputs witness)
+    (satisfied : JoltConstraints.AllConstraints joltInstance untrustedAdvice witness)
     {elf : ElfSections} (hdecoded : joltInstance.program.DecodedFrom elf) :
     ∃ (privateInputs : JoltPrivateInputs) (trace : HonestTrace joltInstance privateInputs),
       trace.matches_outputs joltInstance ∧
@@ -61,6 +61,12 @@ That fact is about sizing only: Jolt's prover can still refuse such a trace in s
 `sail_soundness` is about an instance the constraints accept.
 Jolt's soundness theorem, `JoltInstance.soundness`, turns a witness that satisfies `AllConstraints` into an honest trace with the instance's claimed outputs and panic flag.
 `sail_soundness` applies `sail_reproduces` to that trace.
+
+`AllConstraints` takes the untrusted advice as `untrustedAdvice : Nat → F`, one field element per word of the untrusted-advice block, because Jolt's verifier holds only a commitment to that block and adds it to the initial RAM in the RAM value check (`ram_val_check_advice_block` in `crates/jolt-verifier/src/stages/stage4/ram_val_check.rs`).
+A committed word can be any field element, including one outside the 64-bit range.
+The trace that `JoltInstance.soundness` returns starts from advice bytes: each committed word in the 64-bit range keeps its value, and every other word becomes zero.
+No row of the witness reads or writes a word outside the 64-bit range, so the run behaves the same.
+Trusted advice is still part of the instance as packed bytes; the theorems hold when the trusted party commits to those bytes (`TrustedAdviceAsBytes` in `assumptions.toml`).
 
 ## What the conclusion says
 
@@ -148,7 +154,7 @@ The instance premise `SoundnessAssumptions.ramRegionFits`, that the whole maximu
 
 ## Conformance is a premise on a trace the verifier does not see
 
-In `sail_soundness`, the private inputs and the trace are existentially quantified: `JoltInstance.soundness` proves that some trace exists, and does not name it.
+In `sail_soundness`, the private inputs and the trace are existentially quantified: `JoltInstance.soundness` proves that some trace exists, and does not name it. Its untrusted advice comes from the committed words as described above.
 `BlockConforms` is a premise on the blocks of that trace.
 To obtain the Sail run, a reader has to prove that the halt prefix of the returned trace conforms.
 A reader who sees only the instance cannot inspect those blocks.

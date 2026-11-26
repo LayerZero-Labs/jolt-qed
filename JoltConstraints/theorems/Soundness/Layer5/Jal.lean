@@ -27,7 +27,9 @@ theorem jump_write_value
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry
+      witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
     (selected : bytecodeRa witness slot t = 1)
     {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)

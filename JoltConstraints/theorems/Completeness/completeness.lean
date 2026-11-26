@@ -10,6 +10,7 @@ The address-wrap cases of a16z/jolt#1949 are proved: honest memory rows never
 wrap their effective address. The shared-memory RAM-history obligations are proved.
 -/
 import JoltConstraints.theorems.Completeness.All
+import JoltConstraints.theorems.untrusted_advice_block
 
 open LeanRV64D
 
@@ -81,7 +82,9 @@ Assume also that the instance's maximum padded trace length is at most `2^63`
 `usize` in `setup_total_vars` (`crates/jolt-prover/src/dory/preprocessing.rs:196-210`),
 so Jolt's preprocessing builds no default Dory setup.
 Then the honest witness at Jolt's witness sizes (`HonestTrace.witness_params`) satisfies
-`AllConstraints`.
+`AllConstraints` with the words of the untrusted-advice block of the run's initial RAM as
+the committed advice (`JoltConstraints.adviceBlockWords`), the words an honest prover
+commits to.
 For example, a 300-row run that touches RAM word 1000 is accepted on a 512-cycle witness
 with a 1024-word RAM table.
 It inherits the gaps in `model_review.md` ("Proofs owed").
@@ -100,18 +103,28 @@ theorem JoltInstance.completeness {F : Type} [Field F]
     (proverAccepts : trace.prover_config joltInstance = some config) 
     -- In the language end.
     (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63) :
-    JoltConstraints.AllConstraints joltInstance privateInputs
+    JoltConstraints.AllConstraints joltInstance
+      (JoltConstraints.adviceBlockWords trace.initialState.jolt_device.memory_layout
+        (TraceWitness.initialRamWord trace))
       (HonestTrace.honestWitness (F := F) (trace.witness_params config proverAccepts) trace) := by
   obtain ⟨slots, preprocessed⟩ := trace.exists_preprocessed
   obtain ⟨io, publicIo⟩ := trace.exists_public_io
-  exact trace.allConstraints_prover_sizes config proverAccepts setupSized slots preprocessed
+  obtain ⟨context, equations⟩ := trace.allConstraintsOnBytes_prover_sizes (F := F) config
+    proverAccepts setupSized slots preprocessed
     ⟨TraceWitness.bytecodePc trace 0, trace.entry_lt_bytecode_domain config proverAccepts⟩
     (trace.first_pc_eq_entry slots preprocessed) spoilAssertsPass
     joltInstance.program.next_pc_no_wrap claimsRunOutputs io publicIo
+  have satisfied := JoltConstraints.allConstraints_of_onBytes context equations
+  obtain ⟨state, initialized, ramIs⟩ := context.initialized
+  have stateIs : state = trace.initialState :=
+    Option.some.inj (initialized.symm.trans trace.initialized)
+  rw [← JoltConstraints.Soundness.initial_state_memory_layout context initialized, ramIs,
+    stateIs] at satisfied
+  exact satisfied
 
 /-- Completeness, existential form: every instance in Jolt's language
 (`JoltInstance.InLanguage`) whose maximum padded trace length is at most `2^63` has
-private inputs and a witness, at some sizes, that satisfy every constraint.
+committed untrusted-advice words and a witness, at some sizes, that satisfy every constraint.
 It follows from `JoltInstance.completeness` by unpacking `InLanguage`: the witness is the
 honest one at Jolt's sizes.
 For example, an instance whose program writes its claimed output and ends in `jolt.success` has
@@ -120,11 +133,11 @@ theorem JoltInstance.completeness_someWitness {F : Type} [Field F]
     (joltInstance : JoltInstance SourceInstruction)
     (inLanguage : joltInstance.InLanguage)
     (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63) :
-    ∃ (privateInputs : JoltPrivateInputs) (params : WitnessParams)
+    ∃ (untrustedAdvice : Nat → F) (params : WitnessParams)
       (witness : WitnessType F params),
-      JoltConstraints.AllConstraints joltInstance privateInputs witness := by
+      JoltConstraints.AllConstraints joltInstance untrustedAdvice witness := by
   obtain ⟨privateInputs, trace, claimsRunOutputs, proverAccepts, spoilAssertsPass⟩ :=
     inLanguage
   obtain ⟨config, accepted⟩ := Option.isSome_iff_exists.mp proverAccepts
-  exact ⟨privateInputs, _, _, JoltInstance.completeness joltInstance privateInputs
+  exact ⟨_, _, _, JoltInstance.completeness joltInstance privateInputs
     trace claimsRunOutputs spoilAssertsPass config accepted setupSized⟩

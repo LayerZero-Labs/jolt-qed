@@ -54,11 +54,12 @@ noncomputable def ConstraintContext.withAdviceTape
 -- The relation cannot distinguish two choices of execution tape. This is an
 -- invariance result; it does not establish that any satisfying witness admits
 -- an execution consistent with a single tape. That is a soundness obligation.
-theorem AllConstraints.advice_tape_irrelevant {F : Type} [Field F] {params : WitnessParams}
+theorem AllConstraintsOnBytes.advice_tape_irrelevant {F : Type} [Field F]
+    {params : WitnessParams}
     (joltInstance : JoltInstance SourceInstruction) (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params) (tape : Array (BitVec 8)) :
-    AllConstraints joltInstance { privateInputs with advice_tape := tape } witness ↔
-      AllConstraints joltInstance privateInputs witness := by
+    AllConstraintsOnBytes joltInstance { privateInputs with advice_tape := tape } witness ↔
+      AllConstraintsOnBytes joltInstance privateInputs witness := by
   constructor
   · rintro ⟨context, equations⟩
     refine ⟨context.withAdviceTape privateInputs.advice_tape, equations⟩

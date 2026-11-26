@@ -18,7 +18,8 @@ variable {F : Type} [Field F]
 /-- The expanded PC is the selected bytecode slot. -/
 theorem pc_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.PC t = (chosen.val : F) := by
@@ -28,7 +29,8 @@ theorem pc_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- The unexpanded PC is the selected slot's instruction address. -/
 theorem unexpandedPC_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.UnexpandedPC t = bytecodeAddress context.bytecode chosen.val := by
@@ -38,7 +40,8 @@ theorem unexpandedPC_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar
 /-- The immediate is the selected slot's normalized immediate. -/
 theorem imm_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.Imm t = bytecodeImmediate context.bytecode chosen.val := by
@@ -48,7 +51,8 @@ theorem imm_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- Each circuit flag comes from the selected bytecode slot. -/
 theorem opFlag_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (flag : CircuitFlags) (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.OpFlags flag t = bytecodeCircuitFlag context.bytecode flag chosen.val := by
@@ -58,7 +62,8 @@ theorem opFlag_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- Each instruction flag comes from the selected bytecode slot. -/
 theorem instructionFlag_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (flag : InstructionFlags) (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.InstructionFlags flag t = bytecodeInstructionFlag context.bytecode flag chosen.val := by
@@ -68,7 +73,8 @@ theorem instructionFlag_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringC
 /-- The first source-register selector comes from the selected bytecode slot. -/
 theorem rs1Ra_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (register : Fin 128) (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.Rs1Ra register t = bytecodeRegisterSelector context.bytecode bytecodeRs1Register register chosen.val := by
@@ -78,7 +84,8 @@ theorem rs1Ra_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- The second source-register selector comes from the selected bytecode slot. -/
 theorem rs2Ra_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (register : Fin 128) (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.Rs2Ra register t = bytecodeRegisterSelector context.bytecode bytecodeRs2Register register chosen.val := by
@@ -88,7 +95,8 @@ theorem rs2Ra_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- The destination-register selector comes from the selected bytecode slot. -/
 theorem rdWa_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (register : Fin 128) (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.RdWa register t = bytecodeRegisterSelector context.bytecode bytecodeRdRegister register chosen.val := by
@@ -98,7 +106,8 @@ theorem rdWa_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- Each lookup-table flag comes from the selected bytecode slot. -/
 theorem lookupTableFlag_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (table : LookupTableKind) (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.LookupTableFlag table t = bytecodeLookupTableFlag context.bytecode table chosen.val := by
@@ -110,7 +119,8 @@ means the right lookup operand is the whole 128-bit address and the left is zero
 0 means the address interleaves the two operands' bits. -/
 theorem instructionRafFlag_of_selected_bytecode (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin (2 ^ params.logBytecodeK))
     (selected : bytecodeRa witness chosen t = 1) :
     witness.InstructionRafFlag t = bytecodeRafFlag context.bytecode chosen.val := by

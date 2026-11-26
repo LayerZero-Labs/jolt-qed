@@ -20,7 +20,8 @@ variable {F : Type} [Field F]
 /-- A selected RAM index determines the raw byte-address column. -/
 theorem ramAddress_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin params.ramSize)
     (selected : witness.RamRa chosen t = 1) :
     witness.RamAddress t =
@@ -31,7 +32,8 @@ theorem ramAddress_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- A selected RAM index reads its table value at the current cycle. -/
 theorem ramReadValue_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin params.ramSize)
     (selected : witness.RamRa chosen t = 1) :
     witness.RamReadValue t = witness.RamVal chosen t := by
@@ -43,7 +45,8 @@ theorem ramReadValue_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- A selected RAM index writes its current table value plus the cycle's increment. -/
 theorem ramWriteValue_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (t : Fin params.traceLength) (chosen : Fin params.ramSize)
     (selected : witness.RamRa chosen t = 1) :
     witness.RamWriteValue t = witness.RamVal chosen t + witness.RamInc t := by

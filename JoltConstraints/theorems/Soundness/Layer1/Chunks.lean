@@ -19,7 +19,8 @@ variable {F : Type} [Field F]
 /-- Each bytecode one-hot chunk selects one entry, at every witness cycle. -/
 theorem bytecode_chunk_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (chunk : Fin params.bytecodeChunks) (t : Fin params.traceLength) :
     ∃! entry, witness.BytecodeRaChunk chunk entry t = 1 := by
   apply existsUnique_of_boolean_sum_one (fun entry => witness.BytecodeRaChunk chunk entry t)
@@ -30,7 +31,8 @@ theorem bytecode_chunk_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
 /-- Each instruction-lookup one-hot chunk selects one entry, at every witness cycle. -/
 theorem instruction_chunk_unique (charAbove2pow127 : 2 ^ 127 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    {initialValue : Nat → F}
+    (equations : FieldConstraintEquations context.bytecode initialValue context.io context.entry witness)
     (chunk : Fin params.instructionChunks) (t : Fin params.traceLength) :
     ∃! entry, witness.InstructionRaChunk chunk entry t = 1 := by
   apply existsUnique_of_boolean_sum_one (fun entry => witness.InstructionRaChunk chunk entry t)
