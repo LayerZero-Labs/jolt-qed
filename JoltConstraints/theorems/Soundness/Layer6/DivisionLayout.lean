@@ -78,7 +78,7 @@ private theorem source_advice_kind (source : SourceInstruction)
         amoanddProgramAuto, amoordProgramAuto, amoxordProgramAuto, amomindProgramAuto,
         amomaxdProgramAuto, amominudProgramAuto, amomaxudProgramAuto,
         advicelbProgramAuto, advicelhProgramAuto, advicelwProgramAuto, adviceldProgramAuto,
-        ecallProgram, ebreakProgram, mretProgram, csrrwProgram, csrrsProgram,
+        ecallProgramAuto, ebreakProgramAuto, mretProgramAuto, csrrwProgramAuto, csrrsProgramAuto,
         pureWritebackRdZeroProgram] at advice
 
 private theorem source_internal_advice_of_rows

@@ -1,5 +1,6 @@
 import JoltBytecode.Assumptions
-import JoltBytecode.JoltISA.Expansions.System
+import JoltBytecode.JoltISA.ExpansionsAutomated
+import JoltBytecode.JoltISA.ExpansionsHandwritten
 import JoltBytecode.JoltISA.SystemProjection
 import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
 import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas.ADDI
@@ -26,6 +27,13 @@ The Sail side is still computed by Sail helpers such as `exception_handler`,
 -/
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
+
+/-- Boolean architectural-register equality used by the CSR proofs' `rd = rs1`
+cases. The generated `regidx` wrapper has no `DecidableEq` instance.
+For example, `JoltISA.sameXReg (regidx.Regidx 5) (regidx.Regidx 5) = true`. -/
+def JoltISA.sameXReg (lhs rhs : regidx) : Bool :=
+  match lhs, rhs with
+  | regidx.Regidx l, regidx.Regidx r => decide (l = r)
 
 set_option autoImplicit true
 
@@ -386,7 +394,7 @@ def csrrwAfterSameReg
     (js : SailJoltState) (csr : JoltISA.SystemCSR) (rd : regidx)
     (oldCsr rs1Val : BitVec 64) : SailJoltState :=
   joltSetVReg
-    { joltSetVReg js JoltISA.systemScratchVReg rs1Val with
+    { joltSetVReg js JoltISA.inlineTmp0 rs1Val with
       sail := stateAfterWrite js.sail rd oldCsr }
     (JoltISA.SystemCSR.vreg csr) rs1Val
 

@@ -15,18 +15,18 @@ namespace System
 succeeds and updates only the virtual-register file. -/
 private theorem writeDst_systemScratchVReg_run
     (js : SailJoltState) (nextPC target : BitVec 64) :
-    JoltISA.writeDst (JoltISA.Dst.vreg JoltISA.systemScratchVReg) nextPC
+    JoltISA.writeDst (JoltISA.Dst.vreg JoltISA.inlineTmp0) nextPC
         { js with sail := setNextPCState js.sail target } =
       .ok ()
         { js with
           sail := setNextPCState js.sail target,
           vregs := fun r =>
-            if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } := by
+            if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } := by
   unfold JoltISA.writeDst
-  exact writeVReg_run_of_writable JoltISA.systemScratchVReg nextPC
+  exact writeVReg_run_of_writable JoltISA.inlineTmp0 nextPC
     { js with sail := setNextPCState js.sail target }
     (by
-      unfold JoltISA.systemScratchVReg JoltISA.inlineTmp0 JoltISA.inlineTmp
+      unfold JoltISA.inlineTmp0 JoltISA.inlineTmp0 JoltISA.inlineTmp
         WritableVReg JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
         JoltISA.riscvRegisterCount JoltISA.numReservedVirtualRegisters
       decide)
@@ -38,7 +38,7 @@ private theorem mretProgram_jolt_run
     (hNextPCReadable :
       js.sail.regs.get? Register.nextPC =
         some (nextPC : RegisterType Register.nextPC)) :
-    (JoltISA.execProgram JoltISA.mretProgram).run js =
+    (JoltISA.execProgram JoltISA.mretProgramAuto).run js =
       .ok RETIRE_SUCCESS
         { js with
           sail := setNextPCState js.sail
@@ -46,8 +46,8 @@ private theorem mretProgram_jolt_run
               (js.vregs JoltISA.mepcVReg + sign_extend (m := 64) (0 : BitVec 12))
               0 0#1),
           vregs := fun r =>
-            if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } := by
-  simp only [EStateM.run, JoltISA.execProgram, JoltISA.mretProgram,
+            if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } := by
+  simp only [EStateM.run, JoltISA.execProgram, JoltISA.mretProgramAuto,
     JoltISA.execInstr, bind, EStateM.bind]
   -- Read sail register next_pc successfully (use assumptions that it's readable)
   have hGetNextPC : liftSail (LeanRV64D.readReg Register.nextPC) js = .ok nextPC js := by
@@ -88,27 +88,27 @@ private theorem systemProject_mretJoltFinal
         { js with
           sail := setNextPCState js.sail target,
           vregs := fun r =>
-            if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } =
+            if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } =
       { systemProject js with
         regs := (systemProject js).regs.insert Register.nextPC target } := by
-  have hMtvec : JoltISA.trapHandlerVReg ≠ JoltISA.systemScratchVReg := by
+  have hMtvec : JoltISA.trapHandlerVReg ≠ JoltISA.inlineTmp0 := by
     decide
-  have hMscratch : JoltISA.mscratchVReg ≠ JoltISA.systemScratchVReg := by
+  have hMscratch : JoltISA.mscratchVReg ≠ JoltISA.inlineTmp0 := by
     decide
-  have hMepc : JoltISA.mepcVReg ≠ JoltISA.systemScratchVReg := by
+  have hMepc : JoltISA.mepcVReg ≠ JoltISA.inlineTmp0 := by
     decide
-  have hMcause : JoltISA.mcauseVReg ≠ JoltISA.systemScratchVReg := by
+  have hMcause : JoltISA.mcauseVReg ≠ JoltISA.inlineTmp0 := by
     decide
-  have hMtval : JoltISA.mtvalVReg ≠ JoltISA.systemScratchVReg := by
+  have hMtval : JoltISA.mtvalVReg ≠ JoltISA.inlineTmp0 := by
     decide
-  have hMstatus : JoltISA.mstatusVReg ≠ JoltISA.systemScratchVReg := by
+  have hMstatus : JoltISA.mstatusVReg ≠ JoltISA.inlineTmp0 := by
     decide
   have hScratchIgnored :
       systemProject
           { js with
             sail := setNextPCState js.sail target,
             vregs := fun r =>
-              if r = JoltISA.systemScratchVReg then nextPC else js.vregs r } =
+              if r = JoltISA.inlineTmp0 then nextPC else js.vregs r } =
         systemProject { js with sail := setNextPCState js.sail target } := by
     unfold systemProject
     simp only [hMtvec, hMscratch, hMepc, hMcause, hMtval, hMstatus,
@@ -123,7 +123,7 @@ calling `exception_handler` for `CTL_MRET` and then `set_next_pc`. -/
 def mretProgramEqSailStatement
     (js : SailJoltState) (_h : MretProgramEqSailAssumptions js) : Prop :=
   systemProjectResult
-      ((JoltISA.execProgram JoltISA.mretProgram).run js) =
+      ((JoltISA.execProgram JoltISA.mretProgramAuto).run js) =
     (execute_MRET ()).run (systemProject js)
 
 theorem mretProgram_eq_sail_projected

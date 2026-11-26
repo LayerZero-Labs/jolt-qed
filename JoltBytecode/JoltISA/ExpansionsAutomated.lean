@@ -1,5 +1,6 @@
 import JoltBytecode.JoltISA.Instruction
 import JoltBytecode.JoltISA.VirtualRegisters
+import JoltBytecode.JoltISA.SystemCSR
 import JoltBytecode.JoltISA.Expansions.ALU
 
 open LeanRV64D
@@ -16,6 +17,283 @@ emitted by Rust for its source instruction parameters.
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 namespace JoltISA
+
+/-- Auto-generated from the Rust `CSRRS` expansion. -/
+def csrrsProgramAuto (csr : SystemCSR) (rd rs1 : regidx) : Program :=
+  match csr with
+  | .mstatus =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (.ORI (.xreg rd) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (136 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (136 : BitVec 12)) <|
+      .instr (.ORI (.xreg rs1) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (136 : BitVec 12)) <|
+      .instr (.ORI (.xreg rd) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+  | .mtvec =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (2 : BitVec 12)) <|
+      .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
+      .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 40))) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (2 : BitVec 12)) <|
+      .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
+      .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 40))) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (2 : BitVec 12)) <|
+      .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 64)) <|
+      .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 40))) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+  | .mscratch =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.OR (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 35)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 35)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mepc =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (-2 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (-2 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (-2 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+  | .mcause =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.OR (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 37)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 37)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mtval =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.OR (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 38)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+      .instr (.OR (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 38)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+
+/-- Auto-generated from the Rust `CSRRW` expansion. -/
+def csrrwProgramAuto (csr : SystemCSR) (rd rs1 : regidx) : Program :=
+  match csr with
+  | .mstatus =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 39)) (.xreg (regidx.Regidx 0)) (136 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (.ORI (.xreg rd) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+        .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 39)) (.xreg (regidx.Regidx 0)) (136 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 39)) (.xreg rs1) (136 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (.ORI (.xreg rs1) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 40)) (136 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (.ORI (.xreg rd) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 39)) (.xreg rs1) (136 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+  | .mtvec =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 34)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 34)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.XOR (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 34))) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (2 : BitVec 12)) <|
+      .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
+      .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41))) <|
+      .instr (.XOR (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (.XOR (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 34))) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (2 : BitVec 12)) <|
+      .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
+      .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41))) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+      .instr (.XOR (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (.XOR (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (.vreg (BitVec.ofNat 7 34))) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (2 : BitVec 12)) <|
+      .instr (.VirtualShiftRightBitmask (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 41)) (0 : BitVec 64)) <|
+      .instr (.AND (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41))) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+      .instr (.XOR (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+  | .mscratch =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 35)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 35)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 35)) (.xreg rs1) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 35)) (.xreg rs1) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+  | .mepc =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 36)) (.xreg (regidx.Regidx 0)) (-2 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+        .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 36)) (.xreg (regidx.Regidx 0)) (-2 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 36)) (.xreg rs1) (-2 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 40)) (-2 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 36)) (.xreg rs1) (-2 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+  | .mcause =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 37)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 37)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 37)) (.xreg rs1) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 37)) (.xreg rs1) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+  | .mtval =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 38)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+        .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 38)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 38)) (.xreg rs1) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 38)) (.xreg rs1) (0 : BitVec 12)) <|
+      .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `DIV` expansion. -/
 def divProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
@@ -52,6 +330,21 @@ def divuProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .instr (.VirtualAssertValidUnsignedRemainder (.vreg (BitVec.ofNat 7 41)) (.xreg rs2) (0 : BitVec 128)) <|
     .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (0 : BitVec 12)) <|
     .done RETIRE_SUCCESS
+
+/-- Auto-generated from the Rust `EBREAK` expansion. -/
+def ebreakProgramAuto : Program :=
+  .instr (.JoltPanic (.vreg (BitVec.ofNat 7 40)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+  .done RETIRE_SUCCESS
+
+/-- Auto-generated from the Rust `ECALL` expansion. -/
+def ecallProgramAuto : Program :=
+  .instr (.AUIPC (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 64)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 37)) (.xreg (regidx.Regidx 0)) (11 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 38)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.ANDI (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 39)) (8 : BitVec 12)) <|
+  .instr (.VirtualMULI (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 40)) (slliMultiplier 4)) <|
+  .instr (JoltISA.Encoded.JALR (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+  .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LB` expansion. -/
 def lbProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
@@ -117,6 +410,13 @@ def lwProgramAuto (rd rs1 : regidx) (imm : BitVec 12) : Program :=
     .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) imm) <|
     .instr (.VirtualPextSigned (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
+
+/-- Auto-generated from the Rust `MRET` expansion. -/
+def mretProgramAuto : Program :=
+  .instr (.VirtualSRLI (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (srliBitmask 4)) <|
+  .instr (JoltISA.Encoded.ORI (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (128 : BitVec 12)) <|
+  .instr (JoltISA.Encoded.JALR (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+  .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `MULH` expansion. -/
 def mulhProgramAuto (rd rs1 rs2 : regidx) : Program :=
@@ -419,13 +719,13 @@ def remwProgramAuto (rd rs1 rs2 : regidx) (advice0 : BitVec 64) : Program :=
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LRW` expansion. -/
-def lrwProgramAuto (rd rs1 _rs2 : regidx) : Program :=
+def lrwProgramAuto (rd rs1 : regidx) : Program :=
   if isX0 rd then
     .instr (.LUI (.vreg (BitVec.ofNat 7 41)) (2147483648 : BitVec 64)) <|
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 128)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 32)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 33)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
-    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_Load_Addr_Align ())) <|
     .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 42)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.VirtualPextSigned (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41)) (.vreg (BitVec.ofNat 7 42))) <|
     .done RETIRE_SUCCESS
@@ -434,7 +734,7 @@ def lrwProgramAuto (rd rs1 _rs2 : regidx) : Program :=
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 128)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 32)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 33)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
-    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_SAMO_Addr_Align ())) <|
+    .instr (JoltISA.Encoded.VirtualLoadW .amo (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12) (ExceptionType.E_Load_Addr_Align ())) <|
     .instr (JoltISA.Encoded.VirtualWindowMaskW (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 12)) <|
     .instr (.VirtualPextSigned (.xreg rd) (.vreg (BitVec.ofNat 7 40)) (.vreg (BitVec.ofNat 7 41))) <|
     .done RETIRE_SUCCESS
@@ -744,7 +1044,7 @@ def amomaxuwProgramAuto (rd rs1 rs2 : regidx) : Program :=
     .done RETIRE_SUCCESS
 
 /-- Auto-generated from the Rust `LRD` expansion. -/
-def lrdProgramAuto (rd rs1 _rs2 : regidx) : Program :=
+def lrdProgramAuto (rd rs1 : regidx) : Program :=
   if isX0 rd then
     .instr (.LUI (.vreg (BitVec.ofNat 7 41)) (2147483648 : BitVec 64)) <|
     .instr (.VirtualAssertLTE (.vreg (BitVec.ofNat 7 41)) (.xreg rs1) (0 : BitVec 128)) <|
@@ -996,6 +1296,130 @@ def advicelwProgramAuto (rd : regidx) : Program :=
     .instr (.VirtualSRAI (.xreg rd) (.xreg rd) (sraiBitmask 32)) <|
     .done RETIRE_SUCCESS
 
+/-- Auto-generated from the Rust `CSRRC` expansion. -/
+def csrrcProgramAuto (csr : SystemCSR) (rd rs1 : regidx) : Program :=
+  match csr with
+  | .mstatus =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (.ORI (.xreg rd) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (.ORI (.xreg rs1) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (.ORI (.xreg rd) (.vreg (BitVec.ofNat 7 39)) (6144 : BitVec 64)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 39)) (.vreg (BitVec.ofNat 7 39)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mtvec =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 34)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 34)) (.vreg (BitVec.ofNat 7 34)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mscratch =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 35)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 35)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 35)) (.vreg (BitVec.ofNat 7 35)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mepc =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 36)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 36)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 36)) (.vreg (BitVec.ofNat 7 36)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mcause =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 37)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 37)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 37)) (.vreg (BitVec.ofNat 7 37)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+  | .mtval =>
+    if isX0 rs1 then
+      if isX0 rd then
+        .instr (JoltISA.Encoded.ADDI (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+      else
+        .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+        .done RETIRE_SUCCESS
+    else if isX0 rd then
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 38)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+    else if rd == rs1 then
+      .instr (JoltISA.Encoded.ADDI (.vreg (BitVec.ofNat 7 40)) (.xreg rs1) (0 : BitVec 12)) <|
+      .instr (JoltISA.Encoded.ADDI (.xreg rs1) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 40))) <|
+      .done RETIRE_SUCCESS
+    else
+      .instr (JoltISA.Encoded.ADDI (.xreg rd) (.vreg (BitVec.ofNat 7 38)) (0 : BitVec 12)) <|
+      .instr (.ANDN (.vreg (BitVec.ofNat 7 38)) (.vreg (BitVec.ofNat 7 38)) (.xreg rs1)) <|
+      .done RETIRE_SUCCESS
+
 end JoltISA
 
--- generated 57 expansion program(s)
+-- generated 63 expansion program(s)

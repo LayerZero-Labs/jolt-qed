@@ -81,16 +81,16 @@ private theorem systemCSR_vreg_writable (csr : JoltISA.SystemCSR) :
     decide
 
 private theorem systemScratch_vreg_writable :
-    WritableVReg JoltISA.systemScratchVReg := by
-  unfold JoltISA.systemScratchVReg JoltISA.inlineTmp0 JoltISA.inlineTmp
+    WritableVReg JoltISA.inlineTmp0 := by
+  unfold JoltISA.inlineTmp0 JoltISA.inlineTmp0 JoltISA.inlineTmp
     WritableVReg JoltISA.inlineRegisterBase JoltISA.riscvRegisterBase
     JoltISA.riscvRegisterCount JoltISA.numReservedVirtualRegisters
   decide
 
 private theorem systemCSR_vreg_ne_scratch (csr : JoltISA.SystemCSR) :
-    JoltISA.SystemCSR.vreg csr ≠ JoltISA.systemScratchVReg := by
+    JoltISA.SystemCSR.vreg csr ≠ JoltISA.inlineTmp0 := by
   cases csr <;>
-    unfold JoltISA.SystemCSR.vreg JoltISA.systemScratchVReg
+    unfold JoltISA.SystemCSR.vreg JoltISA.inlineTmp0
       JoltISA.mstatusVReg JoltISA.trapHandlerVReg JoltISA.mscratchVReg
       JoltISA.mepcVReg JoltISA.mcauseVReg JoltISA.mtvalVReg
       JoltISA.inlineTmp0 JoltISA.inlineTmp JoltISA.inlineRegisterBase
@@ -159,7 +159,7 @@ private def csrrsAfterSameReg
     (js : SailJoltState) (csr : JoltISA.SystemCSR) (rd : regidx)
     (oldCsr rs1Val : BitVec 64) : SailJoltState :=
   joltSetVReg
-    { joltSetVReg js JoltISA.systemScratchVReg rs1Val with
+    { joltSetVReg js JoltISA.inlineTmp0 rs1Val with
       sail := stateAfterWrite js.sail rd oldCsr }
     (JoltISA.SystemCSR.vreg csr) (oldCsr ||| rs1Val)
 
@@ -184,11 +184,11 @@ private theorem csrrsProgram_project_run
     (hSource : rX_bits rs1 js.sail = .ok rs1Val js.sail) :
     systemProjectResult
         ((JoltISA.execProgram
-          (JoltISA.csrrsProgram csr rs1 rd)).run js) =
+          (JoltISA.csrrsProgramAuto csr rd rs1)).run js) =
       .ok RETIRE_SUCCESS
         (systemProject
           (csrrsJoltFinal js csr rs1 rd rs1Val)) := by
-  unfold JoltISA.csrrsProgram csrrsJoltFinal
+  unfold JoltISA.csrrsProgramAuto csrrsJoltFinal
   cases hRs1 : JoltISA.isX0 rs1
   · simp only [Bool.false_eq_true, ite_false]
     cases hRd : JoltISA.isX0 rd
@@ -239,23 +239,23 @@ private theorem csrrsProgram_project_run
       · simp only [ite_true]
         let oldCsr := js.vregs (JoltISA.SystemCSR.vreg csr)
         let jsScratch : SailJoltState :=
-          joltSetVReg js JoltISA.systemScratchVReg rs1Val
+          joltSetVReg js JoltISA.inlineTmp0 rs1Val
         let jsAfterRd : SailJoltState :=
           { jsScratch with sail := stateAfterWrite jsScratch.sail rd oldCsr }
         have hScratchRun :
             (JoltISA.execInstr
-                (JoltISA.Encoded.ADDI (.vreg JoltISA.systemScratchVReg) (.xreg rs1)
+                (JoltISA.Encoded.ADDI (.vreg JoltISA.inlineTmp0) (.xreg rs1)
                   (0 : BitVec 12))).run js =
               .ok RETIRE_SUCCESS jsScratch := by
           have hRun :=
-            JoltISA.addi_run_vreg_xreg JoltISA.systemScratchVReg rs1
+            JoltISA.addi_run_vreg_xreg JoltISA.inlineTmp0 rs1
               (0 : BitVec 12) js rs1Val hSource systemScratch_vreg_writable
           rw [addi_zero_value] at hRun
           simpa [jsScratch, joltSetVReg, vregWrite] using! hRun
         have hScratchCsr :
             jsScratch.vregs (JoltISA.SystemCSR.vreg csr) = oldCsr := by
           simpa [jsScratch, joltSetVReg, oldCsr] using
-            vregWrite_other js.vregs JoltISA.systemScratchVReg
+            vregWrite_other js.vregs JoltISA.inlineTmp0
               (JoltISA.SystemCSR.vreg csr) rs1Val
               (systemCSR_vreg_ne_scratch csr)
         have hRdRun :
@@ -276,18 +276,18 @@ private theorem csrrsProgram_project_run
               (0 : BitVec 12) jsScratch
               (stateAfterWrite jsScratch.sail rd oldCsr) hWrite
         have hScratchVal :
-            jsAfterRd.vregs JoltISA.systemScratchVReg = rs1Val := by
+            jsAfterRd.vregs JoltISA.inlineTmp0 = rs1Val := by
           simp [jsAfterRd, jsScratch, joltSetVReg, vregWrite_self]
         have hCsrRun :
             (JoltISA.execInstr
                 (.OR (.vreg (JoltISA.SystemCSR.vreg csr))
                   (.vreg (JoltISA.SystemCSR.vreg csr))
-                  (.vreg JoltISA.systemScratchVReg))).run jsAfterRd =
+                  (.vreg JoltISA.inlineTmp0))).run jsAfterRd =
               .ok RETIRE_SUCCESS
                 (csrrsAfterSameReg js csr rd oldCsr rs1Val) := by
           have hRun :=
             or_run_vreg_vreg_vreg (JoltISA.SystemCSR.vreg csr)
-              (JoltISA.SystemCSR.vreg csr) JoltISA.systemScratchVReg
+              (JoltISA.SystemCSR.vreg csr) JoltISA.inlineTmp0
               jsAfterRd (systemCSR_vreg_writable csr)
           simpa [csrrsAfterSameReg, joltSetVReg, vregWrite, jsAfterRd,
             jsScratch, oldCsr, hScratchVal, hScratchCsr,
@@ -940,7 +940,7 @@ private theorem csrrs_eq_sail_projected_from_facts
         some (Privilege.Machine : RegisterType Register.cur_privilege))
     (hJoltRun :
       systemProjectResult
-          ((JoltISA.execProgram (JoltISA.csrrsProgram csr rs1 rd)).run js) =
+          ((JoltISA.execProgram (JoltISA.csrrsProgramAuto csr rd rs1)).run js) =
         .ok RETIRE_SUCCESS
           (systemProject (csrrsJoltFinal js csr rs1 rd rs1Val)))
     (hCheck :
@@ -974,7 +974,7 @@ private theorem csrrs_eq_sail_projected_from_facts
         systemProject (csrrsJoltFinal js csr rs1 rd rs1Val) =
           stateAfterWrite sAfterCsrWrite rd oldCsr) :
     systemProjectResult
-        ((JoltISA.execProgram (JoltISA.csrrsProgram csr rs1 rd)).run js) =
+        ((JoltISA.execProgram (JoltISA.csrrsProgramAuto csr rd rs1)).run js) =
       (execute_CSRReg (JoltISA.SystemCSR.address csr) rs1 rd csrop.CSRRS).run
         (systemProject js) := by
   rw [hJoltRun]
@@ -993,7 +993,7 @@ def csrrsProgramEqSailStatement
     (js : SailJoltState) (csr : JoltISA.SystemCSR) (rs1 rd : regidx)
     (_h_sys : CsrrsSystemAssumptions js csr rs1 rd) : Prop :=
   systemProjectResult
-      ((JoltISA.execProgram (JoltISA.csrrsProgram csr rs1 rd)).run js) =
+      ((JoltISA.execProgram (JoltISA.csrrsProgramAuto csr rd rs1)).run js) =
     (execute_CSRReg (JoltISA.SystemCSR.address csr) rs1 rd csrop.CSRRS).run
       (systemProject js)
 
@@ -1019,7 +1019,7 @@ theorem csrrsProgram_eq_sail_projected
     have hJoltRun :
         systemProjectResult
             ((JoltISA.execProgram
-              (JoltISA.csrrsProgram JoltISA.SystemCSR.mstatus rs1 rd)).run js) =
+              (JoltISA.csrrsProgramAuto JoltISA.SystemCSR.mstatus rd rs1)).run js) =
           .ok RETIRE_SUCCESS
             (systemProject
               (csrrsJoltFinal js JoltISA.SystemCSR.mstatus rs1 rd h_sys.rs1_val)) := by
@@ -1075,7 +1075,7 @@ theorem csrrsProgram_eq_sail_projected
     have hJoltRun :
         systemProjectResult
             ((JoltISA.execProgram
-              (JoltISA.csrrsProgram JoltISA.SystemCSR.mtvec rs1 rd)).run js) =
+              (JoltISA.csrrsProgramAuto JoltISA.SystemCSR.mtvec rd rs1)).run js) =
           .ok RETIRE_SUCCESS
             (systemProject
               (csrrsJoltFinal js JoltISA.SystemCSR.mtvec rs1 rd h_sys.rs1_val)) := by
@@ -1131,7 +1131,7 @@ theorem csrrsProgram_eq_sail_projected
     have hJoltRun :
         systemProjectResult
             ((JoltISA.execProgram
-              (JoltISA.csrrsProgram JoltISA.SystemCSR.mscratch rs1 rd)).run js) =
+              (JoltISA.csrrsProgramAuto JoltISA.SystemCSR.mscratch rd rs1)).run js) =
           .ok RETIRE_SUCCESS
             (systemProject
               (csrrsJoltFinal js JoltISA.SystemCSR.mscratch rs1 rd h_sys.rs1_val)) := by
@@ -1186,7 +1186,7 @@ theorem csrrsProgram_eq_sail_projected
     have hJoltRun :
         systemProjectResult
             ((JoltISA.execProgram
-              (JoltISA.csrrsProgram JoltISA.SystemCSR.mepc rs1 rd)).run js) =
+              (JoltISA.csrrsProgramAuto JoltISA.SystemCSR.mepc rd rs1)).run js) =
           .ok RETIRE_SUCCESS
             (systemProject
               (csrrsJoltFinal js JoltISA.SystemCSR.mepc rs1 rd h_sys.rs1_val)) := by
@@ -1242,7 +1242,7 @@ theorem csrrsProgram_eq_sail_projected
     have hJoltRun :
         systemProjectResult
             ((JoltISA.execProgram
-              (JoltISA.csrrsProgram JoltISA.SystemCSR.mcause rs1 rd)).run js) =
+              (JoltISA.csrrsProgramAuto JoltISA.SystemCSR.mcause rd rs1)).run js) =
           .ok RETIRE_SUCCESS
             (systemProject
               (csrrsJoltFinal js JoltISA.SystemCSR.mcause rs1 rd h_sys.rs1_val)) := by
@@ -1297,7 +1297,7 @@ theorem csrrsProgram_eq_sail_projected
     have hJoltRun :
         systemProjectResult
             ((JoltISA.execProgram
-              (JoltISA.csrrsProgram JoltISA.SystemCSR.mtval rs1 rd)).run js) =
+              (JoltISA.csrrsProgramAuto JoltISA.SystemCSR.mtval rd rs1)).run js) =
           .ok RETIRE_SUCCESS
             (systemProject
               (csrrsJoltFinal js JoltISA.SystemCSR.mtval rs1 rd h_sys.rs1_val)) := by

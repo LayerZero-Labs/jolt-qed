@@ -2194,7 +2194,7 @@ theorem selected_jalr_next_target
       context equations cycle slot selected row present dst base imm value jump baseAt)
 
 /-- A stamped bytecode row retains an instruction from its source expansion.
-For example, a stamped ECALL JALR comes from `ecallProgram.instrs`.
+For example, a stamped ECALL JALR comes from `ecallProgramAuto.instrs`.
 See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 at 8bbb2357. -/
 theorem stamp_sequence_instruction_member
     (address : BitVec 64) (compressed : Bool)

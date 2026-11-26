@@ -13,7 +13,8 @@ import JoltBytecode.JoltISA.Expansions.Atomics
 import JoltBytecode.JoltISA.Expansions.Load
 import JoltBytecode.JoltISA.Expansions.Mul
 import JoltBytecode.JoltISA.Expansions.Store
-import JoltBytecode.JoltISA.Expansions.System
+import JoltBytecode.JoltISA.ExpansionsAutomated
+import JoltBytecode.JoltISA.ExpansionsHandwritten
 import JoltBytecode.InstructionEquivalence.Instructions.ALUFamily.Rtype.Sll
 import JoltBytecode.InstructionEquivalence.Instructions.ALUFamily.Rtype.Sllw
 import JoltBytecode.InstructionEquivalence.Instructions.ALUFamily.Rtype.Sra
@@ -244,6 +245,10 @@ inductive RiscvInstruction where
      Source: https://docs.riscv.org/reference/isa/v20260120/unpriv/zicsr.html -/
   | CSRRW (rd : regidx) (csr : JoltISA.SystemCSR) (rs1 : regidx)
   | CSRRS (rd : regidx) (csr : JoltISA.SystemCSR) (rs1 : regidx)
+  | CSRRC (rd : regidx) (csr : JoltISA.SystemCSR) (rs1 : regidx)
+  | CSRRWI (rd : regidx) (csr : JoltISA.SystemCSR) (uimm : BitVec 5)
+  | CSRRSI (rd : regidx) (csr : JoltISA.SystemCSR) (uimm : BitVec 5)
+  | CSRRCI (rd : regidx) (csr : JoltISA.SystemCSR) (uimm : BitVec 5)
 
   /- Jolt-supported RvPrivileged source instruction.
      Source: https://docs.riscv.org/reference/isa/v20260120/priv/priv-insns.html -/

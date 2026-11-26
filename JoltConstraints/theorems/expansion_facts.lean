@@ -555,12 +555,12 @@ theorem amomaxud_ok (rd rs1 rs2 : regidx) :
     sequenceOk (JoltISA.amomaxudProgramAuto rd rs1 rs2).instrs = true := by
   rows_ok JoltISA.amomaxudProgramAuto
 
-theorem lrw_ok (rd rs1 rs2 : regidx) :
-    sequenceOk (JoltISA.lrwProgramAuto rd rs1 rs2).instrs = true := by
+theorem lrw_ok (rd rs1 : regidx) :
+    sequenceOk (JoltISA.lrwProgramAuto rd rs1).instrs = true := by
   rows_ok JoltISA.lrwProgramAuto
 
-theorem lrd_ok (rd rs1 rs2 : regidx) :
-    sequenceOk (JoltISA.lrdProgramAuto rd rs1 rs2).instrs = true := by
+theorem lrd_ok (rd rs1 : regidx) :
+    sequenceOk (JoltISA.lrdProgramAuto rd rs1).instrs = true := by
   rows_ok JoltISA.lrdProgramAuto
 
 theorem scw_ok (rd rs1 rs2 : regidx) :
@@ -588,26 +588,26 @@ theorem adviceld_ok (rd : regidx) :
   rows_ok JoltISA.adviceldProgramAuto
 
 theorem ecall_ok :
-    sequenceOk (JoltISA.ecallProgram).instrs = true := by
-  rows_ok JoltISA.ecallProgram
+    sequenceOk (JoltISA.ecallProgramAuto).instrs = true := by
+  rows_ok JoltISA.ecallProgramAuto
 
 theorem ebreak_ok :
-    sequenceOk (JoltISA.ebreakProgram).instrs = true := by
-  rows_ok JoltISA.ebreakProgram
+    sequenceOk (JoltISA.ebreakProgramAuto).instrs = true := by
+  rows_ok JoltISA.ebreakProgramAuto
 
 theorem mret_ok :
-    sequenceOk (JoltISA.mretProgram).instrs = true := by
-  rows_ok JoltISA.mretProgram
+    sequenceOk (JoltISA.mretProgramAuto).instrs = true := by
+  rows_ok JoltISA.mretProgramAuto
 
 theorem csrrw_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
-    sequenceOk (JoltISA.csrrwProgram csr rs1 rd).instrs = true := by
+    sequenceOk (JoltISA.csrrwProgramAuto csr rd rs1).instrs = true := by
   -- The CSR's virtual register is fixed per CSR, so split on which CSR it is.
-  cases csr <;> rows_ok JoltISA.csrrwProgram
+  cases csr <;> rows_ok JoltISA.csrrwProgramAuto
 
 theorem csrrs_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
-    sequenceOk (JoltISA.csrrsProgram csr rs1 rd).instrs = true := by
+    sequenceOk (JoltISA.csrrsProgramAuto csr rd rs1).instrs = true := by
   -- The CSR's virtual register is fixed per CSR, so split on which CSR it is.
-  cases csr <;> rows_ok JoltISA.csrrsProgram
+  cases csr <;> rows_ok JoltISA.csrrsProgramAuto
 
 -- A branch's offset comes from a 13-bit immediate (FormatB, sign-extended).
 def BranchOffsetOk : JoltISA.Instr → Prop
