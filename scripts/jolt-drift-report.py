@@ -16,9 +16,12 @@ with whether the run could monitor Jolt main, then lists:
 - every other Jolt file the Lean sources cite (scripts/jolt_citations.py) that changed, with
   the Lean files that cite it, and the citations that resolve to no file at the pin;
 - every other changed production Rust file or build input (`*.rs` outside tests, benches and
-  examples, `Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, `build.rs`) in a directory the model
-  depends on, as "unclassified": a change the citations miss, such as a new instruction's
-  `exec` in a file no comment cites, still shows (see `classify_changes`);
+  examples, `Cargo.toml`, `Cargo.lock`, `rust-toolchain*`, `build.rs`) in a watched directory,
+  as "unclassified": a change the citations miss, such as a new instruction's `exec` in a file
+  no comment cites, still shows (see `classify_changes`). The watched directories are every
+  crate of Jolt's workspace at the pin or at REV except the few in `EXCLUDED_CRATES`, plus
+  `tracer/`, `common/` and the directory of each cited file. The section also names the crates
+  that REV adds to the workspace;
 - `git diff --stat` of all those files;
 - the result of regenerating the constraint data from REV, labelled by whether the generator
   produced new files, when the caller passes it;
@@ -49,6 +52,7 @@ anchor comparison), and anything else when no report was written.
 """
 
 import argparse
+import fnmatch
 import pathlib
 import re
 import subprocess
@@ -65,13 +69,19 @@ MAX_BODY = 64000  # GitHub limits an issue body to 65536 characters.
 MAX_LIST = 60
 ARTIFACT = "drift-evidence"
 
-# Directories whose production Rust and build inputs the model depends on. Every directory
-# that holds a cited file (see `watched_directories`) is watched too.
-WATCHED = (
-    "tracer/", "common/", "crates/jolt-program/", "crates/jolt-riscv/", "crates/jolt-verifier/",
-    "crates/jolt-verifier-derive/", "crates/jolt-prover/", "crates/jolt-claims/",
-    "crates/jolt-claims-derive/", "crates/jolt-claim-expr/", "crates/jolt-witness/",
-    "crates/jolt-witness-derive/", "crates/jolt-lookup-tables/", "crates/jolt-r1cs/",
+# Directories that are always watched, whatever the workspace lists. Every crate of the
+# workspace except those in EXCLUDED_CRATES, and every directory that holds a cited file (see
+# `watched_directories`), is watched too.
+WATCHED = ("tracer/", "common/")
+# Workspace crates whose code cannot change what the model represents, by directory prefix,
+# each with the reason. Keep this list short: a crate missing from it is watched, which costs a
+# reader a look, while a crate wrongly on it hides drift.
+EXCLUDED_CRATES = (
+    ("examples/", "example host and guest programs built on the SDK"),
+    ("jolt-eval", "a harness of invariants and red-team runs for agents"),
+    ("jolt-inlines/fixtures", "fixture tests of the inline expansions"),
+    ("z3-verifier", "SMT experiments on the constraints, written as tests"),
+    ("crates/jolt-profiling", "profiling and tracing infrastructure"),
 )
 BUILD_INPUTS = re.compile(r"(?:^|/)(?:Cargo\.toml|Cargo\.lock|rust-toolchain(?:\.toml)?|build\.rs)$")
 NOT_PRODUCTION = re.compile(r"(?:^|/)(?:tests|benches|examples)/")
@@ -90,13 +100,52 @@ def watched_directories(cited):
     return sorted(found)
 
 
-def classify_changes(changed, anchor_paths, cited, watched):
+def workspace_members(jolt_dir, rev):
+    """The `members` of `[workspace]` in Jolt's top-level Cargo.toml at `rev`, and "." when that
+    file also declares a package (the `jolt` command-line tool in `src/`). Raise `ValueError`
+    when the file is missing or is not TOML, since the watched directories then are unknown."""
+    text = file_at(jolt_dir, rev, "Cargo.toml")
+    if text is None:
+        raise ValueError(f"Jolt has no top-level Cargo.toml at {rev}")
+    manifest = tomllib.loads(text)
+    members = [member.strip("/") for member in manifest.get("workspace", {}).get("members", [])]
+    return members + (["."] if "package" in manifest else [])
+
+
+def crate_of(path, members):
+    """The directory of the workspace crate that holds `path`: the longest member that contains
+    it (a member may be a pattern such as `crates/*`), "." for `src/` and `build.rs` of the
+    top-level package, or None."""
+    parts = path.split("/")
+    best = None
+    for member in members:
+        pattern = member.split("/")
+        if (member != "." and len(parts) > len(pattern)
+                and all(fnmatch.fnmatchcase(p, q) for p, q in zip(parts, pattern))
+                and (best is None or len(pattern) > len(best.split("/")))):
+            best = "/".join(parts[:len(pattern)])
+    if best is None and "." in members and (parts[0] == "src" or path == "build.rs"):
+        best = "."
+    return best
+
+
+def excluded_reason(crate):
+    """The reason `EXCLUDED_CRATES` gives for the crate directory `crate`, or None."""
+    for prefix, reason in EXCLUDED_CRATES:
+        prefix = prefix.rstrip("/")
+        if crate == prefix or crate.startswith(prefix + "/"):
+            return reason
+    return None
+
+
+def classify_changes(changed, anchor_paths, cited, watched, members=()):
     """Sort every changed path into "anchored", "cited", "unclassified" and "other".
 
     A path is "unclassified" when no anchor or citation names it and it is a build input at the
     top level of Jolt or in a watched directory, or production Rust (`*.rs` outside `tests/`,
-    `benches/` and `examples/`) in a watched directory. Everything else is "other": tests,
-    documentation, and directories the model does not depend on.
+    `benches/` and `examples/`) in a watched directory. A watched directory is one in `watched`
+    or a crate of the workspace `members` that `EXCLUDED_CRATES` does not list. Everything else
+    is "other": tests, documentation, excluded crates, and directories outside the workspace.
     """
     groups = {"anchored": [], "cited": [], "unclassified": [], "other": []}
     for path in sorted(changed):
@@ -105,7 +154,9 @@ def classify_changes(changed, anchor_paths, cited, watched):
         elif path in cited:
             group = "cited"
         else:
-            in_watched = any(path.startswith(d) for d in watched)
+            crate = crate_of(path, members)
+            in_watched = (any(path.startswith(d) for d in watched)
+                          or (crate is not None and excluded_reason(crate) is None))
             build_input = BUILD_INPUTS.search(path) and ("/" not in path or in_watched)
             production = (in_watched and path.endswith(".rs")
                           and not NOT_PRODUCTION.search(path))
@@ -152,7 +203,12 @@ def anchor_sections(out, jolt_dir, main, pin, entries, evidence=None,
     # --no-renames lists a renamed file under its old and its new path.
     all_changed = set(git(jolt_dir, "diff", "--name-only", "--no-renames", "-z", pin,
                           head).split("\0")) - {""}
-    groups = classify_changes(all_changed, anchor_paths, cited, watched_directories(cited))
+    # A crate that only the pin lists still holds changed (deleted) files, so both count.
+    members_pin = workspace_members(jolt_dir, pin)
+    members_main = workspace_members(jolt_dir, head)
+    new_crates = sorted(set(members_main) - set(members_pin))
+    groups = classify_changes(all_changed, anchor_paths, cited, watched_directories(cited),
+                              sorted(set(members_pin) | set(members_main)))
     changed = set(groups["anchored"]) | set(groups["cited"])
     evidence["changed-files.tsv"] = "".join(f"{group}\t{path}\n" for group in groups
                                             for path in groups[group])
@@ -216,11 +272,18 @@ def anchor_sections(out, jolt_dir, main, pin, entries, evidence=None,
                f"{len(groups['anchored'])} anchored, {len(groups['cited'])} cited by the Lean "
                f"sources, {len(unclassified)} unclassified and {len(groups['other'])} other. "
                "An unclassified file is production Rust or a build input (`Cargo.toml`, "
-               "`Cargo.lock`, `rust-toolchain*`, `build.rs`) in a directory the model depends "
-               "on that no anchor or citation names; read each one and decide whether the model "
-               "transcribes it. The other files are tests, documentation and directories the "
-               "model does not depend on.")
+               "`Cargo.lock`, `rust-toolchain*`, `build.rs`) that no anchor or citation names, "
+               "in a crate of Jolt's workspace, `tracer/`, `common/` or the directory of a cited "
+               "file; read each one and decide whether the model transcribes it. The other "
+               "files are tests, documentation, directories outside the workspace, and these "
+               "crates, which are not watched: "
+               + "; ".join(f"`{prefix}` ({reason})" for prefix, reason in EXCLUDED_CRATES)
+               + ".")
     out.append("")
+    for crate in new_crates:
+        reason = excluded_reason(crate)
+        watched = f"not watched: {reason}" if reason else "its files are watched"
+        out.append(f"- crate `{crate}/` (added to the workspace since the pin; {watched})")
     for path in unclassified[:MAX_LIST]:
         status = ("added" if file_at(jolt_dir, pin, path) is None else
                   "deleted" if file_at(jolt_dir, head, path) is None else "modified")
@@ -228,7 +291,7 @@ def anchor_sections(out, jolt_dir, main, pin, entries, evidence=None,
     if len(unclassified) > MAX_LIST:
         out.append(f"- … and {len(unclassified) - MAX_LIST} more ({full} has the full list "
                    "in `changed-files.tsv`)")
-    if not unclassified:
+    if not unclassified and not new_crates:
         out.append("None.")
     out.append("")
 
@@ -333,7 +396,7 @@ def main():
         anchors.append("")
         try:
             anchor_sections(anchors, args.jolt_dir, args.main, pin, entries, evidence, full)
-        except (subprocess.CalledProcessError, OSError) as exc:
+        except (subprocess.CalledProcessError, OSError, ValueError) as exc:
             failures.append(f"comparing the anchors failed: {exc}")
             anchors = []
     if failures:
