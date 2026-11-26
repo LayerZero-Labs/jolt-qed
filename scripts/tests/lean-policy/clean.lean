@@ -11,3 +11,4 @@ def shown : String := s!"{x'} and {message}"
 set_option maxRecDepth 750 in
 def is_CSR_accessible : Nat := 0
 def joined : String := s!"{", ".intercalate ["a", "b"]} -- not a comment"
+def negated : Bool := !s!"{", ".intercalate ["a", "b"]}" == "" && !r"\" == "" && !'"' == 'a'
