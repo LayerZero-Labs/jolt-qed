@@ -30,7 +30,7 @@ The current migration also models the shared-memory and halt-end changes at `ff6
 The previous pin was `5def437f`.
 Older findings below keep the revision at which they were established.
 
-The completeness theorem is `JoltInstance.completeness` (`theorems/Completeness/completeness.lean`): for every instance and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`.
+The completeness theorem is `JoltInstance.completeness` (`theorems/Completeness/completeness.lean`): for every instance and every honest trace that meets the three conditions of `JoltInstance.InLanguage` (`language.lean`) with Jolt's prover config `config`, the honest witness at Jolt's own sizes (`HonestTrace.witness_params`) satisfies `AllConstraints`, with the words of the untrusted-advice block of the run's initial RAM as the committed words (`adviceBlockWords`).
 The earlier existential form, some private inputs and some witness, is `JoltInstance.completeness_someWitness`, proved from it by unpacking `InLanguage`.
 Its workhorse is `HonestTrace.allConstraints_prover_sizes` (`theorems/Completeness/All.lean`).
 `Trace.prover_config` models Jolt's checked sizing policy, and `HonestTrace.witness_params` takes its trace length and RAM size.
@@ -42,11 +42,12 @@ The SDK's `field_to_limbs!` and `field_from_limbs!` conversions emit `0x7B` inst
 A guest containing these instructions is outside the theorems' scope by construction.
 This restriction is recorded in [`expansion_helpers.lean`](../translation/expansion_helpers.lean); it is not an additional premise or a verifier check.
 
-`AllConstraints joltInstance privateInputs witness` binds the constraint data to the instance through `ConstraintContext` (`constraint_context.lean`).
-Bytecode, initial RAM, public I/O and the entry slot cannot be chosen independently of these inputs.
-Trusted advice is part of the instance; Jolt's verifier holds a commitment to it, and we model its contents directly.
-Untrusted advice is prover-chosen.
+`AllConstraints joltInstance untrustedAdvice witness` binds the constraint data to the instance through `ConstraintContext` (`constraint_context.lean`).
+Bytecode, initial RAM outside the untrusted-advice block, public I/O and the entry slot cannot be chosen independently of the instance.
+Untrusted advice is prover-chosen, and Jolt's verifier holds only a commitment to it, so `untrustedAdvice index` is an arbitrary field element: the initial value of word `index` of the untrusted-advice block (`committedInitialValue`, `ram_val_check_advice_block` in `crates/jolt-verifier/src/stages/stage4/ram_val_check.rs`).
+Trusted advice is part of the instance; Jolt's verifier also holds a commitment to it, and we model its contents as packed bytes (`TrustedAdviceAsBytes` in `assumptions.toml`).
 Both contribute to initial RAM without being public I/O.
+The soundness proof goes through the byte relation `AllConstraintsOnBytes`, where the untrusted advice is bytes as the tracer receives them; `JoltConstraints.Soundness.UntrustedAdvice.allConstraintsOnBytes_of_allConstraints` reduces `AllConstraints` to it.
 The context also checks the instance's input/output sizes and lowest address, the padded trace length, the bytecode domain, and the verifier's RAM bounds.
 `ConstraintEquations` is the underlying equation bundle over those data.
 
@@ -171,11 +172,9 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 
 ## Gaps in our model
 
-- **Advice words in initial RAM.** Lean builds untrusted advice from bytes, and every advice word in initial RAM is therefore a 64-bit value. Jolt's verifier takes those words from a committed polynomial and does not range-check them.
-  The soundness hypothesis is therefore stronger than Jolt's check: the theorems say nothing about a proof whose committed advice holds a word of `2^64` or more.
-  Trusted advice has the same gap, because Lean also models its contents as bytes.
-  The 2026-10-29 report (finding 1) suggested that LD followed by MULHU could turn such a word into a false claim. The constraints block that attack at `ff6fc6568`: LD carries `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs:1-8`). Constraint (11) therefore makes the loaded value the right lookup operand, and constraint (41) bounds that operand below `2^64` through the instruction read-RAF.
-  Closing the gap still needs either a proof that no satisfying witness reads an out-of-range advice word, or a model of advice words as field elements, which changes a core definition and waits for Ari.
+- **Advice words in initial RAM (untrusted advice resolved, trusted advice open).** `AllConstraints` takes the untrusted-advice words as field elements, as Jolt's verifier adds them from a committed polynomial without range checks.
+  The soundness proof shows that no satisfying witness reads or writes an untrusted-advice word outside the 64-bit range. A load reads a range-checked doubleword: LD carries `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs`), so constraints (11) and (41) bound the loaded value below `2^64`, and every narrow virtual load writes a register that a later row of its expansion uses as a lookup operand (`loadWindowsOk` in `theorems/expansion_facts.lean`). A store to an advice word keeps its value (`RamWriteProtected`), and stores a register value, which is a 64-bit word (`UntrustedAdvice/RegisterWords.lean`).
+  Trusted advice keeps the gap, because Lean still models its contents as bytes: the theorems hold when the trusted party commits to the packed bytes of `JoltInstance.trusted_advice` (`TrustedAdviceAsBytes` in `assumptions.toml`).
 - **HostIO END marker (resolved by the re-pin).** At `ff6fc6568` Jolt's tracer reads the label for both cycle-marker events and ignores a rejected read; the total host-call model (`JoltISA.execHostIOWith`) does the same, so finding 2 of the 2026-10-29 report no longer applies.
 - **Host allocation.** The model assumes every host allocation succeeds. In Jolt's tracer at `ff6fc6568`, `read_host_bytes` returns `HostReadError::Allocation` when `try_reserve` fails (`tracer/src/emulator/host_io.rs:72-75`), and `handle_advice_write` then logs the error and appends nothing (`tracer/src/emulator/cpu.rs:1185-1196`). The model appends the bytes to the advice tape. Host out-of-memory aborts, for example in memory-access bookkeeping or the tracing subscriber, are not modelled as guest outcomes ([host-call report](../../reports/2026-11-24-hostio-repin.md), "Explicit modelling choices and limits").
 - **ELF sections and `tohost`.** Lean's initial RAM (`initialRam`, `program.lean`) zero-fills the RAM region and writes preprocessing's `memory_init`, which `decode_elf` fills from every section at or above `RAM_START_ADDRESS` (`crates/jolt-program/src/image/elf.rs:84-133`). Jolt's tracer differs in two ways (`setup_program`, `tracer/src/emulator/mod.rs:270-340`). The model cannot state either difference, because `ElfSection` (`WholeRun/Elf.lean`) records no section type, file offset or symbol (2026-10-29 report, findings 3 and 4).
@@ -192,8 +191,9 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - **Trace representation.** Jolt's `JoltTraceRow` stores encoded operands, optional captures and a resolved bytecode PC.
   Lean's `TraceRow` derives observations from full pre- and post-states; this is a source-audited correspondence, not a formal equivalence with Jolt's packed representation.
   Lean does not represent missing captures or noncanonical NoOp rows; Jolt's row-constructor checks are producer checks, not verifier constraints or premises.
-- **Not modeled.** The Akita build's prover configuration (see the Akita item below), program commitments (ProgramBytecode, ProgramImageInit), and the advice witness columns and commitment protocols.
+- **Not modeled.** The Akita build's prover configuration (see the Akita item below), program commitments (ProgramBytecode, ProgramImageInit), and the advice commitment protocols.
   Trusted advice contents are modeled directly as part of the instance; Lean has no flag for a trusted-advice commitment being absent.
+  Lean has no flag for an absent untrusted-advice commitment either: `AllConstraints` quantifies over every choice of committed words, and the absent commitment is the choice of all zeros.
 - **Akita.** The field premise and the constraint algebra cover Akita's field. The relation includes Akita's instruction-address canonicality guard as constraint (63), on exactly when the characteristic is below `2^128`, as Jolt's `akita` feature turns it on together with the fp128 field (`methods/soundness.md`, Layer 4).
   The prover configuration and sizing model is for the base Dory build only. `translation/prover_config.lean` pads to at least 256 rows, `WitnessParams.ProverChunkConfig` follows the base one-hot chunk policy, `ConstraintContext.traceLengthFloor` requires only 256 rows, and `oneHotFitsSetup` checks Dory's setup bound (`dorySetupLogN`).
   With the `akita` feature, pinned Jolt pads every trace to at least 4096 rows (`crates/jolt-verifier/src/config.rs:93-103`) and keeps 4/16-bit one-hot chunks at every trace length (`one_hot_config`, `crates/jolt-prover/src/config.rs:207-208`), where the base build switches to 8/32-bit chunks from `log_T = 25`.

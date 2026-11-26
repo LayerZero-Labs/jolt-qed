@@ -114,18 +114,28 @@ Track every new `sorry` in `model_review.md` under "Proofs owed".
 
 Read this before the layers below; the rest of this document fills it in.
 
-- **The relation.** `AllConstraints joltInstance privateInputs witness` is a
+- **The relation.** `AllConstraints joltInstance untrustedAdvice witness` is a
   predicate on the witness alone, a table of field elements indexed by cycle.
-  The instance and private inputs enter only as fixed data: the expanded
-  bytecode, the initial RAM, the public I/O and the entry slot
-  (`ConstraintContext`). No trace appears in it.
+  The instance enters only as fixed data: the expanded bytecode, the initial
+  RAM, the public I/O and the entry slot (`ConstraintContext`). The committed
+  untrusted-advice words `untrustedAdvice` replace the initial RAM in the
+  untrusted-advice block. No trace appears in it.
+- **Advice words.** The proof first reduces `AllConstraints` to the byte
+  relation `AllConstraintsOnBytes`, where the untrusted advice is bytes
+  (`UntrustedAdvice/Bytes.lean`). Each committed word in the 64-bit range keeps
+  its value and every other word becomes zero. No row selects a word outside the
+  64-bit range: a load reads a range-checked doubleword (`LoadWords.lean`), and a
+  store to an advice word keeps its value and writes a register value
+  (`RegisterWords.lean`). Subtracting the difference from the RAM table keeps
+  every constraint (`ShiftWitness.lean`). The rest of the argument is about the
+  byte relation.
 - **The language.** `JoltInstance.InLanguage` says there exist private inputs
   and an `HonestTrace` on them whose final device has the claimed outputs and
   panic flag (`matches_outputs`), which Jolt's prover accepts, and whose spoil
   asserts all pass. Stopping at the first explicit halt is part of `HonestTrace`
   itself.
 - **The existential.** The private inputs are the given untrusted advice and a tape built from the values the witness records at its tape-read cycles.
-  The given tape cannot be used: no constraint reads it (`AllConstraints.advice_tape_irrelevant`).
+  The given tape cannot be used: no constraint reads it (`AllConstraintsOnBytes.advice_tape_irrelevant`).
   The relaxed trace ends at the first explicit halt, or at padding or the last witness cycle if neither comes first.
   The rebuilt tape then gives an honest trace with the same source-level results.
 - **The connection, step 1.** For every retained cycle `t`, the witness's columns describe the relaxed trace's state before step `t`: the selected row, its live registers and its memory.
@@ -149,7 +159,7 @@ every source instruction with the same registers and memory (Layer 7).
 
 This section records the proof at Lean commit `7096dca`.
 The `ff6fc6568` re-pin later replaced the stall-based stopping rule with the explicit halt, removed the termination word and every temporary restriction, and made `sys_enable_experimental_extensions` a definition; see [Current re-pin](#current-re-pin-2026-11-25).
-The LD/MULHU attack that finding 1 of the 2026-10-29 audit suggested is blocked by constraints (11) and (41); the remaining advice-word gap is described in `model_review.md` ("Advice words in initial RAM").
+The LD/MULHU attack that finding 1 of the 2026-10-29 audit suggested is blocked by constraints (11) and (41). Since 2026-11-25 `AllConstraints` takes the untrusted-advice words as field elements; the remaining trusted-advice gap is described in `model_review.md` ("Advice words in initial RAM").
 
 At Lean HEAD `7096dca` on 2026-10-23, `JoltInstance.soundness` was proved, under the temporary restrictions, with no `sorry`.
 `lake build JoltBytecode JoltConstraints` passed then (8,832 jobs), and `#print axioms JoltInstance.soundness` listed only `propext`, `sys_enable_experimental_extensions`, `Classical.choice` and `Quot.sound`.
