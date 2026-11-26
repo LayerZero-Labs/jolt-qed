@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.BytecodeReadData
-import JoltConstraints.translation.witness_helpers
 
 open LeanRV64D
 
@@ -11,7 +10,7 @@ open scoped BigOperators
 
 /-- Constraint (43) in `constraints.md` (stages 6a–6b):
 the expanded PC is the selected bytecode slot.
-Rust: https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L360-L380 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/bytecode.rs#L401-L421 -/
 def pcEqBytecodeRead {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ (t : Fin params.traceLength),

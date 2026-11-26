@@ -27,7 +27,8 @@ theorem scdProgram_spec (rd rs1 rs2 : regidx) (js : SailJoltState) (addr src : B
     (hr2 : rX_bits rs2 js.sail = .ok src js.sail)
     (ha : addr &&& 7#64 = 0#64) (hram : JoltISA.RAM_START_ADDRESS ≤ addr.toNat)
     (hl : JoltISA.Mmu.effective_address_ok js.jolt_device addr.toNat false = true)
-    (hs : JoltISA.Mmu.effective_address_ok js.jolt_device addr.toNat true = true) :
+    (hs : Assumptions.JoltRamStoreOk addr js
+      (if addr == js.vregs 33#7 then src else JoltISA.Mmu.ram_doubleword js.sail.mem addr.toNat) 8) :
     System.systemProjectResult (JoltISA.execProgram (JoltISA.scdProgramAuto rd rs1 rs2) js) =
       .ok RETIRE_SUCCESS (stateAfterWrite
         (System.systemProject (withReservation
@@ -73,7 +74,10 @@ theorem scdProgram_spec (rd rs1 rs2 : regidx) (js : SailJoltState) (addr src : B
     simpa only [hchoose] using h
   have hvalue : selected.vregs result = choice := by simp [selected, stateAfterVRegWrite]
   have hstore : JoltISA.Mmu.store_doubleword addr choice selected = .ok (.Ok true) stored := by
-    have h := JoltISA.Mmu.store_doubleword_ram selected addr choice ha hram hs
+    have haccepted : Assumptions.JoltRamStoreOk addr selected choice 8 :=
+      hs.transfer rfl rfl rfl
+    have h := JoltISA.Mmu.store_doubleword_ram selected addr choice ha hram
+      (JoltISA.Mmu.effective_address_ok_of_store hram haccepted) haccepted.preserves_protected
     rw [JoltISA.Mmu.write_ram_doubleword_eq] at h
     exact h
   have hsd := reservationSd_run rs1 result selected addr choice stored hr1 hvalue ha hstore

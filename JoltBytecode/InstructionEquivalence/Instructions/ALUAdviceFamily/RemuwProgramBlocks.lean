@@ -15,7 +15,8 @@ noncomputable section
 /-!
 # Program blocks for `remuwProgram`
 
-REMUW follows Rust's `remuw.rs` allocation exactly: `rs1`, `rs2`, and one
+REMUW follows the allocation in Rust's
+`crates/jolt-program/src/expand/division/remuw.rs` exactly: `rs1`, `rs2`, and one
 `v_tmp`.  The same `v_tmp` register holds quotient advice, then
 `quotient * divisor`, then the computed remainder.
 -/

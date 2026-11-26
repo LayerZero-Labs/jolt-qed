@@ -1,6 +1,7 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Alignment
 import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Windows
+import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
 
 open LeanRV64D
 
@@ -57,8 +58,8 @@ theorem LoadProgramEqSailAssumptions.dwordWindowFacts
 All fields are consequences of `StoreProgramEqSailAssumptions`; this structure
 adds no primitive assumptions. -/
 structure StoreDwordWindowFacts
-    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState)
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) : Prop where
+    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState) {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth) : Prop where
   aligned :
     AlignedDwordAccess (compute_aligned_dword_base_address h.rs1_val imm)
   bytes :
@@ -77,8 +78,8 @@ structure StoreDwordWindowFacts
       (compute_aligned_dword_base_address h.rs1_val imm) 8 js.sail
 
 theorem StoreProgramEqSailAssumptions.dwordWindowFacts
-    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
+    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState} {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth) :
     StoreDwordWindowFacts imm rs2 rs1 js h :=
   { aligned := by
       simpa [compute_aligned_dword_base_address, aligned_dword_addr_eq,
@@ -97,12 +98,25 @@ theorem StoreProgramEqSailAssumptions.dwordWindowFacts
       simpa using h.not_writable_mmio.subaccess
         (offset := 0) (accessWidth := 8) (by decide) (by omega) }
 
+/-- Store acceptance stated with the loaded doubleword used by the proof layer.
+For example, the byte-store bundle describes its merged eight-byte row value. -/
+theorem StoreProgramEqSailAssumptions.storeOk
+    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState} {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth) :
+    Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address h.rs1_val imm) js
+      (JoltISA.storeDwordValue storeWidth (load_effective_address h.rs1_val imm)
+        (loaded_dword_at js.sail (compute_aligned_dword_base_address h.rs1_val imm)
+          h.dwordWindowFacts.bytes h.dwordWindowFacts.aligned.no_ovf) h.rs2_val) 8 := by
+  rw [← JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail _
+    h.dwordWindowFacts.bytes h.dwordWindowFacts.aligned.no_ovf]
+  exact h.jolt_ram_store
+
 /-- Derived write-side facts for a native store access inside the enclosing
 dword window. The caller supplies positivity and the arithmetic fact that the access fits
 inside that window. -/
 structure StoreAccessFacts
-    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState)
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js)
+    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState) {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth)
     (width : Nat) : Prop where
   store_pmp :
     Assumptions.StorePmpOk (load_effective_address h.rs1_val imm) width js.sail
@@ -110,8 +124,8 @@ structure StoreAccessFacts
     Assumptions.NotWritableMmio (load_effective_address h.rs1_val imm) width js.sail
 
 theorem StoreProgramEqSailAssumptions.storeAccessFacts
-    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js)
+    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState} {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth)
     (width : Nat)
     (hpositive : 0 < width)
     (hfits :

@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValProofHelpers
-import Batteries.Data.Fin.Fold
+import JoltConstraints.theorems.Completeness.Helpers.PrefixSum
+import JoltConstraints.translation.witness_helpers.registers_val
 
 open LeanRV64D
 
@@ -8,33 +9,6 @@ set_option autoImplicit false
 open scoped BigOperators
 
 namespace JoltConstraints
-
-private theorem register42_prefix_sum_succ
-    {F : Type} [Field F] {N : Nat} (f : Fin N → F)
-    (n : Nat) (hn : n < N) :
-    (∑ i : Fin N, if i.val < n + 1 then f i else 0) =
-      (∑ i : Fin N, if i.val < n then f i else 0) + f ⟨n, hn⟩ := by
-  classical
-  conv_lhs =>
-    arg 2
-    ext i
-    rw [show (if i.val < n + 1 then f i else 0) =
-      (if i.val < n then f i else 0) +
-        (if i = (⟨n, hn⟩ : Fin N) then f i else 0) by
-          by_cases hlt : i.val < n
-          · have hneq : i ≠ (⟨n, hn⟩ : Fin N) := by
-              intro h
-              have hv : i.val = n := by simpa using congrArg Fin.val h
-              omega
-            simp [hlt, Nat.lt_add_one_of_lt hlt, hneq]
-          · by_cases heq : i.val = n
-            · have hi : i = ⟨n, hn⟩ := Fin.ext heq
-              simp [hi]
-            · have hnot : ¬ i.val < n + 1 := by omega
-              have hneq : i ≠ (⟨n, hn⟩ : Fin N) := Fin.ne_of_val_ne heq
-              simp [hlt, hnot, hneq]]
-  rw [Finset.sum_add_distrib, Finset.sum_ite_eq']
-  simp
 
 private theorem register42_registersVal_succ
     {F : Type} [Field F] (p : WitnessParams)
@@ -227,7 +201,7 @@ theorem honestRegistersVal_eq_prefixRdInc
         have hm : m < p.traceLength := by omega
         have hstep := register42_registersVal_step (F := F) p trace traceFits
           initialRegistersZero register m hn
-        have hsum := register42_prefix_sum_succ
+        have hsum := prefix_sum_succ
           (fun cycle : Fin p.traceLength =>
             TraceWitness.RdWa (F := F) p trace register cycle *
               TraceWitness.RdInc p trace cycle) m hm

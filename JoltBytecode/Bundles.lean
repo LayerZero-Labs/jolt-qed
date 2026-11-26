@@ -5,6 +5,7 @@ Authors: Ari
 -/
 
 import JoltBytecode.Assumptions
+import JoltBytecode.JoltISA.Values
 import JoltBytecode.HartConfig
 import JoltBytecode.JoltISA.MemoryAccess
 import JoltBytecode.JoltISA.SystemCSR
@@ -14,17 +15,30 @@ open LeanRV64D
 /-!
 # Jolt proof bundles
 
-A bundle is just a subset of assumptions from Assumptions.lean.
-Each main equivalence theorem gets a bundle, which states everything 
-we must assume to prove the theorem. 
-A bundle should NEVER invent assumptions, it can only import them from 
-Assumptions.lean.
-
-Thus, the entire assumption surface lives in Assumption.lean.
-We could have passed the entire list of assumptions to every theorem, 
+Each main equivalence theorem gets a bundle, which states everything
+we must assume to prove the theorem.
+The bundles in this file only collect assumptions from Assumptions.lean.
+We could have passed the entire list of assumptions to every theorem,
 but then it is not clear which theorems use which assumptions.
-The bundles are a clean way to show that memory equivalence proofs 
+The bundles are a clean way to show that memory equivalence proofs
 require far more assumptions than ALU expansions.
+
+Assumptions.lean is not the whole assumption surface. Some bundles outside
+this file add their own premises about the machine state:
+
+* `MretEqAssumptions`, `CsrEqAssumptions` and `CsrRegEqAssumptions` in
+  RiscvInstruction.lean ask for the step invariant, legal mstatus bits, a
+  legal mtvec mode and an even mepc.
+* `ReservationReadEqAssumptions` in
+  InstructionEquivalence/Instructions/System/Reservation.lean and
+  `ReservationStoreEqAssumptions` in
+  InstructionEquivalence/Instructions/System/Sc.lean ask that Sail's physical
+  access check passes at the reserved address, and SC also asks for a legal
+  reservation pair in v32 and v33.
+
+The whole-run proof discharges every bundle, these included, in
+`WholeRun.equivAssumptions_of_retire`
+(JoltConstraints/theorems/WholeRun/Bundles.lean).
 
 -/
 
@@ -226,19 +240,25 @@ theorem LoadProgramEqSailAssumptions.linkedCSRs
 /-- Public assumptions for store-family equivalence theorems.
 
 Stores reuse the load-family enclosing-dword read assumptions, then add the
-second source register and write-side memory window. -/
+second source register and write-side memory window.
+`storeWidth` is the source width (one, two, four or eight bytes); acceptance checks
+the complete eight-byte value written by the lowered store.
+For example, SB replaces one byte and preserves the other seven. -/
 structure StoreProgramEqSailAssumptions
-    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState)
+    (imm : BitVec 12) (rs2 rs1 : regidx) (js : SailJoltState) (storeWidth : Nat := 8)
     extends LoadProgramEqSailAssumptions imm rs1 js,
       DwordWriteWindowAssumptions
         (compute_aligned_dword_base_address rs1_val imm) js.sail where
   rs2_val : BitVec 64
   rs2_read : rX_bits rs2 js.sail = .ok rs2_val js.sail
   jolt_ram_store : Assumptions.JoltRamStoreOk (compute_aligned_dword_base_address rs1_val imm) js
+    (JoltISA.storeDwordValue storeWidth (rs1_val + sign_extend (m := 64) imm)
+      (JoltISA.Mmu.ram_doubleword js.sail.mem
+        (compute_aligned_dword_base_address rs1_val imm).toNat) rs2_val) 8
 
 theorem StoreProgramEqSailAssumptions.linkedCSRs
-    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState}
-    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js) :
+    {imm : BitVec 12} {rs2 rs1 : regidx} {js : SailJoltState} {storeWidth : Nat}
+    (h : StoreProgramEqSailAssumptions imm rs2 rs1 js storeWidth) :
     LinkedCSRs js :=
   h.toLoadProgramEqSailAssumptions.linkedCSRs
 
@@ -277,6 +297,7 @@ structure AmoDwordProgramEqSailAssumptions
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram_load : Assumptions.JoltRamLoadOk rs1_val js
   jolt_ram_store : Assumptions.JoltRamStoreOk rs1_val js
+    (JoltISA.amoValue op rs2_val (JoltISA.Mmu.ram_doubleword js.sail.mem rs1_val.toNat)) 8
 
 theorem AmoDwordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}
@@ -300,6 +321,8 @@ structure AmoWordProgramEqSailAssumptions
   mstatus_mprv : Assumptions.MstatusMprvZero js.sail
   jolt_ram_load : Assumptions.JoltRamLoadOk (amoWordBase rs1_val) js
   jolt_ram_store : Assumptions.JoltRamStoreOk (amoWordBase rs1_val) js
+    (JoltISA.amoWordStoreValue op rs1_val
+      (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase rs1_val).toNat) rs2_val) 8
 
 theorem AmoWordProgramEqSailAssumptions.rdReadable
     {op : amoop} {rs2 rs1 rd : regidx} {js : SailJoltState}

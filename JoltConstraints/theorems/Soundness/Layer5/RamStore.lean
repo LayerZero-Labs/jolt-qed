@@ -4,8 +4,8 @@ open LeanRV64D
 
 /-! The byte-map effect of Jolt's ordinary-RAM doubleword store, expressed as
 an update to one aligned word. Reuse the existing byte hit/frame proofs.
-At public pin 8bbb2357:
-See : jolt/tracer/src/emulator/mmu.rs:721-740 -/
+At public pin ff6fc6568:
+See : jolt/tracer/src/emulator/mmu.rs:859-879 -/
 
 set_option autoImplicit false
 
@@ -16,7 +16,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 /-- Reading byte `offset < 8` after a doubleword store returns that byte of
 the stored word, counting from its least significant byte.
 For example, offset zero of word 257 is byte 1.
-See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at 5def437f. -/
+See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at ff6fc6568. -/
 theorem ram_store_byte (state : SailState) (base value : BitVec 64)
     (offset : Nat) (within : offset < 8) :
     (Mmu.write_ram_doubleword state.mem base.toNat value).get? (base.toNat + offset) =
@@ -29,7 +29,7 @@ theorem ram_store_byte (state : SailState) (base value : BitVec 64)
 /-- Reading the eight bytes written by a doubleword store reconstructs its word.
 For example, writing 257 and reading the same word gives 257 independently of
 the old memory contents.
-See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at 5def437f. -/
+See `jolt/tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword_raw`) at ff6fc6568. -/
 theorem ram_store_word (state : SailState) (base value : BitVec 64) :
     Mmu.ram_doubleword (Mmu.write_ram_doubleword state.mem base.toNat value) base.toNat = value := by
   have first := ram_store_byte state base value 0 (by decide)

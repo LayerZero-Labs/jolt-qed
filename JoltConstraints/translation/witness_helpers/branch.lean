@@ -1,13 +1,11 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
-import JoltBytecode.JoltISA.semantic_helpers
 
 open LeanRV64D
 
 set_option autoImplicit false
 
--- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.
+-- Rust paths are relative to the Jolt repository root at ff6fc6568.
 
 namespace TraceWitness
 

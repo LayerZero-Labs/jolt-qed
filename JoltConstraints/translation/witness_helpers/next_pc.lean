@@ -8,10 +8,10 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [NextPc](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/pc.rs).
+-- Rust: [NextPc](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/witnesses/pc.rs).
 -- Expanded PC of the next execution row, which can revisit or skip bytecode slots.
 -- PC supplies zero for padding; the final witness position also has successor value zero.
--- Rust: [successor window](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/cycle.rs#L99-L118).
+-- Rust: [successor window](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/backend/trace/cycle.rs#L69-L88).
 noncomputable def NextPC [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>
     if nextInBounds : t.val + 1 < p.traceLength then

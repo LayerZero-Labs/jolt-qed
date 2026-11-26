@@ -12,8 +12,8 @@ set_option autoImplicit false
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
 -- The final rows for one source instruction; none where Lean has no expansion yet.
--- See : jolt/crates/jolt-program/src/expand/mod.rs:126-170 (expand_source_instruction_with_provider)
---       jolt/crates/jolt-program/src/expand/grammar.rs:388-450 (is_source_only)
+-- See : jolt/crates/jolt-program/src/expand/mod.rs:127-171 (expand_source_instruction_with_provider)
+--       jolt/crates/jolt-program/src/expand/grammar.rs:388-454 (is_source_only)
 def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
   | .riscv instruction =>
     match instruction with
@@ -121,6 +121,7 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .MRET => some (.ofProgram JoltISA.mretProgram)
   | .jolt instruction =>
     match instruction with
+    | .JoltSuccess => some (.ofNative (.JoltSuccess (.xreg (regidx.Regidx 0))))
     | .AdviceLB rd => some (.ofProgram (JoltISA.advicelbProgramAuto rd))
     | .AdviceLH rd => some (.ofProgram (JoltISA.advicelhProgramAuto rd))
     | .AdviceLW rd => some (.ofProgram (JoltISA.advicelwProgramAuto rd))
@@ -128,5 +129,5 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .VirtualRev8W rd rs1 => some (.ofNative (.VirtualRev8W (.xreg rd) (.xreg rs1)))
     | .VirtualAssertEQ rs1 rs2 imm =>
         some (.ofNative (JoltISA.Encoded.VirtualAssertEQ (.xreg rs1) (.xreg rs2) imm))
-    -- No operands: jolt/crates/jolt-program/src/image/decode.rs:335-339 at 5def437f.
+    -- No operands: jolt/crates/jolt-program/src/image/decode.rs:360-364 at ff6fc6568.
     | .VirtualHostIO => some (.ofNative .VirtualHostIO)

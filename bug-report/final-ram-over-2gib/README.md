@@ -1,5 +1,10 @@
 # Final RAM misplaces bytes more than 2 GiB above RAM_START
 
+**Status: fixed in Jolt by a16z/jolt#2509 (in `ff6fc6568`).** `final_ram_state` no longer has the
+`address >= dram_start` branch quoted below, and the Lean model (`TraceWitness.finalRamWord`)
+models the fixed code with no assumption. The rest of this file records the original finding
+at `629ed77b5`.
+
 > [!NOTE]
 > This issue surfaced while formally verifying, in Lean, that the honest Jolt
 > witness satisfies the final-RAM check. Our Lean model of the final RAM put every

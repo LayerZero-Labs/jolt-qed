@@ -7,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [BytecodeRaChunk](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:121).
+-- Rust: `crates/jolt-witness/src/witnesses/one_hot.rs` (`BytecodeRaChunk`).
 -- Encode the static bytecode slot, not the trace position: executing the same
 -- instruction twice selects the same address. Padding selects slot 0.
 noncomputable def BytecodeRaChunk {F : Type} [Field F] (p : WitnessParams)

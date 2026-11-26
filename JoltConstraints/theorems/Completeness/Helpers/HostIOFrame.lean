@@ -1,10 +1,10 @@
-import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.theorems.nextpc_frame
+import JoltConstraints.theorems.execution_facts
 
 open LeanRV64D
 
--- HostIO changes no Sail state: its byte reads go through Jolt's MMU, which
--- changes nothing, and it otherwise only appends to the advice tape.
+-- HostIO changes no Sail state: it either leaves the state unchanged or only
+-- appends to the advice tape (`execHostIO_keeps_state`).
 
 set_option autoImplicit false
 
@@ -15,78 +15,8 @@ namespace JoltHostFrame
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   ∀ (s t : SailJoltState) (v : α), m s = .ok v t → t.sail = s.sail
 
-theorem pure_rule {α : Type} (v : α) : Preserves (pure v) := by
-  intro s t x h
-  cases h
-  rfl
-
-theorem bind_rule {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
-    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) : Preserves (m >>= f) := by
-  intro s t v h
-  cases hr : m s with
-  | error e s' => simp only [bind, EStateM.bind, hr] at h; cases h
-  | ok x s' =>
-    simp only [bind, EStateM.bind, hr] at h
-    exact (hf x s' t v h).trans (hm s s' x hr)
-
-theorem read_rule (src : JoltISA.Src) : Preserves (JoltISA.readSrc src) := by
-  intro s t v h
-  obtain ⟨rfl, _⟩ := lookup_readSrc_value src s t v h
-  rfl
-
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
-  intro s t v h
-  cases h
-  rfl
-
-theorem throw_rule {α : Type} (e : Error exception) :
-    Preserves (throw e : JoltMonad α) := by
-  intro s t v h
-  cases h
-
-theorem modifyAdvice_rule
-    (f : SailJoltState → SailJoltState)
-    (hf : ∀ s, (f s).sail = s.sail) :
-    Preserves (modify f : JoltMonad Unit) := by
-  intro s t v h
-  cases h
-  exact hf s
-
-theorem loadByte_rule (addr : BitVec 64) : Preserves (JoltISA.Mmu.load addr) := by
-  intro s t v h
-  rw [JoltISA.Mmu.load_state h]
-
-theorem readHostBytes_frame
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
-      overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact pure_rule _
-  | succ n ih =>
-    dsimp only [JoltISA.readHostBytes]
-    refine bind_rule (loadByte_rule _) (fun result => ?_)
-    cases result with
-    | Err e => exact pure_rule _
-    | Ok byte =>
-      split_ifs with h
-      · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-      · exact bind_rule (pure_rule _) (fun _ => ih _ _)
-
-theorem execHostIO_frame : Preserves (JoltISA.execHostIO) := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine bind_rule get_rule (fun config => ?_)
-  dsimp only
-  split
-  · exact pure_rule _
-  · repeat' first
-      | exact readHostBytes_frame _ _ _ _ _
-      | exact read_rule _
-      | exact pure_rule _
-      | exact throw_rule _
-      | exact modifyAdvice_rule _ (by intro s; rfl)
-      | split
-      | refine bind_rule ?_ (fun x => ?_)
+theorem execHostIO_frame : Preserves (JoltISA.execHostIO) :=
+  fun s t v h => (execHostIO_keeps_state s t v h).1
 
 end JoltHostFrame
 

@@ -86,14 +86,15 @@ theorem sdJolt_reduces_to_vmem_write_addr
       exact BitVec.and_not_eq_self_of_and_eq_zero x 7 hx
     have hbase_eq : compute_aligned_dword_base_address h.rs1_val imm = ea := by
       simpa [compute_aligned_dword_base_address, ea] using hclear ea halign_ea
-    have hjolt : Assumptions.JoltRamStoreOk ea js := by
-      simpa [hbase_eq] using h.jolt_ram_store
+    have hjolt : Assumptions.JoltRamStoreOk ea js h.rs2_val 8 := by
+      simpa [hbase_eq, JoltISA.storeDwordValue] using h.jolt_ram_store
     simp only [halign, ite_true]
     simp only [EStateM.bind]
     rw [JoltISA.Mmu.store_doubleword_eq_sail js ea h.rs2_val h.cur_privilege h.mstatus_mprv
       (aligned_dword_access_of_align ea halign_ea) hstore_access.store_pmp
       hstore_access.write_mmio
-      (JoltISA.Mmu.effective_address_ok_of_store hstore_access.write_mmio.ram hjolt)]
+      (JoltISA.Mmu.effective_address_ok_of_store hstore_access.write_mmio.ram hjolt)
+      hjolt.preserves_protected]
     unfold liftSail
     unfold System.systemProjectResult
     simp only [hwrite, hwrite_raw, EStateM.pure]

@@ -1,4 +1,3 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.witness_helpers.register_address
@@ -15,7 +14,7 @@ Absent operands and padding contribute zero.
 For example, a floor load selects its destination and a floor store selects none.
 Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
 (`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
-`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
+`format/format_shift_data.rs` (`FormatShiftData`) at `ff6fc6568`. -/
 noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) :
     Fin 128 → Fin p.traceLength → F :=
@@ -25,7 +24,7 @@ noncomputable def RdWa {F : Type} [Field F] (p : WitnessParams)
       let instruction :=
         (getElem trace.bytecode row.rowIndex.val row.rowIndex.isLt).instruction
       match instruction with
-      | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
+      | .JoltSuccess dst | .Panic dst | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
       | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
       | .ADD dst _ _ | .ADDW dst _ _ | .SUB dst _ _ | .SUBW dst _ _ | .MUL dst _ _
       | .MULW dst _ _ | .MULHU dst _ _ | .ANDN dst _ _ | .VirtualMULI dst _ _

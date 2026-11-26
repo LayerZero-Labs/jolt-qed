@@ -2,7 +2,6 @@
 Syntactic facts about the rows each expansion emits. `trace_interface.lean` turns
 them into `ExpansionRowsValid`.
 -/
-import JoltConstraints.translation.expansions
 import JoltConstraints.translation.register_encoding
 import JoltConstraints.translation.metadata
 import JoltConstraints.theorems.expansion_temp_liveness
@@ -97,7 +96,7 @@ def shiftsOk : List JoltISA.Instr → Bool
 
 /-- If the final instruction is JAL or JALR, every instruction has its Store
 opcode flag unset. For example, ECALL ends in JALR and contains no store.
-See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:23-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:20-51 at ff6fc6568. -/
 def jumpEndNoStore (instructions : List JoltISA.Instr) : Bool :=
   match instructions.getLast? with
   | some (.JAL ..) | some (.JALR ..) =>
@@ -106,7 +105,7 @@ def jumpEndNoStore (instructions : List JoltISA.Instr) : Bool :=
 
 /-- Every JALR in a sequence has a virtual destination and a virtual base.
 For example, MRET reads virtual mepc and writes its link to a temporary.
-See jolt/crates/jolt-program/src/expand/control_flow/mret.rs:11-18 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/mret.rs:17-28 at ff6fc6568. -/
 def sequenceJalrsVirtual (instructions : List JoltISA.Instr) : Bool :=
   instructions.all fun instruction =>
     match instruction with
@@ -117,7 +116,7 @@ def sequenceJalrsVirtual (instructions : List JoltISA.Instr) : Bool :=
 /-- Each virtual-base, virtual-destination JALR reads a virtual register that
 no instruction in its sequence names as a virtual destination.
 For example, ECALL jumps through mtvec without writing mtvec.
-See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:15-50 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:25-50 at ff6fc6568. -/
 def virtualJalrBaseUnwritten (instructions : List JoltISA.Instr) : Bool :=
   instructions.all fun instruction =>
     match instruction with
@@ -134,9 +133,9 @@ These are exactly the destination and source forms of `sideEffectingRdZeroDst`
 and `adviceReadSource`: for example, AdviceLB x0 loads virtual register 40,
 then multiplies that register by `slliMultiplier (BitVec.ofNat 6 56)`.
 A narrow load at the end of the list fails this check.
-See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357.
+See jolt/crates/jolt-program/src/expand/memory/shared.rs:191-223 at ff6fc6568.
 The width check follows jolt/tracer/src/instruction/virtual_advice_load.rs
-(`VirtualAdviceLoad::exec`) at 5def437f. -/
+(`VirtualAdviceLoad::exec`) at ff6fc6568. -/
 def advicePairsOk : List JoltISA.Instr → Bool
   | [] => true
   | instruction :: rest =>
@@ -162,7 +161,7 @@ def advicePairsOk : List JoltISA.Instr → Bool
 /-- Every advice load in a checked list has a supported byte count.
 For example, the first row of AdviceLH reads two bytes.
 See jolt/tracer/src/instruction/virtual_advice_load.rs
-(`VirtualAdviceLoad::exec`) at 5def437f. -/
+(`VirtualAdviceLoad::exec`) at ff6fc6568. -/
 theorem advicePairsOk_width (instructions : List JoltISA.Instr)
     (ok : advicePairsOk instructions = true) {destination : JoltISA.Dst} {width : BitVec 64}
     (member : JoltISA.Instr.VirtualAdviceLoad destination width ∈ instructions) :
@@ -179,7 +178,7 @@ theorem advicePairsOk_width (instructions : List JoltISA.Instr)
 /-- A native JALR has an architectural base; its destination may be
 architectural or virtual after the x0 rewrite.
 For example, native JALR x0, 0(x2) retains x2 as its base.
-See jolt/crates/jolt-program/src/expand/mod.rs:126-170 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/mod.rs:127-171 at ff6fc6568. -/
 def nativeJalrBaseOk : JoltISA.Instr → Bool
   | .JALR _ (.vreg _) _ => false
   | _ => true
@@ -323,9 +322,12 @@ theorem wordMaskOk_shamt (shamt : BitVec 5) :
   simp [shamt.isLt]
 
 -- Evaluate the unchanged sequence checks after a program's branches are exposed.
+-- Try `rfl` first: most branches evaluate by definitional unfolding, which is
+-- several times cheaper than `simp` reducing matches on `JoltISA.Instr`.
 macro "finish_rows_ok" : tactic => `(tactic| (
-  all_goals
-    simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
+  all_goals first
+  | rfl
+  | simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
@@ -360,8 +362,9 @@ macro "pure_rows_ok " program:ident notX0:ident : tactic => `(tactic| (
   unfold $program
   simp only [$notX0:ident, Bool.false_eq_true, ↓reduceIte]
   repeat' split
-  all_goals
-    simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
+  all_goals first
+  | rfl
+  | simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
@@ -1061,7 +1064,7 @@ theorem virtualAssertEQ_native_ok (rs1 rs2 : regidx) (imm : BitVec 13) :
 
 /-- An operandless host call satisfies the native-row expansion checks.
 For example, it reads no instruction temporary and has no destination to rewrite.
-See jolt/crates/jolt-program/src/expand/materialize.rs:79-101 at 5def437f. -/
+See jolt/crates/jolt-program/src/expand/materialize.rs:83-105 at ff6fc6568. -/
 theorem virtualHostIO_native_ok :
     ExpandedOk (.ofNative JoltISA.Instr.VirtualHostIO) := by
   native_ok
@@ -1186,6 +1189,7 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
   | .jolt .VirtualHostIO, _, h => by cases h; exact virtualHostIO_native_ok
+  | .jolt .JoltSuccess, _, h => by cases h; native_ok
 
 /-- The first read of each instruction temporary in a source expansion follows
 a write within that same expansion. Reserved virtual registers are excluded. -/
@@ -1201,7 +1205,7 @@ theorem expand_temps_ok (source : SourceInstruction) (expanded : ExpandedSource)
 
 /-- The Store circuit flag is the instruction's Store opcode flag: stamping
 metadata does not affect it. For example, a stamped SD retains Store = true.
-See jolt/crates/jolt-riscv/src/lib.rs:399-421 at 8bbb2357. -/
+See jolt/crates/jolt-riscv/src/lib.rs:475-497 at ff6fc6568. -/
 theorem circuitFlag_store_eq_opcodeFlag (row : JoltInstructionRow) :
     JoltMetadata.circuitFlag row .Store =
       JoltMetadata.opcodeFlag row.instruction .Store := rfl
@@ -1211,7 +1215,7 @@ checks. A native expansion has one instruction satisfying the native checks;
 a sequence satisfies the sequence checker, including its jump and advice checks.
 For example, stamping ECALL keeps its final JALR in the last position.
 See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 and
-jolt/crates/jolt-program/src/expand/materialize.rs:71-101 at 8bbb2357. -/
+jolt/crates/jolt-program/src/expand/materialize.rs:75-105 at ff6fc6568. -/
 theorem expand_instruction_checks (source : SourceInstructionRow SourceInstruction)
     (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
     match source.instruction.expand with

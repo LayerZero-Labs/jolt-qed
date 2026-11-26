@@ -31,16 +31,18 @@ abbrev amoWordLaneOld (addr dword : BitVec 64) : BitVec 64 :=
 
 /-- An aligned floor load performs the containing-doubleword read and writes
 its result, as in `floor_access::load` in `tracer/src/instruction/floor_access.rs`.
-For example, an effective address of 12 reads the doubleword at 8. -/
+For example, an effective address of 12 reads the doubleword at 8. The
+misalignment exception `fault` plays no part on this path. AMO expansions use
+the default `E_SAMO_Addr_Align`, and LR.W passes `E_Load_Addr_Align`. -/
 theorem amo_word_floor_load_aligned_run
     (rs1 : regidx) (dst : JoltISA.VReg) (js : SailJoltState)
     (addr dword : BitVec 64)
     (hread : rX_bits rs1 js.sail = .ok addr js.sail)
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hload : JoltISA.Mmu.load_doubleword (amoWordBase addr) js = .ok (.Ok dword) js)
-    (hw : WritableVReg dst) :
-    (JoltISA.execInstr (.VirtualLoadW .amo (.vreg dst) (.xreg rs1) 0
-      (ExceptionType.E_SAMO_Addr_Align ()))).run js =
+    (hw : WritableVReg dst)
+    (fault : ExceptionType := ExceptionType.E_SAMO_Addr_Align ()) :
+    (JoltISA.execInstr (.VirtualLoadW .amo (.vreg dst) (.xreg rs1) 0 fault)).run js =
       .ok RETIRE_SUCCESS (stateAfterVRegWrite js dst dword) := by
   unfold JoltISA.execInstr JoltISA.readSrc liftSail
   simp only [hread, bind, EStateM.bind, EStateM.run]
@@ -147,13 +149,13 @@ theorem amo_word_floor_store_run
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hbase : amoWordBase addr &&& (7 : BitVec 64) = 0)
     (hram : JoltISA.RAM_START_ADDRESS ≤ (amoWordBase addr).toNat)
-    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js (js.vregs value) 8) :
     (JoltISA.execInstr (.VirtualStoreW (.xreg rs1) (.vreg value) 0
       (ExceptionType.E_SAMO_Addr_Align ()))).run js =
       .ok RETIRE_SUCCESS
         { js with sail := state_after_dword_store js.sail (amoWordBase addr) (js.vregs value) } := by
   have hstore := JoltISA.Mmu.store_doubleword_ram js (amoWordBase addr) (js.vregs value)
-    hbase hram (JoltISA.Mmu.effective_address_ok_of_store hram hjolt)
+    hbase hram (JoltISA.Mmu.effective_address_ok_of_store hram hjolt) hjolt.preserves_protected
   rw [JoltISA.Mmu.write_ram_doubleword_eq] at hstore
   unfold JoltISA.execInstr JoltISA.readSrc liftSail readVReg
   simp only [hread, bind, EStateM.bind, EStateM.run, add_zero, halign, ite_true,
@@ -193,7 +195,7 @@ theorem amo_word_lane_merge_run
     (halign : addr &&& (3 : BitVec 64) = 0)
     (hbase : amoWordBase addr &&& (7 : BitVec 64) = 0)
     (hram : JoltISA.RAM_START_ADDRESS ≤ (amoWordBase addr).toNat)
-    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js) :
+    (hjolt : Assumptions.JoltRamStoreOk (amoWordBase addr) js (amoWordLaneMerged addr original value) 8) :
     JoltISA.Program.Run
       (JoltISA.laneWindowMerge .word (.vreg dword) (.vreg lane) (.xreg rs1) 0 source
         (ExceptionType.E_SAMO_Addr_Align ()) (.done RETIRE_SUCCESS)) js
@@ -213,7 +215,8 @@ theorem amo_word_lane_merge_run
     simpa [shifted, cleared, merged, amoWordLaneMergeState, stateAfterVRegWrite, hdl,
       amoWordLaneMerged] using JoltISA.add_run_vreg_vreg_vreg dword dword lane shifted hdword
   have hstore := amo_word_floor_store_run rs1 dword merged addr hread halign hbase hram
-    ⟨hjolt.below_heap_end, hjolt.outside_canary⟩
+    (by simpa [merged, amoWordLaneMergeState, stateAfterVRegWrite] using
+      hjolt.transfer (t := merged) rfl rfl rfl)
   have hstore' : (JoltISA.execInstr (.VirtualStoreW (.xreg rs1) (.vreg dword) 0
       (ExceptionType.E_SAMO_Addr_Align ()))).run merged =
       .ok RETIRE_SUCCESS { merged with

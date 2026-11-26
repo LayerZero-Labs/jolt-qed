@@ -85,7 +85,7 @@ theorem lw_ld_run
   · exact h.dwordWindowFacts.load_pmp
   · exact h.dwordWindowFacts.read_mmio
   · exact hWritable
-  · exact ⟨h.jolt_ram.below_heap_end⟩
+  · exact ⟨h.jolt_ram.below_backing_end⟩
 
 /-- The second LW instruction writes the word-window mask to its chosen
 scratch virtual register. -/

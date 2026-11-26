@@ -1,8 +1,8 @@
 import JoltConstraints.translation.Constraints.RightLookupAdd
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.AddressSum
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.Completeness.Helpers.AddressWindow
 
 open LeanRV64D
 
@@ -14,12 +14,30 @@ namespace JoltConstraints
 for other instructions; for example, LoadH with base x2 and offset -2
 returns `(x2, -2)`.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`to_instruction_inputs`) at `c6703570`. -/
+(`to_instruction_inputs`) at `ff6fc6568`. -/
 def floorAccess? : JoltISA.Instr → Option (JoltISA.Src × BitVec 64)
   | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _
   | .VirtualLoadW _ _ base imm _ | .VirtualStoreB base _ imm _
   | .VirtualStoreH base _ imm _ | .VirtualStoreW base _ imm _ => some (base, imm)
   | _ => none
+
+/-- A floor row's operands give an access row with that base and offset.
+For example, `VirtualLoadH .normal x1 x2 (-2) fault` is a halfword access row with
+base x2 and offset -2. -/
+theorem access_of_floorAccess {instruction : JoltISA.Instr} {base : JoltISA.Src}
+    {imm : BitVec 64} (floor : floorAccess? instruction = some (base, imm)) :
+    ∃ width, Soundness.AccessRow instruction width base imm := by
+  cases instruction <;> simp only [floorAccess?, reduceCtorEq] at floor
+  all_goals
+    simp only [Option.some.injEq, Prod.mk.injEq] at floor
+    obtain ⟨rfl, rfl⟩ := floor
+  all_goals first
+    | exact ⟨.byte, Or.inl ⟨_, _, _, rfl⟩⟩
+    | exact ⟨.halfword, Or.inl ⟨_, _, _, rfl⟩⟩
+    | exact ⟨.word, Or.inl ⟨_, _, _, rfl⟩⟩
+    | exact ⟨.byte, Or.inr ⟨_, _, rfl⟩⟩
+    | exact ⟨.halfword, Or.inr ⟨_, _, rfl⟩⟩
+    | exact ⟨.word, Or.inr ⟨_, _, rfl⟩⟩
 
 end JoltConstraints
 
@@ -38,9 +56,15 @@ So the equation holds only when `rs1 + imm` is not negative. For example,
 `lb x1, -16(x0)` gives `RightLookupOperand t = 2^128 - 16`, but the right side
 is `0 + (-16) = -16`; they differ by `2^128`, and the constraint is not
 satisfied.
-Left as `sorry` until a16z/jolt#1949 is fixed.
+That row never retires in an honest trace, so the sum is never negative there.
+The tracer accepts a floor row's doubleword only inside the address window
+`[0x40000000, 2^63 + 2^31)`, and every floor offset is a sign-extended 12-bit
+value, so `rs1 + imm` cannot wrap (`HonestTrace.access_noWrap`).
+In the example, the wrapped address `2^64 - 16` lies above the window, and the
+tracer stops before the row retires.
+Jolt at ff6fc6568: `tracer/src/emulator/mmu.rs` (`assert_effective_address`).
 
-Rust, at `c6703570`:
+Rust, at `ff6fc6568`:
 - (08): `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` (`RightLookupAdd`).
 - Flags of these instructions, so `AddOperands t = 1`:
   `crates/jolt-riscv/src/instructions/virt/{load,store}_{b,h,w}.rs` (`jolt_instruction!`).
@@ -57,16 +81,17 @@ theorem HonestTrace.floorAccess_address_nonneg
       some (base, imm)) :
     0 ≤ ((JoltISA.sourceValue base (trace.rows[t]'inBounds).preState).toNat : Int) +
       imm.toInt := by
-  sorry
+  obtain ⟨width, access⟩ := access_of_floorAccess floor
+  exact (trace.access_noWrap t inBounds access).1
 
 namespace JoltConstraints
 
 /-- A floor row's 128-bit lookup index casts to the sum of its instruction
 inputs; for example, base 10 with immediate -2 yields field value 8.
-Only its nonnegativity uses the honest-row #1949 obligation; the upper bound
-follows from the operand widths.
+Its nonnegativity comes from `HonestTrace.floorAccess_address_nonneg`; the upper
+bound follows from the operand widths.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`to_lookup_operands`) at `c6703570`. -/
+(`to_lookup_operands`) at `ff6fc6568`. -/
 private theorem floor_lookup_sum {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (t : Nat) (ht : t < trace.rows.size)
@@ -110,9 +135,9 @@ private theorem masked_mod_128 (value : Nat) :
 
 /-- Constraint (08) combines the selected inputs by addition, including floor
 addresses; for example, base 10 and immediate -2 produce index 8.
-The floor address equality depends on the explicit #1949 wrap obligation.
+The floor address equality uses `HonestTrace.floorAccess_address_nonneg`.
 Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
-(`RightLookupAdd`) at `c6703570`. -/
+(`RightLookupAdd`) at `ff6fc6568`. -/
 theorem honestWitness_rightLookupAdd
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

@@ -1,13 +1,4 @@
 import JoltConstraints.theorems.Soundness.Layer6.DivisionDefs
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Div
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divu
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divw
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Divuw
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Rem
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Remu
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Remw
-import JoltBytecode.InstructionEquivalence.Instructions.ALUAdviceFamily.Remuw
-import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionFrame
 
 open LeanRV64D
 

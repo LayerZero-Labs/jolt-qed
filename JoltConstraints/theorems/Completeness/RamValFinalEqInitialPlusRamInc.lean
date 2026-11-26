@@ -1,8 +1,6 @@
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.translation.Constraints.RamValFinalEqInitialPlusRamInc
-import JoltConstraints.translation.Constraints.RamReadData
-import JoltConstraints.theorems.Completeness.Helpers.RamAccesses
-import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.Completeness.Helpers.RamHistoryReplay
 
 open LeanRV64D
 
@@ -12,15 +10,12 @@ namespace JoltConstraints
 
 open scoped BigOperators
 
-/-- Completeness target for the honest witness.
-FIXME: false until a16z/jolt#1951 item 1 is fixed. When a run does not panic and
-never stores to the termination word (e.g. a program that is just `j .`), the
-tracer records no write to it, but witness generation (jolt-witness's
-final_ram_state, not the tracer) sets that word to 1 from the panic flag alone.
-Initial RAM holds 0 there and no row adds an increment, so this constraint reads
-1 = 0. Lean's witness does the same.
-Also check #1951 item 2 (other stores to the panic or termination words) before
-attempting this theorem. -/
+/-- Every final shared-memory word equals its initial image plus the selected
+write increments of the honest witness.
+For example, a value-preserving protected store contributes zero, and an I/O
+gap store contributes its actual new word minus its old word.
+Jolt at `ff6fc6568`: `crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs`
+(`RamValCheck`). -/
 theorem honestWitness_ramValFinalEqInitialPlusRamInc
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -30,6 +25,14 @@ theorem honestWitness_ramValFinalEqInitialPlusRamInc
     (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     : ramValFinalEqInitialPlusRamInc (TraceWitness.initialRamWord trace)
       (HonestTrace.honestWitness (F := F) params trace) := by
-  sorry
+  intro address
+  change ((TraceWitness.finalRamWord trace address.val).toNat : F) =
+    ((TraceWitness.initialRamWord trace address.val).toNat : F) +
+      ∑ cycle : Fin params.traceLength,
+        TraceWitness.RamRa params trace address cycle * HonestWitness.RamInc params trace cycle
+  have summed := ramHistoryWord_eq_prefix (F := F) params trace ramFits validAccesses
+    address params.traceLength (le_refl _)
+  rw [ramHistoryWord_final trace address.val params.traceLength traceFits.traceFits] at summed
+  simpa only [Fin.isLt, ite_true] using summed
 
 end JoltConstraints

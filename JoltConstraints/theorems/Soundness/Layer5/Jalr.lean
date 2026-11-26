@@ -1,6 +1,7 @@
-import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer7.StallSuffix
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValProofHelpers
+import JoltConstraints.theorems.Soundness.Layer5.RegisterWrite
+import JoltConstraints.theorems.Soundness.Layer5.Registers
 
 open LeanRV64D
 
@@ -17,7 +18,7 @@ bit zero, and extends register agreement by its destination.
 For example, `jalr x1, 0(x1)` jumps using the old x1 and then replaces x1 by the
 prepared link; a virtual mtvec base follows the same rule.
 The link does not wrap, while the target addition uses 64-bit wrapping semantics.
-See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at 5def437f. -/
+See jolt/tracer/src/instruction/jalr.rs (`JALR::exec`) at ff6fc6568. -/
 theorem jalr_step
     {F : Type} [Field F] (joltField : JoltField F)
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}

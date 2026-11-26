@@ -56,13 +56,13 @@ def LoadFaultClass.alignFault : LoadFaultClass → ExceptionType
 -- Preserve immediate fields even when execution ignores them: Rust's Imm witness
 -- still records them. Zero defaults describe the existing generated expansions;
 -- importing a Rust row must supply its actual immediate.
--- Rust: [instruction formats](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/format).
+-- Rust: instruction formats in `tracer/src/instruction/format/`.
 -- Final immediates are already decoded; inline expansion may emit full u64
 -- operands (e.g. ADDI with 4096). Source encoding widths belong in Encoded below.
--- Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-program/src/expand/inline.rs#L204-L245
--- Rust formats: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_i.rs#L9-L14
+-- Rust: `crates/jolt-program/src/expand/inline.rs` (`emit_i`, `emit_ld`) at ff6fc6568
+-- Rust formats: `tracer/src/instruction/format/format_i.rs` (`FormatI`) at ff6fc6568
 -- FormatB retains a signed i128; proof-trace conversion separately bounds its magnitude.
--- Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_b.rs#L9-L14
+-- Rust: `tracer/src/instruction/format/format_b.rs` (`FormatB`) at ff6fc6568
 inductive Instr where
   | ADDI (dst : Dst) (src : Src) (imm : BitVec 64)
   | ADDIW (dst : Dst) (src : Src) (imm : BitVec 64)
@@ -82,6 +82,10 @@ inductive Instr where
   | BLTU (lhs rhs : Src) (imm : BitVec 128)
   | BGEU (lhs rhs : Src) (imm : BitVec 128)
   | FENCE
+  /-- Success halt row; for example, decoded jolt.success uses x0 as link destination. -/
+  | JoltSuccess (dst : Dst)
+  /-- Failure halt row; for example, EBREAK lowers to this row with scratch v40. -/
+  | Panic (dst : Dst)
   | ADD  (dst : Dst) (lhs rhs : Src)
   | ADDW (dst : Dst) (lhs rhs : Src)
   | SUB  (dst : Dst) (lhs rhs : Src)
@@ -284,7 +288,8 @@ end Encoded
 
 /-- Nat-valued helper parameters denote Rust u64 immediates. Keep Nat for the
 arithmetic helper API, but reject values that Rust's final format cannot store.
-Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/tracer/src/instruction/format/format_virtual_right_shift_i.rs#L9-L14
+Rust: `tracer/src/instruction/format/format_virtual_right_shift_i.rs`
+(`FormatVirtualRightShiftI`) at ff6fc6568
 -/
 def Instr.OperandsRepresentable : Instr → Prop
   | .VirtualPow2I _ imm | .VirtualPow2IW _ imm | .VirtualShiftRightBitmaskI _ imm
@@ -295,7 +300,7 @@ def Instr.OperandsRepresentable : Instr → Prop
 
 /-- FormatB carries i128, but successful proof-trace conversion requires a u64
 magnitude. Preserve the signed immediate, including values ignored by execution.
-Rust: https://github.com/abiswas3/jolt/blob/e012da54c3bb26a6436b5ca74e86c19bb39695ad/crates/jolt-riscv/src/trace_row.rs#L279-L283
+Rust: `crates/jolt-riscv/src/trace_row.rs` (`JoltTraceRow::new`, error `ImmTooWide`) at ff6fc6568
 -/
 def Instr.CompactImmediateFits : Instr → Prop
   | .BEQ _ _ imm | .BNE _ _ imm | .BLT _ _ imm | .BGE _ _ imm
@@ -309,7 +314,7 @@ def Instr.CompactImmediateFits : Instr → Prop
 /-- Source instructions that Rust expands before final Jolt bytecode.
 
 This mirrors the built-in `SourceInstructionKind` cases handled by
-`/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-program/src/expand/mod.rs`
+`crates/jolt-program/src/expand/mod.rs`
 in `expand_source_only_instruction`. -/
 inductive Expanded where
   | MULH (dst : Dst) (lhs rhs : Src)
@@ -453,7 +458,7 @@ def sideEffectingDst : Dst → Dst
     sideEffectingDst (.vreg v) = .vreg v := rfl
 
 def Instr.destination? : Instr → Option Dst
-  | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
+  | .JoltSuccess dst | .Panic dst | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
   | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
   | .ADD dst _ _ | .ADDW dst _ _ | .SUB dst _ _ | .SUBW dst _ _ | .MUL dst _ _
   | .MULW dst _ _ | .MULHU dst _ _ | .ANDN dst _ _ | .VirtualMULI dst _ _
@@ -488,13 +493,32 @@ def Instr.destination? : Instr → Option Dst
 def Instr.canonicalNoOp : Instr :=
   .ADDI (.xreg (.Regidx 0)) (.xreg (.Regidx 0)) 0
 
+/-- **Rust's `rd = x0` rule for a native source row.** An instruction with side effects keeps
+running with its x0 destination redirected to a temporary (`sideEffectingDst`); any other
+instruction whose destination is x0 becomes the canonical no-op. The side-effecting
+instructions with a destination are those whose kind has `has_side_effects` in Rust: the two
+halts, JAL, JALR, LD, `VirtualAdviceLoad` and the floor loads `VirtualLoadB`, `VirtualLoadH`
+and `VirtualLoadW`, whose read can fault. Instructions without a destination are unchanged.
+For example, `VirtualLoadB` into x0 still reads its doubleword, into the temporary, while
+`ADD x0 x1 x2` becomes `ADDI x0 x0 0`.
+Jolt at ff6fc6568: `crates/jolt-program/src/expand/mod.rs`
+(`expand_source_instruction_with_provider`) and `crates/jolt-riscv/src/kind.rs`
+(`jolt_side_effects_for_marker`, `source_side_effects_for_marker`). -/
 def Instr.rewriteNative (instruction : Instr) : Instr :=
   match instruction with
+  | .JoltSuccess dst => .JoltSuccess (sideEffectingDst dst)
+  | .Panic dst => .Panic (sideEffectingDst dst)
   | .JAL dst imm => .JAL (sideEffectingDst dst) imm
   | .JALR dst base imm => .JALR (sideEffectingDst dst) base imm
   | .LD fault dst base imm => .LD fault (sideEffectingDst dst) base imm
   | .VirtualAdviceLoad dst byteCount =>
       .VirtualAdviceLoad (sideEffectingDst dst) byteCount
+  | .VirtualLoadB faultClass dst base imm fault =>
+      .VirtualLoadB faultClass (sideEffectingDst dst) base imm fault
+  | .VirtualLoadH faultClass dst base imm fault =>
+      .VirtualLoadH faultClass (sideEffectingDst dst) base imm fault
+  | .VirtualLoadW faultClass dst base imm fault =>
+      .VirtualLoadW faultClass (sideEffectingDst dst) base imm fault
   | instruction =>
       match instruction.destination? with
       | some (.xreg rd) =>

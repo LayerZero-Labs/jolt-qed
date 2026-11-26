@@ -5,8 +5,10 @@ Authors: Ari
 -/
 import JoltBytecode.JoltISA.Core
 import JoltBytecode.JoltISA.semantic_helpers
-import Mathlib.Tactic
+import Mathlib.Algebra.Group.Int.Defs
+import Mathlib.Algebra.Group.Nat.Defs
 import Mathlib.Data.BitVec
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 
@@ -89,7 +91,7 @@ end Riscv
 -- Jolt-side value helpers
 -- ============================================================================
 
--- Rust: [bitwise and comparison lookup outputs](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv).
+-- Rust: bitwise and comparison lookup outputs, `crates/jolt-lookup-tables/src/instructions/riscv/` (`to_lookup_output`).
 -- Transparent pure calculations shared by execInstr and witness extraction.
 -- Keeping these transparent preserves the existing execution proof reductions.
 abbrev jolt_xor_value (x y : BitVec 64) : BitVec 64 := x ^^^ y
@@ -99,14 +101,14 @@ abbrev jolt_andn_value (x y : BitVec 64) : BitVec 64 := x &&& Complement.complem
 abbrev jolt_slt_value (x y : BitVec 64) : BitVec 64 :=
   zero_extend (m := 64) (bool_to_bit (zopz0zI_s x y))
 
--- Rust: [JALR target](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs:29).
+-- Rust: JALR target, `crates/jolt-lookup-tables/src/instructions/riscv/jalr.rs` (`to_lookup_output`).
 abbrev jolt_jalr_target64 (base : BitVec 64) (imm : BitVec 64) : BitVec 64 :=
   BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base imm)) 0 0#1
 
 abbrev jolt_jalr_target (base : BitVec 64) (imm : BitVec 12) : BitVec 64 :=
   BitVec.update (BitVec.ofNat 64 (JoltISA.addWide base (sign_extend (m := 64) imm))) 0 0#1
 
--- Rust: [AssertEq output](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs:17).
+-- Rust: AssertEq output, `crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs` (`to_lookup_output`).
 -- Equality is still the lookup predicate when a nonzero immediate suppresses
 -- the execution assertion; successful retirement alone does not imply equality.
 abbrev jolt_assert_eq (x y : BitVec 64) : Prop := x = y
@@ -231,8 +233,16 @@ def jolt_virtual_srliw_value (x : BitVec 64) (bitmask : Nat) : BitVec 64 :=
   if bitmask = 0 then 0
   else ((x.setWidth 32) >>> ctz bitmask).signExtend 64
 
-/-- RV64 `VirtualSRAIW` value: arithmetically shift the low word by the
-encoded mask's trailing-zero count, then sign-extend it. -/
+/-- RV64 `VirtualSRAIW` value: arithmetically shift the low word by the encoded
+mask's trailing-zero count, then sign-extend it.
+It matches Rust for masks with fewer than 32 trailing zeros, the only masks the
+expansions supply: `sraiwProgramAuto` emits `2^32 - 2^s` with `s < 32`
+(`ctz_word_shift_immediate_lt`). Outside that domain Rust shifts an `i32` by
+`trailing_zeros`, which is at least 32 there (64 for a zero mask), and the shift
+panics under overflow checks and otherwise uses the count modulo 32. This
+definition shifts by `ctz` itself, which gives a word of sign bits for counts 32
+to 63 and no shift for a zero mask (`ctz 0 = 0`).
+Rust: `tracer/src/instruction/virtual_sraiw.rs` (`VirtualSRAIW::exec`). -/
 def jolt_virtual_sraiw_value (x : BitVec 64) (bitmask : Nat) : BitVec 64 :=
   ((x.setWidth 32).sshiftRight (ctz bitmask)).signExtend 64
 
@@ -246,11 +256,30 @@ stored in the second source register. -/
 def jolt_virtual_sra_value (x bitmask : BitVec 64) : BitVec 64 :=
   x.sshiftRight (ctz bitmask.toNat)
 
-/-- RV64 `VirtualSRLW` value. -/
+/-- RV64 `VirtualSRLW` value: logically shift the low word by `ctz` of the
+bitmask in the second source register, then sign-extend the word result.
+It matches Rust for bitmasks with fewer than 32 trailing zeros, the only ones
+the expansions supply: `srlwProgramAuto` computes the bitmask with
+`VirtualShiftRightBitmaskW` (`ctz_jolt_virtual_shift_right_bitmaskw_value_lt`).
+Outside that domain Rust shifts a `u32` by `trailing_zeros`, which is at least
+32 there (64 for a zero mask), and the shift panics under overflow checks and
+otherwise uses the count modulo 32. This definition shifts by `ctz` itself,
+which gives zero for counts 32 to 63 and no shift for a zero mask (`ctz 0 = 0`).
+Rust: `tracer/src/instruction/virtual_srlw.rs` (`VirtualSRLW::exec`). -/
 def jolt_virtual_srlw_value (x bitmask : BitVec 64) : BitVec 64 :=
   ((x.setWidth 32) >>> ctz bitmask.toNat).signExtend 64
 
-/-- RV64 `VirtualSRAW` value. -/
+/-- RV64 `VirtualSRAW` value: arithmetically shift the low word by `ctz` of the
+bitmask in the second source register, then sign-extend it.
+It matches Rust for bitmasks with fewer than 32 trailing zeros, the only ones
+the expansions supply: `srawProgramAuto` computes the bitmask with
+`VirtualShiftRightBitmaskW` (`ctz_jolt_virtual_shift_right_bitmaskw_value_lt`).
+Outside that domain Rust shifts an `i32` by `trailing_zeros`, which is at least
+32 there (64 for a zero mask), and the shift panics under overflow checks and
+otherwise uses the count modulo 32. This definition shifts by `ctz` itself,
+which gives a word of sign bits for counts 32 to 63 and no shift for a zero mask
+(`ctz 0 = 0`).
+Rust: `tracer/src/instruction/virtual_sraw.rs` (`VirtualSRAW::exec`). -/
 def jolt_virtual_sraw_value (x bitmask : BitVec 64) : BitVec 64 :=
   ((x.setWidth 32).sshiftRight (ctz bitmask.toNat)).signExtend 64
 
@@ -274,7 +303,7 @@ def jolt_virtual_xorrot_value (rot : Nat) (x y : BitVec 64) : BitVec 64 :=
   rotater (x ^^^ y) rot
 
 /-- RV64 `VirtualXORROTL1`: xor the first operand with the second rotated left once.
-Rust: https://github.com/abiswas3/jolt/tree/main/tracer/src/instruction/virtual_xor_rotl1.rs -/
+Rust: `tracer/src/instruction/virtual_xor_rotl1.rs` at ff6fc6568 -/
 def jolt_virtual_xorrotl1_value (x y : BitVec 64) : BitVec 64 :=
   x ^^^ rotatel y 1
 
@@ -402,3 +431,63 @@ def mulhs (a b : BitVec 64) : BitVec 64 :=
   BitVec.ofInt 64 ((a.toInt * b.toInt) / (2 ^ 64))
 
 end
+
+namespace StoreSplice
+
+/-- The byte-store XOR-mask-XOR expression.  `shift` is measured in bits. -/
+def byteSplice (dword_orig : BitVec 64) (byte_val : BitVec 8) (shift : Nat) : BitVec 64 :=
+  let b_ext : BitVec 64 := byte_val.zeroExtend 64 <<< shift
+  let mask : BitVec 64 := (0x00000000000000FF : BitVec 64) <<< shift
+  dword_orig ^^^ ((dword_orig ^^^ b_ext) &&& mask)
+
+/-- The halfword-store XOR-mask-XOR expression.  `shift` is measured in bits. -/
+def halfwordSplice (dword_orig : BitVec 64) (halfword_val : BitVec 16) (shift : Nat) :
+    BitVec 64 :=
+  let h_ext : BitVec 64 := halfword_val.zeroExtend 64 <<< shift
+  let mask : BitVec 64 := (0x000000000000FFFF : BitVec 64) <<< shift
+  dword_orig ^^^ ((dword_orig ^^^ h_ext) &&& mask)
+
+/-- The word-store XOR-mask-XOR expression.  `shift` is measured in bits. -/
+def wordSplice (dword_orig : BitVec 64) (word_val : BitVec 32) (shift : Nat) : BitVec 64 :=
+  let w_ext : BitVec 64 := word_val.zeroExtend 64 <<< shift
+  let mask : BitVec 64 := (0x00000000FFFFFFFF : BitVec 64) <<< shift
+  dword_orig ^^^ ((dword_orig ^^^ w_ext) &&& mask)
+
+end StoreSplice
+
+namespace JoltISA
+
+/-- The containing doubleword written by a source store of `width` bytes.
+For example, width one replaces only the addressed byte, while width eight
+writes the full source value. This is the shared lane merge at `ff6fc6568`. -/
+def storeDwordValue (width : Nat) (ea original value : BitVec 64) : BitVec 64 :=
+  let shift := (ea - (ea &&& (-8 : BitVec 64))).toNat * 8
+  match width with
+  | 1 => StoreSplice.byteSplice original (Sail.BitVec.extractLsb value 7 0) shift
+  | 2 => StoreSplice.halfwordSplice original (Sail.BitVec.extractLsb value 15 0) shift
+  | 4 => StoreSplice.wordSplice original (Sail.BitVec.extractLsb value 31 0) shift
+  | _ => value
+
+/-- The non-CAS AMO value for a word of any width.
+For example, AMOADD adds the source to the loaded value with word-width wrap. -/
+def amoValue {width : Nat} (op : amoop) (source loaded : BitVec width) : BitVec width :=
+  match op with
+  | .AMOSWAP => source
+  | .AMOADD => source + loaded
+  | .AMOXOR => source ^^^ loaded
+  | .AMOAND => source &&& loaded
+  | .AMOOR => source ||| loaded
+  | .AMOMIN => if (zopz0zI_s source loaded : Bool) then source else loaded
+  | .AMOMAX => if (zopz0zK_s source loaded : Bool) then source else loaded
+  | .AMOMINU => if (zopz0zI_u source loaded : Bool) then source else loaded
+  | .AMOMAXU => if (zopz0zK_u source loaded : Bool) then source else loaded
+  | .AMOCAS => source
+
+/-- The doubleword written by a word AMO after replacing its addressed lane.
+For example, an AMO at offset four preserves the lower word. -/
+def amoWordStoreValue (op : amoop) (addr original source : BitVec 64) : BitVec 64 :=
+  let shift := (addr - (addr &&& (-8 : BitVec 64))).toNat * 8
+  let loaded := (original >>> shift).setWidth 32
+  StoreSplice.wordSplice original (amoValue op (source.setWidth 32) loaded) shift
+
+end JoltISA

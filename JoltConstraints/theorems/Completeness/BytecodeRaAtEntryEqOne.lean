@@ -1,8 +1,5 @@
-import JoltConstraints.theorems.ProgramLayout
 import JoltConstraints.translation.Constraints.BytecodeRaAtEntryEqOne
-import JoltConstraints.translation.Constraints.BytecodeReadSelectors
 import JoltConstraints.translation.honest_witness
-import JoltConstraints.theorems.ProgramLayout
 import JoltConstraints.theorems.trace_interface
 import JoltConstraints.theorems.witness_domain
 
@@ -42,7 +39,7 @@ instruction at the same address are the same row (`expand_program_first_of_addre
 greater than the trace index because preprocessing prepends the no-op.
 
 Rust revision `3cb4e24361ae2006e9713ae65d58a3fa51fd0518`:
-`crates/jolt-trace/src/preprocess/bytecode.rs::entry_bytecode_index` calls
+`crates/jolt-program/src/preprocess/bytecode.rs::entry_bytecode_index` calls
 `BytecodePCMapper::get_first_pc(entry_address)` to select this row. -/
 theorem honestWitness_bytecodeRaAtEntryEqOne_of_address
     {F : Type} [Field F] (params : WitnessParams)

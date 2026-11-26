@@ -1,5 +1,3 @@
-import JoltConstraints.translation.verifier_sizes
-import JoltConstraints.theorems.witness_domain
 import JoltConstraints.theorems.Completeness.Helpers.RamReadSelection
 
 open LeanRV64D
@@ -103,12 +101,23 @@ private theorem chunks_mono {logT maxLogT : Nat} (shorter : logT ≤ maxLogT) :
   unfold VerifierSizes.committedLogKChunk
   split <;> split <;> omega
 
--- Chunks of the honest width for a trace no longer than the maximum fit the setup
--- sized for the maximum.
+-- The default setup exists when the maximum padded trace length is at most `2^63`,
+-- and chunks of the honest width for a trace no longer than the maximum fit it.
 theorem VerifierSizes.chunks_fit_dorySetupLogN (layout : MemoryLayout) (maxLength logT : Nat)
-    (shorter : logT ≤ Nat.clog 2 maxLength) :
-    logT + VerifierSizes.committedLogKChunk logT ≤ VerifierSizes.dorySetupLogN layout maxLength := by
+    (setupSized : maxLength ≤ 2 ^ 63) (shorter : logT ≤ Nat.clog 2 maxLength) :
+    ∃ setupLogN, VerifierSizes.dorySetupLogN layout maxLength = some setupLogN ∧
+      logT + VerifierSizes.committedLogKChunk logT ≤ setupLogN := by
+  have logSmall : Nat.clog 2 maxLength ≤ 63 := Nat.clog_le_of_le_pow setupSized
+  have rounded : VerifierSizes.checkedNextPowerOfTwo maxLength =
+      some (2 ^ Nat.clog 2 maxLength) := by
+    unfold VerifierSizes.checkedNextPowerOfTwo
+    have fits : 2 ^ Nat.clog 2 maxLength < 2 ^ 64 :=
+      Nat.pow_lt_pow_right (by decide) (by omega)
+    simp only [fits, ↓reduceIte]
   unfold VerifierSizes.dorySetupLogN
+  rw [rounded]
+  refine ⟨_, rfl, ?_⟩
+  rw [Nat.log_pow (by decide)]
   exact ((chunks_mono shorter).trans (le_max_left _ _)).trans (le_round_up_even _)
 
 end JoltConstraints
@@ -124,7 +133,7 @@ than the highest touched word (`Trace.highest_ram_slot`) and the image's end, th
 plus `program_image_len_words` plus one; that end and `config.ram_K` fit in 64 bits.
 For example, an image at `0x80000000` with lowest address `0x7fff8000` starts at word 4096.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`checked_remap_address`) at c97e9300. -/
+`checked_remap_address`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_K_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -166,7 +175,7 @@ number at least the image's end (`HonestTrace.prover_config_ram_K`).
 For example, an image whose first word index plus word count is 40 has minimum
 `pow2(40) = 64`, and Jolt's prover rounds at least 41, so its `ram_K` is at least 64.
 See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) and
-jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at c97e9300. -/
+jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`) at ff6fc6568. -/
 theorem HonestTrace.witness_params_ram_minimum_of_nonempty
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -216,7 +225,7 @@ theorem HonestTrace.witness_params_ram_minimum_of_nonempty
 `RAM_START_ADDRESS + programSize`, where `programSize` is the configured program size:
 the stack canary, the stack and the heap follow the program.
 For example, a 4096-byte program gives `heap_end ≥ 0x80000000 + 4096 + 128`.
-See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at c6703570. -/
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at ff6fc6568. -/
 theorem new_heap_end_ge (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout) :
     ∃ programSize, config.program_size = some programSize ∧
@@ -230,8 +239,8 @@ theorem new_heap_end_ge (config : MemoryConfig) (layout : MemoryLayout)
   -- the advice regions
   rw [bind_some_iff] at built
   obtain ⟨⟨_, _, _, _⟩, _, built⟩ := built
-  -- input end, output end, termination, I/O end
-  iterate 4 (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
+  -- input end and output end
+  iterate 2 (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
   -- stack end, stack start, heap end
   rw [bind_some_iff] at built
   obtain ⟨stackEnd, stackEndAdded, built⟩ := built
@@ -239,23 +248,34 @@ theorem new_heap_end_ge (config : MemoryConfig) (layout : MemoryLayout)
   obtain ⟨stackStart, stackStartAdded, built⟩ := built
   rw [bind_some_iff] at built
   obtain ⟨heapEnd, heapEndAdded, built⟩ := built
+  rw [bind_some_iff] at built
+  obtain ⟨_, _, built⟩ := built
   cases built
   rw [bind_some_iff] at stackStartAdded
   obtain ⟨withCanary, canaryAdded, stackStartAdded⟩ := stackStartAdded
   obtain ⟨stackEndIs, _⟩ := checkedAdd_some stackEndAdded
   obtain ⟨withCanaryIs, _⟩ := checkedAdd_some canaryAdded
   obtain ⟨stackStartIs, _⟩ := checkedAdd_some stackStartAdded
-  obtain ⟨heapEndIs, heapEndFits⟩ := checkedAdd_some heapEndAdded
+  obtain ⟨rawHeapEnd, rawHeapAdded, heapRounded⟩ := Option.bind_eq_some_iff.mp heapEndAdded
+  obtain ⟨heapEndIs, heapEndFits⟩ := checkedAdd_some rawHeapAdded
+  have heapGe := (alignUp8_some heapRounded).1
+  have finalHeapFits : heapEnd < 2^64 := by
+    unfold MemoryLayout.alignUp8 at heapRounded
+    split at heapRounded
+    · have same := Option.some.inj heapRounded
+      omega
+    · obtain ⟨same, bound⟩ := checkedAdd_some heapRounded
+      omega
   refine ⟨programSize, programSizeIs, ?_⟩
   dsimp only
-  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt finalHeapFits]
   omega
 
 /-- In the instance's starting layout, `heap_end` lies at least `STACK_CANARY_SIZE = 128`
 bytes past the program image's end `program_end`: the host sets the program size to
 `program_end - RAM_START_ADDRESS` (`Rv64ProgramImage.program_size`).
 For example, an image ending at `0x80001000` gives `heap_end ≥ 0x80001080`.
-See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at c6703570. -/
+See jolt/common/src/jolt_device.rs (`MemoryLayout::try_new`) at ff6fc6568. -/
 theorem HonestTrace.program_end_below_heap_end {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
     joltInstance.program.program_end.toNat + JoltISA.STACK_CANARY_SIZE ≤
@@ -287,43 +307,85 @@ theorem HonestTrace.lowest_address_le_ram_start {joltInstance : JoltInstance Sou
   unfold JoltInstance.memory_layout at layoutBuilt
   have ordered := new_io_ordered _ _ layoutBuilt
   have geometry := new_io_geometry _ _ layoutBuilt
+  have ioEnd := congrArg BitVec.toNat geometry.2.2.1
   omega
 
-/-- The highest RAM word index the honest trace touches (`Trace.highest_ram_slot`) is
-below the number of words that start below `heap_end`,
-`⌈(heap_end - lowest) / 8⌉ = (heap_end - lowest + 7) / 8`, where `lowest` is the
-layout's lowest address: every recorded address in RAM is below `heap_end`
-(`HonestTrace.ram_address_below_heap_end`), and every other one is below
-`RAM_START_ADDRESS`, which `heap_end` follows by at least 128 bytes.
-For example, with lowest address `0x7fff8000` and `heap_end = 0x80010004`, an SD at
-`0x80010000` straddles `heap_end` and touches word `0x18000 / 8 = 12288`, which is below
-`(0x18004 + 7) / 8 = 12289`. -/
-theorem HonestTrace.highest_ram_slot_lt_heap_end {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
-    trace.highest_ram_slot <
-      (trace.initialState.jolt_device.memory_layout.heap_end.toNat -
-        trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat + 7) / 8 := by
-  have programBelow := trace.program_end_below_heap_end
-  have aboveStart := joltInstance.program.program_end_ge_ram_start
-  have lowestBelow := trace.lowest_address_le_ram_start
-  have stackCanary : JoltISA.STACK_CANARY_SIZE = 128 := rfl
+private theorem highest_ram_slot_below_domain (trace : Trace) (maximum : Nat)
+    (positive : 0 < maximum)
+    (accesses : ∀ i (inTrace : i < trace.rows.size) address,
+      (trace.rows[i]'inTrace).ram_address = some address →
+      address < trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat +
+        8 * maximum) : trace.highest_ram_slot < maximum := by
   unfold Trace.highest_ram_slot
-  apply max?_getD_lt _ _ (by omega)
+  apply max?_getD_lt _ _ positive
   intro slot member
   obtain ⟨address, member, remapped⟩ := List.mem_filterMap.mp member
   obtain ⟨row, inRows, touches⟩ := List.mem_filterMap.mp member
   obtain ⟨i, inTrace, isRow⟩ := Array.mem_iff_getElem.mp (Array.mem_toList_iff.mp inRows)
   subst isRow
-  have below : address < trace.initialState.jolt_device.memory_layout.heap_end.toNat := by
-    by_cases inRam : JoltISA.RAM_START_ADDRESS ≤ address
-    · exact trace.ram_address_below_heap_end i inTrace address touches inRam
-    · omega
   have bounded := remap_address_lt trace.initialState.jolt_device.memory_layout address _
-    (by omega) below
+    (by omega) (accesses i inTrace address touches)
   rw [remapped] at bounded
-  exact bounded
+  simp only [Option.getD_some] at bounded
+  omega
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`) of a nonempty program,
+private theorem backing_end_of_domain (base lowest : Nat) (domain : Option Nat)
+    (maximum : Nat) (computed : domain = some maximum)
+    (above : base ≤ lowest + 8 * maximum) :
+    base + (domain.map fun k => lowest + 8 * k - base).getD 0 =
+      lowest + 8 * maximum := by
+  rw [computed]
+  simp only [Option.map_some, Option.getD_some]
+  omega
+
+private theorem checked_backing_end (device : JoltDevice) (maximum : Nat)
+    (computed : device.memory_layout.max_ram_k? = some maximum)
+    (lowestAligned : device.memory_layout.get_lowest_address.toNat % 8 = 0)
+    (heapAboveRam : JoltISA.RAM_START_ADDRESS + 128 ≤ device.memory_layout.heap_end.toNat) :
+    0 < maximum ∧ JoltISA.Mmu.ram_backing_end device =
+      device.memory_layout.get_lowest_address.toNat + 8 * maximum := by
+  obtain ⟨heapAligned, lowestBelowHeap, maximumIs, _⟩ :=
+    max_ram_k_spec device.memory_layout maximum computed
+  have rounded := Nat.le_nextPowerOfTwo ((device.memory_layout.heap_end.toNat -
+    device.memory_layout.get_lowest_address.toNat) / 8)
+  rw [← maximumIs] at rounded
+  have positive : 0 < maximum := by
+    rw [maximumIs]
+    obtain ⟨exponent, power⟩ := Nat.isPowerOfTwo_nextPowerOfTwo
+      ((device.memory_layout.heap_end.toNat - device.memory_layout.get_lowest_address.toNat) / 8)
+    rw [power]
+    exact Nat.two_pow_pos _
+  refine ⟨positive, ?_⟩
+  exact backing_end_of_domain _ _ _ maximum computed (by omega)
+
+/-- Every touched word lies in the checked maximum padded RAM domain.
+For example, a store after `heap_end` can touch heap padding, but cannot reach
+one word past the maximum admitted backing allocation.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::max_ram_k`)
+and `tracer/src/emulator/mmu.rs` (`assert_effective_address`). -/
+theorem HonestTrace.highest_ram_slot_lt_maximum {joltInstance : JoltInstance SourceInstruction}
+    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
+    trace.highest_ram_slot <
+      trace.initialState.jolt_device.memory_layout.max_ram_k?.getD 0 := by
+  have built := (initial_state_device joltInstance privateInputs _ trace.initialized).1
+  obtain ⟨maximum, computed⟩ := Option.isSome_iff_exists.mp (new_max_ram_k _ _ built)
+  have programBelow := trace.program_end_below_heap_end
+  have aboveStart := joltInstance.program.program_end_ge_ram_start
+  have lowestBelow := trace.lowest_address_le_ram_start
+  have stackCanary : JoltISA.STACK_CANARY_SIZE = 128 := rfl
+  obtain ⟨positive, backing⟩ := checked_backing_end trace.initialState.jolt_device maximum computed
+    (new_lowest_address_aligned _ _ built) (by omega)
+  rw [computed, Option.getD_some]
+  apply highest_ram_slot_below_domain trace.toTrace maximum positive
+  intro i inTrace address touches
+  by_cases inRam : JoltISA.RAM_START_ADDRESS ≤ address
+  · rw [← backing]
+    exact trace.ram_address_below_ram_backing_end i inTrace address touches inRam
+  · have reachesHeap := heap_end_le_ram_backing_end trace.initialState.jolt_device _ built
+    rw [backing] at reachesHeap
+    omega
+
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`) of a nonempty program,
 Jolt's verifier computes its RAM minimum (`VerifierSizes.minRamSize`, Jolt's
 `compute_min_ram_k`): the image's start and end words are the ones Jolt's prover already
 computed, the word index of `RAM_START_ADDRESS` exists because the lowest address is
@@ -331,7 +393,7 @@ below RAM, and rounding fits in 64 bits because Jolt's RAM size, which is at lea
 large, does.
 For example, an image of words 4096 to 4135 with lowest address `0x7fff8000` has minimum
 `pow2(max(4136, 4096)) = 8192`.
-See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) at c6703570. -/
+See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_min_ram_k`) at ff6fc6568. -/
 theorem HonestTrace.verifier_ram_minimum_computes
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -380,21 +442,11 @@ theorem HonestTrace.verifier_ram_minimum_computes
   rw [Nat.max_eq_left (by omega)]
   simp only [VerifierSizes.checkedNextPowerOfTwo, ite_eq_left rounded]
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`) of a nonempty program,
-Jolt's verifier computes its RAM maximum (`VerifierSizes.maxRamSize`, Jolt's
-`compute_max_ram_k` with `div_ceil(8)`), `pow2(⌈(heap_end - lowest) / 8⌉)`, and Jolt's
-RAM size is at most that maximum.
-Jolt's RAM size `pow2(max(h + 1, imageEnd))` (`HonestTrace.prover_config_ram_K`) rounds
-up numbers at most `⌈(heap_end - lowest) / 8⌉`: one more than the highest touched word
-`h`, because every access starts below `heap_end`
-(`HonestTrace.highest_ram_slot_lt_heap_end`), and the image's end, because `heap_end`
-lies 128 bytes past the program.
-For example, with lowest address `0x7fff8000` and `heap_end = 0x80010000`, the maximum is
-`pow2(12288) = 16384`, and a run touching at most word 5000 with an image of words 4096
-to 4135 gets `ram_K = pow2(max(5001, 4137)) = 8192 ≤ 16384`.
-See jolt/crates/jolt-program/src/preprocess/ram.rs (`compute_max_ram_k`) and
-jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c97e9300. -/
+/-- The honest prover's RAM size is at most the checked maximum allocation.
+For example, touching heap padding can enlarge the chosen domain up to that maximum.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`compute_max_ram_k`) and `crates/jolt-prover/src/config.rs`
+(`ProverConfig::derive_from_dimensions`). -/
 theorem HonestTrace.witness_params_ram_maximum
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
@@ -403,62 +455,55 @@ theorem HonestTrace.witness_params_ram_maximum
     ∃ maximum, VerifierSizes.maxRamSize trace.initialState.jolt_device.memory_layout =
         some maximum ∧
       (trace.witness_params config proverAccepts).ramSize ≤ maximum := by
+  let layout := trace.initialState.jolt_device.memory_layout
+  have built := (initial_state_device joltInstance privateInputs _ trace.initialized).1
+  obtain ⟨maximum, computed⟩ := Option.isSome_iff_exists.mp (new_max_ram_k _ layout built)
+  obtain ⟨heapAligned, lowestBelowHeap, maximumIs, _⟩ := max_ram_k_spec layout maximum computed
+  have rounded := Nat.le_nextPowerOfTwo ((layout.heap_end.toNat -
+    layout.get_lowest_address.toNat) / 8)
+  rw [← maximumIs] at rounded
   have programBelow := trace.program_end_below_heap_end
   have aboveStart := joltInstance.program.program_end_ge_ram_start
-  have heapFits := trace.initialState.jolt_device.memory_layout.heap_end.isLt
-  have touchedBelow := trace.highest_ram_slot_lt_heap_end
-  -- the image's first word plus its length is bounded by the program's end
-  have ramStartPos : 0 < JoltISA.RAM_START_ADDRESS := by decide
+  have touchedBelow := trace.highest_ram_slot_lt_maximum
+  change trace.highest_ram_slot < layout.max_ram_k?.getD 0 at touchedBelow
+  rw [computed, Option.getD_some] at touchedBelow
   have imageWords := program_image_len_words_le joltInstance.program.memory_init
-    joltInstance.program.program_end.toNat (by omega)
+    joltInstance.program.program_end.toNat (by unfold JoltISA.RAM_START_ADDRESS at aboveStart; omega)
     (fun entry inImage => (joltInstance.program.memory_init_in_program entry inImage).2)
   obtain ⟨lowestBelowImage, _, _, sizeIs, _⟩ :=
     trace.prover_config_ram_K_of_nonempty config proverAccepts nonempty
-  -- the verifier's maximum: the number of words below heap_end, rounded up
   have stackCanary : JoltISA.STACK_CANARY_SIZE = 128 := rfl
-  have wordsBound : (trace.initialState.jolt_device.memory_layout.heap_end.toNat -
-      trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat + 7) / 8 ≤
-        2 ^ 61 := by
-    omega
-  have maximumFits : 2 ^ Nat.clog 2
-      ((trace.initialState.jolt_device.memory_layout.heap_end.toNat -
-        trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat + 7) / 8) <
-          2 ^ 64 :=
-    Nat.lt_of_le_of_lt (Nat.pow_le_pow_right (by decide) (Nat.clog_le_of_le_pow wordsBound))
-      (by decide)
-  refine ⟨2 ^ Nat.clog 2
-      ((trace.initialState.jolt_device.memory_layout.heap_end.toNat -
-        trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat + 7) / 8),
-    ?_, ?_⟩
-  · unfold VerifierSizes.maxRamSize
-    simp only [MemoryLayout.checkedSub, ite_eq_left (by omega :
-      trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat ≤
-        trace.initialState.jolt_device.memory_layout.heap_end.toNat), Option.bind_eq_bind,
-      Option.bind_some, VerifierSizes.checkedNextPowerOfTwo, ite_eq_left maximumFits]
-  · -- both numbers Jolt's prover rounds are at most the number of words below heap_end
-    rw [trace.witness_params_ram_size config proverAccepts, sizeIs]
-    apply Nat.pow_le_pow_right (by decide : 0 < 2)
-    apply Nat.clog_mono_right
-    omega
+  have power : ∃ exponent, maximum = 2 ^ exponent := by
+    rw [maximumIs]
+    exact Nat.isPowerOfTwo_nextPowerOfTwo _
+  obtain ⟨exponent, power⟩ := power
+  refine ⟨maximum, computed, ?_⟩
+  rw [trace.witness_params_ram_size config proverAccepts, sizeIs, power]
+  apply Nat.pow_le_pow_right (by decide : 0 < 2)
+  apply Nat.clog_le_of_le_pow
+  rw [← power]
+  dsimp only [layout] at *
+  apply Nat.max_le.mpr
+  constructor
+  · omega
+  · omega
 
 /-- Jolt's RAM size passes Jolt's verifier's RAM bounds (`JoltInstance.ram_size_in_bounds`):
 the verifier computes both its minimum and its maximum
 (`HonestTrace.verifier_ram_minimum_computes`, `HonestTrace.witness_params_ram_maximum`),
 and Jolt's RAM size `config.ram_K` lies between them
 (`HonestTrace.witness_params_ram_minimum_of_nonempty`).
-An empty program is excluded by the a16z-confirmed assumption `imageNonempty`.
+The program is not empty, because its run passes the prover's sizing
+(`HonestTrace.prover_config_image_nonempty`).
 For example, with lowest address `0x7fff8000` and `heap_end = 0x80010000`, a run
 touching word 1000 with an image of words 4096 to 4135 gets
 `ram_K = pow2(max(1001, 4137)) = 8192`, between the minimum 8192 and the maximum 16384. -/
 theorem HonestTrace.witness_params_ram_bounds
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
-    -- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program
-    -- is never empty, so its memory image loads at least one byte. Jolt's prover does
-    -- not reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
-    (imageNonempty : joltInstance.program.ImageNonempty) :
+    (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) :
     joltInstance.ram_size_in_bounds (trace.witness_params config proverAccepts).ramSize = true := by
+  have imageNonempty := trace.prover_config_image_nonempty config proverAccepts
   have layoutBuilt :=
     (initial_state_device joltInstance privateInputs trace.initialState trace.initialized).1
   obtain ⟨minimum, minimumComputed⟩ :=
@@ -473,16 +518,18 @@ theorem HonestTrace.witness_params_ram_bounds
   exact ⟨atLeastMinimum, atMostMaximum⟩
 
 /-- The honest prover's one-hot chunks fit the verifier's Dory setup
-(`JoltInstance.one_hot_fits_setup`): its trace is no longer than the maximum padded
-length, and its chunk width is the setup's width for that length.
+(`JoltInstance.one_hot_fits_setup`): the default setup exists for a maximum padded
+length of at most `2^63`, the trace is no longer than that maximum, and its chunk
+width is the setup's width for that length.
 For example, a run padded to `2^9` cycles with 4-bit chunks needs 13 setup variables,
 and a setup sized for at least `2^9` cycles has at least that many.
-See jolt/crates/jolt-prover/src/dory/preprocessing.rs (`setup_total_vars`) at c6703570. -/
+See jolt/crates/jolt-prover/src/dory/preprocessing.rs (`setup_total_vars`) at ff6fc6568. -/
 theorem HonestTrace.witness_params_one_hot_fits_setup
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
-    (layout : MemoryLayout) (hasLayout : joltInstance.memory_layout = some layout) :
+    (layout : MemoryLayout) (hasLayout : joltInstance.memory_layout = some layout)
+    (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63) :
     joltInstance.one_hot_fits_setup (trace.witness_params config proverAccepts).logT
       (trace.witness_params config proverAccepts).chunkBits = true := by
   obtain ⟨isPadded, bounded⟩ := trace.prover_config_trace_length config proverAccepts
@@ -498,6 +545,9 @@ theorem HonestTrace.witness_params_one_hot_fits_setup
     rwa [Nat.clog_pow 2 _ (by decide)] at this
   have chunk : (trace.witness_params config proverAccepts).chunkBits =
       VerifierSizes.committedLogKChunk (trace.witness_params config proverAccepts).logT := rfl
+  obtain ⟨setupLogN, setupIs, fitsSetup⟩ :=
+    VerifierSizes.chunks_fit_dorySetupLogN layout _ _ setupSized shorter
   unfold JoltInstance.one_hot_fits_setup
-  rw [hasLayout, chunk, decide_eq_true_eq]
-  exact VerifierSizes.chunks_fit_dorySetupLogN layout _ _ shorter
+  simp only [hasLayout, setupIs, decide_eq_true_eq]
+  rw [chunk]
+  exact fitsSetup

@@ -6,8 +6,8 @@ set_option autoImplicit false
 
 namespace JoltISA
 
--- Rust: [AdviceTape::read](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/emulator/cpu.rs:51).
--- Rust: [VirtualAdviceLoad::exec](/Users/ari.biswas/Work-with-A16z/jolt/tracer/src/instruction/virtual_advice_load.rs:18).
+-- Rust: `tracer/src/emulator/cpu.rs` (`AdviceTape::read`).
+-- Rust: `tracer/src/instruction/virtual_advice_load.rs` (`VirtualAdviceLoad::exec`).
 -- Read 1, 2, 4, or 8 little-endian bytes and advance the cursor. Failure leaves
 -- the tape unchanged. The bounds proof supplies every array access; no missing
 -- byte is replaced by zero. Unused high bits of the resulting word are zero.

@@ -46,7 +46,7 @@ theorem initial_state_memory_layout
   unfold JoltInstance.public_io at publicIo
   obtain ⟨layout, hasLayout, sameIo⟩ := Option.bind_eq_some_iff.mp publicIo
   have publicLayout : layout = context.io.memory_layout :=
-    congrArg JoltDevice.memory_layout (Option.some.inj sameIo)
+    congrArg JoltPublicIo.memory_layout (Option.some.inj sameIo)
   have same : layout = initialState.jolt_device.memory_layout :=
     Option.some.inj (hasLayout.symm.trans initialLayout)
   exact same.symm.trans publicLayout

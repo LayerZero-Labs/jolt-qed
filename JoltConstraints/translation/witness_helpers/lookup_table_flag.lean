@@ -1,5 +1,3 @@
-import Mathlib.Algebra.Field.Defs
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.metadata
 
@@ -9,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [LookupTableFlag](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/flags.rs:177).
+-- Rust: `crates/jolt-witness/src/witnesses/flags.rs` (`LookupTableFlag`).
 -- The selected lookup table gets one at this execution row. Every other table
 -- gets zero. Instructions without a lookup table and padding give zero for
 -- every table. Reuse metadata's instruction-to-table mapping.

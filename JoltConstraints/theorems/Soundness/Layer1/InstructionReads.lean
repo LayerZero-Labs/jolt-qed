@@ -158,4 +158,26 @@ theorem rightLookupOperand_of_selected (charAbove2pow127 : 2 ^ 127 < ringChar F)
   rw [equations.rightLookupOperandEqInstructionRaf t]
   exact instruction_read_of_selected charAbove2pow127 context equations t _ chosen selected
 
+/-- At an identity-RAF cycle, the selected 128-bit lookup address is below the
+characteristic, so its field encoding determines it.
+A characteristic of at least `2^128` exceeds every address. Below `2^128`,
+constraint (63) applies: it rules out every address at or above `2^128 - 2^64`,
+and the field bound puts the characteristic above the rest.
+For example, with Akita's `p = 2^128 - 1780711455`, address `p + 5` encodes the
+same field element as 5, but its upper half is all ones, so (63) rejects it. -/
+theorem identityAddress_lt_char
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
+    (context : ConstraintContext joltInstance privateInputs params)
+    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
+    (t : Fin params.traceLength) (chosen : Fin (2 ^ 128))
+    (selected : instructionLookupRa witness chosen t = 1)
+    (raf : witness.InstructionRafFlag t = 1) :
+    chosen.val < ringChar F := by
+  by_cases wide : 2 ^ 128 ≤ ringChar F
+  · exact lt_of_lt_of_le chosen.isLt wide
+  · have guard := equations.instructionAddressCanonical (lt_of_not_ge wide) t
+    rw [raf, one_mul, instruction_read_of_selected (two_pow_127_lt_char charAbove2pow128Minus2pow64)
+      context equations t upperHalfAllOnes chosen selected] at guard
+    exact lt_trans (lt_of_upperHalfAllOnes_eq_zero chosen guard) charAbove2pow128Minus2pow64
+
 end JoltConstraints.Soundness

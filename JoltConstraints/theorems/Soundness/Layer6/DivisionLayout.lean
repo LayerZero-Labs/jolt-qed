@@ -301,7 +301,7 @@ For example, the first REM row identifies a nonzero destination and all nine
 generated rows, irrespective of the bytecode's advice placeholder.
 See jolt/crates/jolt-program/src/expand/mod.rs
 (`expand_source_instruction_with_provider`) and division/rem.rs (`expand_rem`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem division_expansion_layout
     (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program image = some bytecode)

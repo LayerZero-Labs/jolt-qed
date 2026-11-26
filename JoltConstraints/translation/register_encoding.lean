@@ -8,7 +8,7 @@ namespace JoltRegisterEncoding
 
 /-- Decode a Rust register address using the existing ISA register map.
 Rust has one address space: x0..x31 followed by virtual registers 32..127.
-Rust: https://github.com/abiswas3/jolt/tree/main/common/src/constants.rs -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/common/src/constants.rs -/
 def source (address : JoltISA.VReg) : JoltISA.Src :=
   match JoltISA.joltRegisterSlot address with
   | .xreg index => .xreg index
@@ -43,7 +43,7 @@ including captured operands that execution ignores.
 For example, a floor load checks its destination and base, while a floor
 store checks its base and stored-value source.
 Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
-(`FormatLoad`, `FormatS`, `FormatShiftData`) at `c6703570`. -/
+(`FormatLoad`, `FormatS`, `FormatShiftData`) at `ff6fc6568`. -/
 def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   match instruction with
   -- One source and one destination.
@@ -87,7 +87,7 @@ def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   | .VirtualAssertMulUNoOverflow lhs rhs _ | .VirtualAssertLTE lhs rhs _ =>
       sourceIsCanonical lhs && sourceIsCanonical rhs
   -- Destination only; runtime advice is a value, not a register operand.
-  | .LUI dst _ | .AUIPC dst _ | .JAL dst _
+  | .JoltSuccess dst | .Panic dst | .LUI dst _ | .AUIPC dst _ | .JAL dst _
   | .VirtualPow2I dst _ | .VirtualPow2IW dst _ | .VirtualShiftRightBitmaskI dst _
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       destinationIsCanonical dst

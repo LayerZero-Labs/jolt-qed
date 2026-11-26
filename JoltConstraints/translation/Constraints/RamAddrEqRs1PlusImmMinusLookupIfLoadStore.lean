@@ -1,6 +1,6 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
-import JoltConstraints.translation.witness_helpers
+import JoltBytecode.MathlibTactics
+import LeanRV64D.Defs
 
 open LeanRV64D
 
@@ -12,7 +12,7 @@ namespace JoltConstraints
 loads and stores use base plus immediate minus the lookup offset as their RAM address.
 For example, a halfword floor row with effective address 10 and offset 2 records 8.
 Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
-(`RV64_CONSTRAINT_NAMES`, row 0) at `c6703570`. -/
+(`RV64_CONSTRAINT_NAMES`, row 0) at `ff6fc6568`. -/
 def ramAddrEqRs1PlusImmMinusLookupIfLoadStore {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

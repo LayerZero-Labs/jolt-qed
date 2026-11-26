@@ -20,13 +20,26 @@ flowchart LR
 
 ```
 
+## Main result
+
+[`JoltConstraints/theorems/WholeRun/Top.lean`](JoltConstraints/theorems/WholeRun/Top.lean) proves that the Sail RISC-V model reproduces the modelled Jolt execution up to its first explicit halt (`jolt.success` for success, EBREAK for panic), taking one Sail step per conforming source instruction. This covers in particular the modelled execution behind an instance that Jolt's constraints accept.
+The model is Jolt's tracer as written in Lean, started from the initial memory that Jolt's preprocessing builds. Applying the result to a real Jolt run needs two more things: the correspondence between that initial memory and the memory Jolt's tracer loads, which the docs record as a trusted assumption that fails for unusual ELFs (["Initial memory is preprocessing's, not the tracer's"](docs/whole-run-theorem.md#what-the-theorems-trust)), and the stated scope, under which every block before the halt runs a RISC-V instruction ([scope premise](docs/whole-run-theorem.md#scope-premise)).
+The theorems hold under premises stated with them, and they check the constraints directly, not through Jolt's sumcheck-based verifier.
+The field premise and the constraint algebra cover both of Jolt's fields: BN254 and Akita's `p = 2^128 - 1780711455`, Jolt's production field since a16z/jolt#2403. `JoltField.akita` and `JoltField.bn254` prove that both fields meet the field premise, with primality checked by Pratt certificates. The field premise `JoltField` asks for characteristic above `2^128 - 2^64`, and below `2^128` the constraints include the canonical lookup-address check that Jolt's `akita` build enforces.
+The prover configuration and sizing model covers only the base Dory build.
+[`JoltConstraints/translation/prover_config.lean`](JoltConstraints/translation/prover_config.lean) pads traces to at least 256 rows and uses the base one-hot chunk policy, and the setup-size check uses Dory's bound.
+With the `akita` feature, pinned Jolt pads every trace to at least 4096 rows and keeps 4/16-bit one-hot chunks at every trace length, and neither rule is modelled.
+[What the whole-run theorems prove](docs/whole-run-theorem.md) states both theorems, every premise, and what they do not say.
+Read it before citing the result.
+[`docs/riscv-alignment.md`](docs/riscv-alignment.md) explains each modelling decision behind them.
+
 ## Status
 
-The recorded Jolt pin is `c97e9300`, the merge of a16z/jolt#2250.
-The system expansions and the decoder transcribe a later revision, a16z/jolt `c336a6da7`, the head of a16z/jolt#2384 (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
-The constraints migration is merged. `lake build JoltBytecode` and `lake build JoltConstraints` pass, and `JoltBytecode/` has no `sorry`.
-The remaining `sorry`s are in completeness proofs under `JoltConstraints/theorems/Completeness/`.
-None of them is used by the soundness theorem, whose `#print axioms` lists only `propext`, `Classical.choice` and `Quot.sound`.
+The recorded Jolt pin is `ff6fc6568` (`ff6fc656813d950565c9f6e1258b78bdaf0e60e8`), the merge of a16z/jolt#2509.
+The system expansions other than EBREAK and the decoder still transcribe a16z/jolt `c336a6da7`, the head of a16z/jolt#2384. The ELF loader (`decode_elf`) follows `ff6fc6568` (see [`docs/riscv-alignment.md`](docs/riscv-alignment.md), Sources).
+The constraints migration is merged. `lake build JoltBytecode` and `lake build JoltConstraints` pass, and neither `JoltBytecode/` nor `JoltConstraints/` has a `sorry`.
+The `#print axioms` output of the soundness and whole-run theorems lists only `propext`, `Classical.choice` and `Quot.sound`.
+The Sail model's platform file `LeanRV64D/RiscvExtras.lean`, which comes from `sail-import/patches/sail-riscv-lean-handwritten.patch`, declares 67 floating-point primitives as Lean `axiom`s. No soundness or whole-run theorem depends on them.
 See [the soundness plan](methods/soundness.md) and [proof obligations](JoltConstraints/documentation/model_review.md).
 
 A self contained manuscript describing the efforts of formally verifying bytecode expansion is available [here](./jolt-qed.pdf)
@@ -48,7 +61,6 @@ The complete generation process is documented in
 [Sail RISC-V Into Lean](https://randomwalks.xyz/blog/sail-to-lean/).
 [`sail-import/PROVENANCE.toml`](sail-import/PROVENANCE.toml) pins the model commit, the compiler and the patches in `sail-import/patches/` that configure the model as Jolt's hart.
 `scripts/regen-sail-model.sh` regenerates `LeanRV64D/` from those inputs, and `scripts/check-sail-model.sh`, which CI runs when the model or its inputs change, checks that the checked-in tree matches byte for byte.
-[`docs/riscv-alignment.md`](docs/riscv-alignment.md) explains each choice in the configuration and the patches.
 The upstream
 Sail compiler and Sail RISC-V model are distributed under the BSD 2-Clause
 License. The complete notice is included in

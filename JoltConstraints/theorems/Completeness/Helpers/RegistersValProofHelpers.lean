@@ -1,7 +1,7 @@
-import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
-import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltConstraints.theorems.Completeness.Helpers.HostIOFrame
 import JoltConstraints.theorems.Completeness.Helpers.FloorMemory
+import JoltConstraints.translation.witness_helpers.rd_inc
+import JoltConstraints.translation.witness_helpers.rd_wa
 
 open LeanRV64D
 
@@ -496,7 +496,7 @@ theorem register42_branch_preserves_sourceValue
 
 /-- Loading a doubleword and writing its destination preserves any other source
 register; for example, loading x1 leaves x2 unchanged.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 theorem register42_load_word_preserves_other
     (address : BitVec 64) (dst : JoltISA.Dst) (src : JoltISA.Src)
     (s t : SailJoltState) (hne : src ≠ register42_dstAsSrc dst)
@@ -518,7 +518,7 @@ theorem register42_load_word_preserves_other
 
 /-- LD preserves sources other than its destination; for example, LD into x1
 leaves x2 unchanged when both registers are readable.
-Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/ld.rs` (`LD::exec`) at `ff6fc6568`. -/
 theorem register42_load_preserves_other
     (fault : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base src : JoltISA.Src) (imm : BitVec 64)
@@ -537,7 +537,7 @@ theorem register42_load_preserves_other
 
 /-- A doubleword store preserves every register; for example, storing x1
 changes memory but leaves the captured source x1 unchanged.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 theorem register42_store_word_preserves_sourceValue
     (address value : BitVec 64) (src : JoltISA.Src) (s t : SailJoltState)
     (runs : (do
@@ -555,7 +555,7 @@ theorem register42_store_word_preserves_sourceValue
       cases result <;> cases runs <;> exact frame
 
 /-- SD preserves every source register, such as its base x2 when storing x1.
-Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) at `ff6fc6568`. -/
 theorem register42_store_preserves_sourceValue
     (base stored src : JoltISA.Src) (imm : BitVec 64)
     (s t : SailJoltState)
@@ -575,85 +575,35 @@ namespace Register42VRegs
 def Preserves {α : Type} (m : JoltMonad α) : Prop :=
   ∀ (s t : SailJoltState) (v : α), m s = .ok v t → t.vregs = s.vregs
 
-theorem pure_rule {α : Type} (v : α) : Preserves (pure v) := by
-  intro s t result h
-  cases h
-  rfl
-
-theorem bind_rule {α β : Type} {m : JoltMonad α} {f : α → JoltMonad β}
-    (hm : Preserves m) (hf : ∀ x, Preserves (f x)) :
-    Preserves (m >>= f) := by
-  intro s t v h
-  cases hr : m s with
-  | error e state => simp only [bind, EStateM.bind, hr] at h; cases h
-  | ok x state =>
-      simp only [bind, EStateM.bind, hr] at h
-      exact (hf x state t v h).trans (hm s state x hr)
-
-theorem read_rule (src : JoltISA.Src) : Preserves (JoltISA.readSrc src) := by
-  intro s t v h
-  obtain ⟨rfl, _⟩ := lookup_readSrc_value src s t v h
-  rfl
-
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
-  intro s t v h
-  cases h
-  rfl
-
-theorem throw_rule {α : Type} (e : Error exception) :
-    Preserves (throw e : JoltMonad α) := by
-  intro s t v h
-  cases h
-
-theorem modifyAdvice_rule (f : SailJoltState → SailJoltState)
-    (hf : ∀ s, (f s).vregs = s.vregs) :
-    Preserves (modify f : JoltMonad Unit) := by
-  intro s t v h
-  cases h
-  exact hf s
-
-theorem loadByte_rule (addr : BitVec 64) : Preserves (JoltISA.Mmu.load addr) := by
-  intro s t v h
-  rw [JoltISA.Mmu.load_state h]
-
-theorem readHostBytes_frame
-    (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (n : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
-      overflowChecks incrementAfterLast pointer n bytes) := by
-  induction n generalizing pointer bytes with
-  | zero => exact pure_rule _
-  | succ n ih =>
-      dsimp only [JoltISA.readHostBytes]
-      refine bind_rule (loadByte_rule _) (fun result => ?_)
-      cases result with
-      | Err e => exact pure_rule _
-      | Ok byte =>
-          split_ifs with h
-          · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-          · exact bind_rule (pure_rule _) (fun _ => ih _ _)
-
-theorem execHostIO_frame : Preserves JoltISA.execHostIO := by
-  unfold JoltISA.execHostIO JoltISA.execHostIOWith
-  refine bind_rule get_rule (fun config => ?_)
-  dsimp only
-  split
-  · exact pure_rule _
-  · repeat' first
-      | exact readHostBytes_frame _ _ _ _ _
-      | exact read_rule _
-      | exact pure_rule _
-      | exact throw_rule _
-      | exact modifyAdvice_rule _ (by intro s; rfl)
-      | split
-      | refine bind_rule ?_ (fun x => ?_)
+theorem execHostIO_frame : Preserves JoltISA.execHostIO :=
+  fun s t v h => (execHostIO_keeps_state s t v h).2
 
 end Register42VRegs
+
+/-- A halt preserves each readable source other than its link destination.
+For example, a panic halt into scratch register 40 preserves x1. -/
+theorem register42_halt_preserves_other (kind : JoltHaltKind)
+    (dst : JoltISA.Dst) (src : JoltISA.Src) (s t : SailJoltState)
+    (hne : src ≠ register42_dstAsSrc dst)
+    (hready : ∀ rd, Assumptions.XRegReadable rd s.sail)
+    (runs : JoltISA.execHalt kind dst s = .ok RETIRE_SUCCESS t) :
+    JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
+  obtain ⟨link, address, middle, _, _, written, shape⟩ :=
+    JoltConstraints.execHalt_shape kind dst s t runs
+  rw [shape]
+  have observed := register42_nextPC_preserves_sourceValue src address middle
+  have recorded : JoltISA.sourceValue src (JoltISA.recordHalt kind
+      { middle with sail := { middle.sail with regs := middle.sail.regs.insert Register.nextPC address } }) =
+      JoltISA.sourceValue src { middle with sail := { middle.sail with
+        regs := middle.sail.regs.insert Register.nextPC address } } := by
+    cases src <;> rfl
+  exact recorded.trans (observed.trans
+    (register42_writeDst_preserves_other dst src link s middle hne hready written))
 
 /-- A retired instruction preserves every readable source except its destination;
 for example, a floor LoadH into x1 preserves x2, and StoreH preserves both.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem register42_instruction_preserves_other
     (instr : JoltISA.Instr) (src : JoltISA.Src)
     (s t : SailJoltState)
@@ -664,6 +614,10 @@ theorem register42_instruction_preserves_other
       .ok (.Retire_Success ()) t) :
     JoltISA.sourceValue src t = JoltISA.sourceValue src s := by
   cases instr
+  case JoltSuccess dst =>
+    exact register42_halt_preserves_other .success dst src s t (hne dst rfl) hready hexec
+  case Panic dst =>
+    exact register42_halt_preserves_other .panic dst src s t (hne dst rfl) hready hexec
   case LD fault dst base imm =>
     exact register42_load_preserves_other fault dst base src imm s t
       (hne dst rfl) hready hexec

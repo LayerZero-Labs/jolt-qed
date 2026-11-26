@@ -2,7 +2,6 @@
 The witness sizes Jolt's prover picks, built from its config and the bytecode
 instead of taken as free parameters.
 -/
-import JoltConstraints.theorems.trace_facts
 import JoltConstraints.theorems.prover_config_facts
 import JoltConstraints.translation.witness
 
@@ -10,12 +9,12 @@ open LeanRV64D
 
 set_option autoImplicit false
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the base-two logarithm
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), the base-two logarithm
 of its padded length `config.trace_length` is below 64: the length is a power of two at
 most the instance's 64-bit maximum.
 For example, a 300-row run pads to `512 = 2^9`, and `9 < 64`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::from_padded_dimensions`)
-at c6703570. -/
+at ff6fc6568. -/
 theorem HonestTrace.prover_config_log_trace_length_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -28,12 +27,12 @@ theorem HonestTrace.prover_config_log_trace_length_lt
   rw [isPadded, isPower] at fitsMaximum
   exact (Nat.pow_lt_pow_iff_right (by decide : 1 < 2)).mp (by omega)
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the base-two logarithm
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), the base-two logarithm
 of its RAM size `config.ram_K` is below 64: Jolt's prover checks that the rounded size
 fits in 64 bits (`HonestTrace.prover_config_ram_K`).
 For example, `ram_K = 1024 = 2^10` gives `10 < 64`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`)
-at c97e9300. -/
+at ff6fc6568. -/
 theorem HonestTrace.prover_config_log_ram_K_lt
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -55,7 +54,7 @@ theorem HonestTrace.log_bytecode_size_lt
   have atMost := Nat.clog_le_of_le_pow (b := 2) (y := 32) (by omega : trace.bytecode.size + 1 ≤ 2 ^ 32)
   omega
 
-/-- The witness sizes Jolt's prover uses for the honest trace, when it accepts the trace
+/-- The witness sizes Jolt's prover uses for the honest trace, when its sizing succeeds
 with config `config` (`proverAccepts`):
 `logT` and `logRamK` are the base-two logarithms of the config's padded length
 `config.trace_length` and RAM size `config.ram_K`;
@@ -70,7 +69,7 @@ See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::from_padded_dimensions
 `validate_inputs_from_parts` call with `config.trace_length`, `config.ram_K` and
 `config.one_hot_config`), jolt/crates/jolt-program/src/preprocess/bytecode.rs
 (`BytecodePreprocessing::preprocess`, `code_size`) and jolt/common/src/constants.rs
-(`ONEHOT_CHUNK_THRESHOLD_LOG_T`) at c6703570. -/
+(`ONEHOT_CHUNK_THRESHOLD_LOG_T`) at ff6fc6568. -/
 noncomputable def HonestTrace.witness_params
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)

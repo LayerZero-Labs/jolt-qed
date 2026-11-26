@@ -3,25 +3,21 @@ import JoltConstraints.theorems.Soundness.Layer6.PlainRowOperands
 import JoltConstraints.theorems.Soundness.Layer6.PlainRowKinds
 import JoltConstraints.theorems.Soundness.Layer5.Fence
 import JoltConstraints.theorems.Completeness.Helpers.LookupEntryProofHelpers
-import JoltConstraints.theorems.Soundness.Layer5.RegisterShift
-import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
-import JoltConstraints.theorems.Soundness.Layer7.StallSuffix
-import JoltConstraints.theorems.Soundness.Layer7.LastJump
-import JoltConstraints.theorems.Soundness.Layer5.Advice
 import JoltConstraints.theorems.Soundness.Layer5.AdviceLoad
 import JoltConstraints.theorems.Soundness.Layer5.Branch
 import JoltConstraints.theorems.Soundness.Layer5.AddImmediate
-import JoltConstraints.theorems.Soundness.Layer5.Arithmetic
 import JoltConstraints.theorems.Soundness.Layer5.Xor
-import JoltConstraints.theorems.Soundness.Layer5.VirtualBinary
-import JoltConstraints.theorems.Soundness.Layer5.UnaryWord
 import JoltConstraints.theorems.Soundness.Layer5.AssertionsBinary
 import JoltConstraints.theorems.Soundness.Layer5.AssertionMulOverflow
 import JoltConstraints.theorems.Soundness.Layer5.AssertLessThanEqual
-import JoltConstraints.theorems.Soundness.Layer3.Access
 import JoltConstraints.theorems.Soundness.Layer3.Updates
-import JoltConstraints.theorems.Soundness.Layer5.MemoryRows
+import JoltConstraints.theorems.Soundness.Layer5.Auipc
+import JoltConstraints.theorems.Soundness.Layer5.LoadUpperImmediate
+import JoltConstraints.theorems.Soundness.Layer5.Movsign
+import JoltConstraints.theorems.Soundness.Layer5.SetLessThanImmediate
+import JoltConstraints.theorems.Soundness.Layer5.XorImmediate
+import JoltConstraints.theorems.Soundness.Layer6.SelectedRows
 
 open LeanRV64D
 
@@ -52,7 +48,7 @@ def PlainRow (instruction : Instr) : Prop :=
   match instruction with
   | .LD .. | .SD .. | .VirtualLoadB .. | .VirtualLoadH .. | .VirtualLoadW ..
   | .VirtualStoreB .. | .VirtualStoreH .. | .VirtualStoreW ..
-  | .VirtualHostIO | .JAL .. | .JALR .. => False
+  | .VirtualHostIO | .JAL .. | .JALR .. | .JoltSuccess .. | .Panic .. => False
   | _ => True
 
 /-- Every division arithmetic row is plain; for example, REM's MUL needs no
@@ -259,7 +255,7 @@ private theorem expansion_row_countdown
 For example, the first row of a nine-row REM block has eight rows remaining.
 The proof uses Jolt's sequence stamp from
 `jolt/crates/jolt-program/src/expand/metadata.rs` (`stamp_sequence_metadata`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem expansion_row_remaining
     (image : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program image = some bytecode)
@@ -578,28 +574,27 @@ theorem representsPrefix_push {F : Type} [Field F] {params : WitnessParams}
     (old : RepresentsPrefix witness trace) (bound : trace.rows.size < params.traceLength)
     (rows : RepresentsRows witness {trace with rows := trace.rows.push step})
     (zero : witness.RamAddress ⟨trace.rows.size, bound⟩ = 0)
-    (memory : step.postState.sail.mem = (TraceWitness.finalTraceState trace).sail.mem)
-    (device : step.postState.jolt_device = (TraceWitness.finalTraceState trace).jolt_device) :
+    (memory : step.postState.sail.mem = (TraceWitness.finalTraceState trace).sail.mem) :
     RepresentsPrefix witness {trace with rows := trace.rows.push step} := by
   have same (address : Nat) :
       TraceWitness.finalRamWord {trace with rows := trace.rows.push step} address =
         TraceWitness.finalRamWord trace address := by
-    simp only [TraceWitness.finalRamWord, finalTraceState_push, memory, device]
+    simp only [TraceWitness.finalRamWord, finalTraceState_push, memory]
   refine {rows with cutRam := ⟨?_, ?_⟩}
-  · intro next address outside
+  · intro next address
     rw [same]
     simpa only [Array.size_push] using
       (ramVal_succ_of_address_zero (two_pow_127_lt_char joltField)
         context equations address ⟨trace.rows.size, bound⟩
         (by simpa only [Array.size_push] using next) zero).trans
-        (old.cutRam.1 bound address outside)
-  · intro last address outside
+        (old.cutRam.1 bound address)
+  · intro last address
     rw [same]
     simpa only [Array.size_push] using
       (ramValFinal_of_address_zero (two_pow_127_lt_char joltField)
         context equations address ⟨trace.rows.size, bound⟩
         (by simpa only [Array.size_push] using last) zero).trans
-        (old.cutRam.1 bound address outside)
+        (old.cutRam.1 bound address)
 
 private theorem interior_progress {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) (witness : WitnessType F params)
@@ -1006,7 +1001,7 @@ def RawRowEntry {joltInstance : JoltInstance SourceInstruction} {privateInputs :
       next.val = last.rowIndex.val + 1 ∧ pre = last.postState
     else
       ∃ address, last.postState.sail.regs.get? Register.nextPC = some address ∧
-        ¬ last.StableStall ∧ run.bytecode[next].address = address ∧
+        ¬ last.Halts ∧ run.bytecode[next].address = address ∧
         run.bytecode[next].starts_source ∧
         pre = advance_pc address (source_is_compressed run.bytecode next) last.postState
 
@@ -1047,7 +1042,7 @@ theorem rawEntry_linked
 
 /-- A ready row starts in the final state or its source-PC preparation.
 For example, an interior REM row uses the final state directly. -/
-private theorem rawEntry_state
+theorem rawEntry_state
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     {run : UntrustedAnswerRun joltInstance privateInputs} {next : Fin run.bytecode.size}
     {pre : SailJoltState} (entry : RawRowEntry run next pre) :
@@ -1068,7 +1063,7 @@ private theorem rawEntry_state
 
 /-- Entry preparation preserves live registers, memory and the device while
 updating PC bookkeeping; for example, preparing a native ADD keeps its inputs.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
+See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at ff6fc6568. -/
 theorem rawEntry_prepared {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {t : Fin params.traceLength} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -1129,12 +1124,10 @@ private theorem real_push {F : Type} [Field F] {params : WitnessParams}
   · have same : t = ⟨rows.size, bound⟩ := Fin.ext (show t.val = rows.size by omega)
     simpa only [same] using current
 
-/-- Append a certified row and its next expansion invariant, with the termination
-word supplied by the row's memory rule instead of requiring a zero RAM address.
-The termination premise applies only when the appended trace has not stored to
-termination; for example, an output SD preserves that word through its RAM update.
-See jolt/tracer/src/emulator/cpu.rs (`Cpu::tick`) at 5def437f. -/
-theorem append_expansion_row_of_termination {F : Type} [Field F] {params : WitnessParams}
+/-- Append a certified row and its next expansion invariant using full shared
+memory agreement, without a synthetic flag-word obligation.
+For example, an output store extends the prefix by its shared-memory update. -/
+theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
     (joltField : JoltField F) (witness : WitnessType F params)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (context : ConstraintContext joltInstance privateInputs params)
@@ -1151,13 +1144,6 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
       answer step.preState = .ok RETIRE_SUCCESS step.postState)
     (entry : RawRowEntry run step.rowIndex step.preState)
     (observations : RepresentsPrefix witness {run.toTrace with rows := run.rows.push step})
-    (termination : ∀ next : run.rows.size + 1 < params.traceLength,
-      (¬ ∃ i : Fin (run.rows.push step).size,
-        storeTouches TouchesTermination (run.rows.push step)[i]) →
-      ∀ address : Fin params.ramSize,
-        address.val = (run.initialState.jolt_device.memory_layout.termination.toNat -
-          ramLowestAddress run.initialState.jolt_device.memory_layout) / 8 →
-        witness.RamVal address ⟨run.rows.size + 1, next⟩ = 0)
     (registers : ∀ next : run.rows.size + 1 < params.traceLength,
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
         witness ⟨run.rows.size + 1, next⟩ step.postState) :
@@ -1190,11 +1176,8 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
   · refine {
       represents := observations
       real := real_push witness run.rows step bound state.real real
-      noEarlierStop := adjacent_push run.rows step (fun current _ => ¬ current.StableStall)
+      noEarlierStop := adjacent_push run.rows step (fun current _ => ¬ current.Halts)
         state.noEarlierStop (state.notStopped unfinished)
-      terminationWord := by
-        simpa only [candidate, appendUntrustedRow, Array.size_push,
-          storesTerminationAt_iff] using termination
       starts := state.starts
       done_le := by omega
       retained := by have old := state.retained; change done + 1 ≤ (run.rows.push step).size; simp; omega
@@ -1221,50 +1204,10 @@ theorem append_expansion_row_of_termination {F : Type} [Field F] {params : Witne
       rw [Array.back?_push] at atEnd
       have same : step = last := Option.some.inj atEnd
       subst last
-      exact remaining more stalled.1
-
-/-- Append a successful row with zero RAM address to an unfinished expansion,
-preserving its represented prefix, live registers and termination invariant.
-For example, the final JALR completes an ECALL expansion. -/
-theorem append_expansion_row {F : Type} [Field F] {params : WitnessParams}
-    (joltField : JoltField F) (witness : WitnessType F params)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (context : ConstraintContext joltInstance privateInputs params)
-    (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
-    (run : UntrustedAnswerRun joltInstance privateInputs)
-    (first : Fin context.bytecode.size) (done : Nat)
-    (state : ExpansionState witness context run first done)
-    (unfinished : done < expansionRowCount context.bytecode first)
-    (bound : run.rows.size < params.traceLength)
-    (step : TraceRow run.bytecode) (answer : BitVec 64)
-    (indexIs : step.rowIndex.val = first.val + done)
-    (executes : execWithTapeAnswer
-      (run.bytecode[step.rowIndex].instruction.withRuntimeAdvice step.runtimeAdvice)
-      answer step.preState = .ok RETIRE_SUCCESS step.postState)
-    (entry : RawRowEntry run step.rowIndex step.preState)
-    (observations : RepresentsPrefix witness {run.toTrace with rows := run.rows.push step})
-    (zero : witness.RamAddress ⟨run.rows.size, bound⟩ = 0)
-    (registers : ∀ next : run.rows.size + 1 < params.traceLength,
-      RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
-        witness ⟨run.rows.size + 1, next⟩ step.postState) :
-    ∃ candidate : UntrustedAnswerRun joltInstance privateInputs,
-      candidate.toTrace = {run.toTrace with rows := run.rows.push step} ∧
-      (∀ index : Fin candidate.rows.size,
-        index.val = run.rows.size → candidate.answers index = answer) ∧
-      RunExtends run candidate ∧ candidate.rows.size = run.rows.size + 1 ∧
-      ExpansionState witness context candidate first (done + 1) := by
-  apply append_expansion_row_of_termination joltField witness context equations run first done
-    state unfinished bound step answer indexIs executes entry observations ?_ registers
-  intro next noStore address atTermination
-  have noEarlierStore : ¬ ∃ i : Fin run.rows.size, run.StoresTerminationAt i := by
-    rintro ⟨i, store⟩
-    apply noStore
-    refine ⟨⟨i.val, by simp only [Array.size_push]; omega⟩, ?_⟩
-    simpa only [Fin.getElem_fin, Array.getElem_push_lt i.isLt] using
-      (storesTerminationAt_iff run i).mp store
-  exact (ramVal_succ_of_address_zero (two_pow_127_lt_char joltField)
-    context equations address ⟨run.rows.size, bound⟩ next zero).trans
-      (state.terminationWord bound noEarlierStore address atTermination)
+      apply remaining more
+      apply JoltConstraints.Soundness.ConstraintContext.halt_terminal context _ _ stalled
+      rw [← bytecodeEq]
+      exact Array.getElem_mem step.rowIndex.isLt
 
 /-- Inside an unfinished expansion, the next prepared state is the preceding
 row's post-state, with no source-boundary PC preparation in between.
@@ -1368,14 +1311,14 @@ private theorem append_plain_execution {F : Type} [Field F] (joltField : JoltFie
   have represented := representsRows_push_operands joltField witness context equations run.toTrace step
     state.represents.toRepresentsRows bound slot selected slotIs rs1 rs2 ram
   have prefixAgreement := representsPrefix_push joltField witness context equations run.toTrace step
-    state.represents bound represented zero (memory.trans prepared.2.1) (device.trans prepared.2.2)
+    state.represents bound represented zero (memory.trans prepared.2.1)
   have nextRegisters (nextCycle : run.rows.size + 1 < params.traceLength) :
       RegisterAgreementOn (ExpansionLive context.bytecode first (done + 1))
         witness ⟨run.rows.size + 1, nextCycle⟩ step.postState :=
     (registers nextCycle).mono (expansionLive_after context.bytecode first done _ atRow)
   obtain ⟨candidate, traceEq, answers, extendsRun, size, after⟩ :=
     append_expansion_row joltField witness context equations run first done state unfinished
-      bound step answer indexIs executes ready prefixAgreement zero nextRegisters
+      bound step answer indexIs executes ready prefixAgreement nextRegisters
   exact ⟨step, answer, candidate, indexIs, ready, prepared.1.present, traceEq,
     executes, encoded, tape, answers, extendsRun, size, after⟩
 

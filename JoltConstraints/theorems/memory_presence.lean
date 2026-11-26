@@ -1,186 +1,15 @@
 import JoltConstraints.theorems.execution_facts
-import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
 
 open LeanRV64D
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 set_option autoImplicit false
 
-/-
-Stores need their old value when constructing the honest witness. A successful
-store alone does not imply that the old RAM bytes exist. Initialization supplies
-those bytes, and induction along HonestTrace carries their presence to each row.
+/-!
+Recorded store words at `ff6fc6568` come from shared memory with zero defaults.
+No flag-word geometry or induction on presence of hash-map keys is required.
+For example, storing into an untouched I/O-gap word records an old word of zero.
 -/
-
-namespace RamMemoryKept
-
--- An instruction may overwrite bytes, but it never removes existing RAM bytes.
-def Extends (before after : Std.ExtHashMap Nat (BitVec 8)) : Prop :=
-  ∀ address, (before.get? address).isSome → (after.get? address).isSome
-
-theorem insert_extends (mem : Std.ExtHashMap Nat (BitVec 8)) (address : Nat)
-    (value : BitVec 8) : Extends mem (mem.insert address value) := by
-  intro other present
-  change mem[other]?.isSome = true at present
-  change (mem.insert address value)[other]?.isSome = true
-  rw [Std.ExtHashMap.isSome_getElem?_eq_contains] at present ⊢
-  rw [Std.ExtHashMap.contains_insert, present, Bool.or_true]
-
-theorem write_ram_extends (mem : Std.ExtHashMap Nat (BitVec 8)) (address : Nat)
-    (value : BitVec 64) : Extends mem (JoltISA.Mmu.write_ram_doubleword mem address value) := by
-  have fold : ∀ (offsets : List Nat) (mem : Std.ExtHashMap Nat (BitVec 8)),
-      Extends mem (offsets.foldl
-        (fun mem k => mem.insert (address + k) (value.extractLsb' (8 * k) 8)) mem) := by
-    intro offsets
-    induction offsets with
-    | nil => intro mem other present; exact present
-    | cons k rest ih =>
-      intro mem other present
-      exact ih _ _ (insert_extends mem _ _ other present)
-  exact fold _ mem
-
-theorem store_raw_extends {state after : SailJoltState} {address : Nat} {value : BitVec 8}
-    (runs : JoltISA.Mmu.store_raw? state address value = some after) :
-    Extends state.sail.mem after.sail.mem := by
-  simp only [JoltISA.Mmu.store_raw?] at runs
-  repeat' split at runs
-  all_goals first
-    | (cases runs; exact insert_extends _ _ _)
-    | cases runs
-    | (cases stored : state.jolt_device.store? address value <;> simp [stored] at runs
-       cases runs
-       exact fun _ present => present)
-
-theorem store_bytes_extends (address : Nat) (value : BitVec 64) :
-    ∀ (offsets : List Nat) (current : Option SailJoltState) (before after : SailJoltState),
-      (∀ state, current = some state → Extends before.sail.mem state.sail.mem) →
-      offsets.foldl (fun current k => current.bind fun state =>
-        JoltISA.Mmu.store_raw? state (address + k) (value.extractLsb' (8 * k) 8)) current =
-          some after → Extends before.sail.mem after.sail.mem := by
-  intro offsets
-  induction offsets with
-  | nil => intro current before after kept runs; exact kept after runs
-  | cons k rest ih =>
-    intro current before after kept runs
-    apply ih _ before after _ runs
-    intro state stored
-    cases current with
-    | none => simp at stored
-    | some middle =>
-      exact fun address present => store_raw_extends stored address (kept middle rfl address present)
-
-def Preserves {α : Type} (step : JoltMonad α) : Prop :=
-  StatePreservation.Preserves (fun state after => Extends state.sail.mem after.sail.mem) step
-
-theorem unchanged_rule {α : Type} {step : JoltMonad α}
-    (same : ∀ state after value, step state = .ok value after →
-      after.sail.mem = state.sail.mem) : Preserves step := by
-  intro state after value runs address present
-  rw [same state after value runs]
-  exact present
-
-theorem pure_rule {α : Type} (value : α) : Preserves (pure value) :=
-  StatePreservation.pure_rule (fun _ _ present => present) value
-
-theorem bind_rule {α β : Type} {first : JoltMonad α} {next : α → JoltMonad β}
-    (keepsFirst : Preserves first) (keepsNext : ∀ value, Preserves (next value)) :
-    Preserves (first >>= next) :=
-  StatePreservation.bind_rule (fun _ _ _ first next address present => next address (first address present))
-    keepsFirst keepsNext
-
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) :=
-  StatePreservation.get_rule (fun _ _ present => present)
-
-theorem throw_rule {α : Type} (failure : Error exception) :
-    Preserves (throw failure : JoltMonad α) :=
-  StatePreservation.throw_rule _ failure
-
-theorem lift_rule {α : Type} {step : SailM α}
-    (same : ∀ sail after value, step sail = .ok value after → after.mem = sail.mem) :
-    Preserves (liftSail step) :=
-  StatePreservation.liftSail_rule
-    (fun _ _ equal address present => by simpa only [equal] using present) same
-
-theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) :=
-  unchanged_rule (fun _ _ _ runs => congrArg (·.mem) (SailUnchanged.read_rule source _ _ _ runs))
-
-theorem write_rule (destination : JoltISA.Dst) (value : BitVec 64) :
-    Preserves (JoltISA.writeDst destination value) := by
-  cases destination with
-  | vreg register =>
-    apply unchanged_rule
-    intro state after result runs
-    simp only [JoltISA.writeDst, writeVReg] at runs
-    split at runs <;> cases runs
-    rfl
-  | xreg register =>
-    apply lift_rule
-    intro sail after result runs
-    rw [wX_bits_eq_stateAfterWrite register value sail after runs]
-    rfl
-
-theorem readReg_rule (register : Register) : Preserves (liftSail (LeanRV64D.readReg register)) :=
-  lift_rule (fun sail after value runs => congrArg (·.mem) (readReg_pure register sail value after runs))
-
-theorem writeReg_rule (register : Register) (value : RegisterType register) :
-    Preserves (liftSail (LeanRV64D.writeReg register value)) :=
-  lift_rule (fun _ _ _ runs => by cases runs; rfl)
-
-theorem arch_pc_rule : Preserves (liftSail (get_arch_pc ())) :=
-  lift_rule (fun sail after value runs => congrArg (·.mem) (readReg_pure Register.PC sail value after runs))
-
-theorem jump_rule (target : BitVec 64) : Preserves (liftSail (jump_to target)) :=
-  lift_rule (fun sail after result runs => by
-    rcases jump_to_shape target sail after result runs with same | written
-    · rw [same]
-    · rw [written])
-
-theorem load_doubleword_rule (address : BitVec 64) :
-    Preserves (JoltISA.Mmu.load_doubleword address) :=
-  unchanged_rule (fun _ _ _ runs => by rw [JoltISA.Mmu.load_doubleword_state runs])
-
-theorem store_doubleword_rule (address value : BitVec 64) :
-    Preserves (JoltISA.Mmu.store_doubleword address value) := by
-  intro state after result runs
-  simp only [JoltISA.Mmu.store_doubleword] at runs
-  repeat' split at runs
-  all_goals first
-    | (cases runs; exact write_ram_extends _ _ _)
-    | (rename_i stored
-       cases runs
-       exact store_bytes_extends _ value _ (some state) state _
-         (fun _ eq => by cases eq; exact fun _ present => present) stored)
-    | cases runs
-
-theorem execHostIO_rule : Preserves JoltISA.execHostIO :=
-  unchanged_rule (fun state after result runs =>
-    congrArg (·.mem) (execHostIO_keeps_sail state after result runs))
-
-theorem execInstr_rule (instruction : JoltISA.Instr) :
-    Preserves (JoltISA.execInstr instruction) := by
-  cases instruction
-  case VirtualAdviceLoad destination byteCount =>
-    intro before after value runs
-    simp only [JoltISA.execInstr] at runs
-    cases tapeRead : JoltISA.readAdviceTape before.adviceTape byteCount with
-    | none => simp only [tapeRead] at runs; cases runs
-    | some pair =>
-      obtain ⟨adviceValue, tape⟩ := pair
-      simp only [tapeRead] at runs
-      exact bind_rule (write_rule destination adviceValue) (fun _ => pure_rule _)
-        { before with adviceTape := tape } after value runs
-  all_goals simp only [JoltISA.execInstr]
-  all_goals preservation_auto [read_rule _, write_rule _ _, pure_rule _, throw_rule _,
-    get_rule, readReg_rule _, writeReg_rule _ _, arch_pc_rule, jump_rule _,
-    load_doubleword_rule _, store_doubleword_rule _ _, execHostIO_rule] using bind_rule
-
-end RamMemoryKept
-
--- The entire allocated RAM backing is populated at initialization.
-def RamBytesPresent (state : SailJoltState) : Prop :=
-  ∀ address, JoltISA.RAM_START_ADDRESS ≤ address →
-    address < JoltISA.Mmu.ram_backing_end state.jolt_device →
-    (state.sail.mem.get? address).isSome
 
 theorem initialRam_size (layout : MemoryLayout) (image : List (BitVec 64 × BitVec 8)) :
     (initialRam layout image).size = 8 * ((layout.get_total_memory_size.toNat + 7) / 8) := by
@@ -203,189 +32,142 @@ theorem initialRam_size (layout : MemoryLayout) (image : List (BitVec 64 × BitV
   rw [fold]
   simp
 
-theorem init_state_byte_present (entry : BitVec 64) (ram : Array (BitVec 8))
-    (device : JoltDevice) (advice : JoltAdviceTape) (hostIO : JoltHostIOConfig)
-    (offset : Nat) (inRange : offset < ram.size) :
-    ((init_state entry ram device advice hostIO).sail.mem.get?
-      (JoltISA.RAM_START_ADDRESS + offset)).isSome := by
-  have fold : ∀ (bytes : List (BitVec 8 × Nat)) (mem : Std.ExtHashMap Nat (BitVec 8)),
-      (∃ byte, (byte, offset) ∈ bytes) ∨ (mem.get? (JoltISA.RAM_START_ADDRESS + offset)).isSome →
-      ((bytes.foldl (fun mem (byte, i) => mem.insert (JoltISA.RAM_START_ADDRESS + i) byte) mem).get?
-        (JoltISA.RAM_START_ADDRESS + offset)).isSome := by
-    intro bytes
-    induction bytes with
-    | nil => intro mem present; simpa using present
-    | cons head tail ih =>
-      intro mem present
-      apply ih
-      rcases present with ⟨byte, member⟩ | present
-      · rcases List.mem_cons.mp member with eq | member
-        · right
-          cases eq
-          change ((mem.insert (JoltISA.RAM_START_ADDRESS + offset) byte)[JoltISA.RAM_START_ADDRESS + offset]?).isSome = true
-          simp
-        · exact Or.inl ⟨byte, member⟩
-      · exact Or.inr (RamMemoryKept.insert_extends _ _ _ _ present)
-  apply fold
-  left
-  refine ⟨ram[offset], ?_⟩
-  have member := List.getElem_mem (l := ram.toList.zipIdx) (n := offset) (by simpa using inRange)
-  simpa using member
+private theorem aligned_backing_end_arithmetic (base lowest words : Nat)
+    (baseAligned : base % 8 = 0) (lowestAligned : lowest % 8 = 0) :
+    (base + (lowest + 8 * words - base)) % 8 = 0 := by
+  omega
 
-theorem initial_state_ram_present {Source : Type} (joltInstance : JoltInstance Source)
-    (privateInputs : JoltPrivateInputs) (state : SailJoltState)
-    (built : joltInstance.initial_state privateInputs = some state) : RamBytesPresent state := by
-  unfold JoltInstance.initial_state at built
-  cases layoutResult : joltInstance.memory_layout with
-  | none => simp only [layoutResult, bind, Option.bind] at built; cases built
-  | some layout =>
-    simp only [layoutResult, bind, Option.bind] at built
-    repeat' split at built
-    all_goals first | cases built
-    all_goals
-      intro address above below
-      have offsetFits : address - JoltISA.RAM_START_ADDRESS <
-          (initialRam layout joltInstance.program.memory_init).size := by
-        rw [initialRam_size]
-        change address < JoltISA.RAM_START_ADDRESS +
-          8 * ((layout.get_total_memory_size.toNat + 7) / 8) at below
-        omega
-      have present := init_state_byte_present joltInstance.program.entry_address
-        (initialRam layout joltInstance.program.memory_init)
-        { inputs := joltInstance.inputs, trusted_advice := joltInstance.trusted_advice,
-          untrusted_advice := privateInputs.untrusted_advice, outputs := #[], panic := false,
-          memory_layout := layout }
-        { bytes := privateInputs.advice_tape, readPosition := 0 } {}
-        (address - JoltISA.RAM_START_ADDRESS) offsetFits
-      simpa only [Nat.add_sub_of_le above] using present
+private theorem aligned_backing_end_option (base lowest : Nat) (domain : Option Nat)
+    (baseAligned : base % 8 = 0) (lowestAligned : lowest % 8 = 0) :
+    (base + (domain.map fun words => lowest + 8 * words - base).getD 0) % 8 = 0 := by
+  cases domain with
+  | none => simpa using baseAligned
+  | some words => exact aligned_backing_end_arithmetic base lowest words baseAligned lowestAligned
 
-theorem execInstr_keeps_ram (instruction : JoltISA.Instr) (state after : SailJoltState)
-    (result : ExecutionResult) (runs : JoltISA.execInstr instruction state = .ok result after)
-    (present : RamBytesPresent state) : RamBytesPresent after := by
-  intro address above below
-  have sameLayout := (JoltIOSetupFrame.execInstr_rule instruction state after result runs).1
-  have belowBefore : address < JoltISA.Mmu.ram_backing_end state.jolt_device := by
-    simpa only [JoltISA.Mmu.ram_backing_end, sameLayout] using below
-  exact RamMemoryKept.execInstr_rule instruction state after result runs address
-    (present address above belowBefore)
+private theorem backing_end_ge_heap_arithmetic (base lowest heap words : Nat)
+    (below : lowest ≤ heap) (aligned : lowest % 8 = 0) (heapAligned : heap % 8 = 0)
+    (rounded : (heap - lowest) / 8 ≤ words) :
+    heap ≤ base + (lowest + 8 * words - base) := by omega
 
-theorem HonestTrace.ram_present {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (position : Nat) (row : TraceRow trace.bytecode)
-    (atPosition : trace.rows[position]? = some row) : RamBytesPresent row.preState := by
-  induction position generalizing row with
-  | zero =>
-    obtain ⟨_, _, startState⟩ := trace.starts row atPosition
-    rw [startState]
-    exact initial_state_ram_present joltInstance privateInputs trace.initialState trace.initialized
-  | succ position ih =>
-    obtain ⟨inRange, _⟩ := Array.getElem?_eq_some_iff.mp atPosition
-    have previousAt : trace.rows[position]? = some trace.rows[position] :=
-      Array.getElem?_eq_getElem (by omega)
-    have previousEnd : RamBytesPresent trace.rows[position].postState :=
-      execInstr_keeps_ram _ _ _ _ (trace.executes _ (Array.getElem_mem (by omega)))
-        (ih trace.rows[position] previousAt)
-    have link := trace.linked position trace.rows[position] row previousAt atPosition
-    split at link
-    · rw [link.2]; exact previousEnd
-    · obtain ⟨_, _, _, _, startState⟩ := link
-      rw [startState]
-      exact previousEnd
+private theorem backing_end_ge_heap_option (base lowest heap : Nat) (domain : Option Nat)
+    (lowestAligned : lowest % 8 = 0) (k : Nat) (present : domain = some k)
+    (geometry : heap % 8 = 0 ∧ lowest ≤ heap ∧ (heap - lowest) / 8 ≤ k) :
+    heap ≤ base + (domain.map fun words => lowest + 8 * words - base).getD 0 := by
+  rw [present]
+  exact backing_end_ge_heap_arithmetic base lowest heap k geometry.2.1 lowestAligned
+    geometry.1 geometry.2.2
 
-theorem heap_end_le_ram_backing_end (device : JoltDevice) :
+/-- A padded RAM domain is aligned when its remapping base is aligned.
+For example, adding any number of eight-byte slots keeps the low three bits zero. -/
+theorem ram_backing_end_aligned (device : JoltDevice)
+    (aligned : device.memory_layout.get_lowest_address.toNat % 8 = 0) :
+    JoltISA.Mmu.ram_backing_end device % 8 = 0 := by
+  exact aligned_backing_end_option _ _ _ (by decide) aligned
+
+private theorem backing_end_le_arithmetic (base lowest words bound : Nat)
+    (baseBound : base ≤ bound) (totalBound : lowest + 8 * words ≤ bound) :
+    base + (lowest + 8 * words - base) ≤ bound := by
+  omega
+
+private theorem backing_end_le_option (base lowest bound : Nat) (domain : Option Nat)
+    (words : Nat) (present : domain = some words) (baseBound : base ≤ bound)
+    (totalBound : lowest + 8 * words ≤ bound) :
+    base + (domain.map fun k => lowest + 8 * k - base).getD 0 ≤ bound := by
+  rw [present]
+  exact backing_end_le_arithmetic base lowest words bound baseBound totalBound
+
+/-- The padded RAM backing of a checked layout ends within the u64 address domain.
+For example, its final aligned word can end exactly at `2^64` without wrapping
+its first byte's address.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`MemoryLayout::try_new`). -/
+theorem ram_backing_end_le_address_space (device : JoltDevice) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some device.memory_layout) :
+    JoltISA.Mmu.ram_backing_end device ≤ 2 ^ 64 := by
+  obtain ⟨words, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config _ built)
+  have bound := (max_ram_k_spec device.memory_layout words checked).2.2.2
+  exact backing_end_le_option JoltISA.RAM_START_ADDRESS _ _ _ words checked (by decide) bound
+
+/-- The padded RAM domain reaches the configured heap end.
+For example, padding can add accessible words after `heap_end`.
+Only checked layouts, rather than arbitrary records of addresses, have this property. -/
+theorem heap_end_le_ram_backing_end (device : JoltDevice) (config : MemoryConfig)
+    (built : MemoryLayout.new config = some device.memory_layout) :
     device.memory_layout.heap_end.toNat ≤ JoltISA.Mmu.ram_backing_end device := by
-  unfold JoltISA.Mmu.ram_backing_end MemoryLayout.get_total_memory_size
-  rw [BitVec.toNat_sub]
-  have heapBound := device.memory_layout.heap_end.isLt
-  have base : (BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS).toNat = 2147483648 := rfl
-  rw [base]
-  unfold JoltISA.RAM_START_ADDRESS
-  omega
+  obtain ⟨k, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config _ built)
+  exact backing_end_ge_heap_option _ _ _ _ (new_lowest_address_aligned config _ built)
+    k checked (by
+      obtain ⟨heapAligned, below, sizeIs, _⟩ := max_ram_k_spec _ k checked
+      refine ⟨heapAligned, below, ?_⟩
+      rw [sizeIs]
+      exact Nat.le_nextPowerOfTwo _)
 
-theorem new_panic_lt_termination (config : MemoryConfig) (layout : MemoryLayout)
+private theorem padded_size_lt_arithmetic (base total bound : Nat)
+    (basePositive : 0 < base) (boundPositive : 0 < bound) (totalBound : total ≤ bound) :
+    total - base < bound := by omega
+
+private theorem padded_size_lt_option (base lowest bound : Nat) (domain : Option Nat)
+    (k : Nat) (present : domain = some k) (basePositive : 0 < base)
+    (boundPositive : 0 < bound) (totalBound : lowest + 8 * k ≤ bound) :
+    (domain.map fun words => lowest + 8 * words - base).getD 0 < bound := by
+  rw [present]
+  exact padded_size_lt_arithmetic base _ bound basePositive boundPositive totalBound
+
+private theorem rounded_size_exact (base size : Nat)
+    (baseAligned : base % 8 = 0) (endAligned : (base + size) % 8 = 0) :
+    8 * ((size + 7) / 8) = size := by omega
+
+/-- The initialized RAM array has exactly the tracer's padded backing size
+for a checked layout.
+For example, an aligned 248-byte backing allocates exactly 248 bytes, without
+wrapping the size through its u64 representation. -/
+theorem initialRam_size_eq_ram_size (layout : MemoryLayout)
+    (image : List (BitVec 64 × BitVec 8)) (config : MemoryConfig)
     (built : MemoryLayout.new config = some layout) :
-    layout.panic.toNat < layout.termination.toNat := by
-  unfold MemoryLayout.new at built
-  repeat' (rw [bind_some_iff] at built; obtain ⟨_, _, built⟩ := built)
-  cases built
-  have checked : ∀ a b c, MemoryLayout.checkedAdd a b = some c ↔
-      c = a + b ∧ a + b < 2 ^ 64 := by
-    intro a b c
-    constructor
-    · exact checkedAdd_some
-    · rintro ⟨rfl, fits⟩
-      simp only [MemoryLayout.checkedAdd, ite_eq_left fits]
-  simp only [checked] at *
-  simp only [BitVec.toNat_ofNat]
-  omega
+    (initialRam layout image).size = layout.ram_size := by
+  obtain ⟨words, checked⟩ := Option.isSome_iff_exists.mp (new_max_ram_k config layout built)
+  have bound := (max_ram_k_spec layout words checked).2.2.2
+  have sizeBound : layout.ram_size < 2 ^ 64 :=
+    padded_size_lt_option JoltISA.RAM_START_ADDRESS _ _ _ words checked
+      (by decide) (by decide) bound
+  have aligned := ram_backing_end_aligned
+    { memory_layout := layout, panic := false } (new_lowest_address_aligned config layout built)
+  rw [initialRam_size, MemoryLayout.get_total_memory_size, BitVec.toNat_ofNat,
+    Nat.mod_eq_of_lt sizeBound]
+  exact rounded_size_exact JoltISA.RAM_START_ADDRESS layout.ram_size (by decide) aligned
 
-theorem device_load_presence_of_layout (before after : JoltDevice) (address : Nat)
+/-- Device readability depends only on layout, not memory contents or panic.
+For example, an output remains readable after another output byte is stored. -/
+theorem device_readable_of_layout (before after : JoltDevice) (address : Nat)
     (same : after.memory_layout = before.memory_layout) :
-    (after.load? address).isSome = (before.load? address).isSome := by
-  unfold JoltDevice.load? JoltDevice.is_panic JoltDevice.is_termination
-    JoltDevice.is_input JoltDevice.is_output JoltDevice.is_trusted_advice
-    JoltDevice.is_untrusted_advice
-  simp only [same]
-  split_ifs <;> rfl
+    after.readable address = before.readable address := by
+  simp only [JoltDevice.readable, JoltDevice.is_input, JoltDevice.is_output,
+    JoltDevice.is_trusted_advice, JoltDevice.is_untrusted_advice,
+    JoltDevice.is_io_gap, same]
 
-theorem device_store_readable (before after : JoltDevice) (address : Nat) (value : BitVec 8)
-    (ordered : before.memory_layout.panic.toNat < before.memory_layout.termination.toNat)
-    (stored : before.store? address value = some after) :
-    (before.load? address).isSome := by
-  have writable : before.is_panic address = true ∨ before.is_termination address = true ∨
-      before.is_output address = true := by
-    unfold JoltDevice.store? at stored
-    split at stored
-    · rename_i atPanic
-      left
-      simp [JoltDevice.is_panic, atPanic, ordered]
-    · split at stored
-      · rename_i either
-        simp only [Bool.or_eq_true] at either
-        rcases either with panic | termination
-        · exact Or.inl panic
-        · exact Or.inr (Or.inl termination)
-      · split at stored
-        · rename_i output
-          exact Or.inr (Or.inr output)
-        · cases stored
-  unfold JoltDevice.load?
-  rcases writable with panic | termination | output
-  · simp [panic]
-  · simp only [termination, ↓reduceIte]
-    split_ifs <;> rfl
-  · simp only [output, ↓reduceIte]
-    split_ifs <;> rfl
-
+/-- A successful below-RAM store passed the device's readability guard.
+For example, an I/O-gap store implies its old byte has a zero-default read. -/
 theorem store_raw_device_readable (before after : SailJoltState) (address : Nat)
     (value : BitVec 8) (below : address < JoltISA.RAM_START_ADDRESS)
-    (ordered : before.jolt_device.memory_layout.panic.toNat <
-      before.jolt_device.memory_layout.termination.toNat)
     (stored : JoltISA.Mmu.store_raw? before address value = some after) :
-    (before.jolt_device.load? address).isSome := by
-  unfold JoltISA.Mmu.store_raw? at stored
-  rw [ite_eq_right (by omega)] at stored
-  split at stored
-  · cases stored
-  · split at stored
-    · cases stored
-    · cases deviceStore : before.jolt_device.store? address value with
-      | none => simp [deviceStore] at stored
-      | some device => exact device_store_readable _ _ _ _ ordered deviceStore
+    before.jolt_device.readable address = true := by
+  have checked : JoltISA.Mmu.effective_address_ok before.jolt_device address true = true := by
+    by_contra failed
+    have rejected := Bool.eq_false_iff.mpr failed
+    simp [JoltISA.Mmu.store_raw?, rejected] at stored
+  simpa only [JoltISA.Mmu.effective_address_ok, if_pos below] using checked
 
 theorem store_bytes_device_readable (address : Nat) (value : BitVec 64) :
     ∀ (offsets : List Nat) (before after : SailJoltState),
       (∀ k ∈ offsets, address + k < JoltISA.RAM_START_ADDRESS) →
-      before.jolt_device.memory_layout.panic.toNat < before.jolt_device.memory_layout.termination.toNat →
       offsets.foldl (fun current k => current.bind fun state =>
         JoltISA.Mmu.store_raw? state (address + k) (value.extractLsb' (8 * k) 8)) (some before) =
           some after →
-      ∀ k ∈ offsets, (before.jolt_device.load? (address + k)).isSome := by
+      ∀ k ∈ offsets, before.jolt_device.readable (address + k) = true := by
   intro offsets
   induction offsets with
-  | nil => intro before after below ordered stored k member; cases member
+  | nil => intro before after below stored k member; cases member
   | cons head tail ih =>
-    intro before after below ordered stored k member
+    intro before after below stored k member
     simp only [List.foldl_cons, Option.bind_some] at stored
     cases headStore : JoltISA.Mmu.store_raw? before (address + head)
         (value.extractLsb' (8 * head) 8) with
@@ -405,10 +187,10 @@ theorem store_bytes_device_readable (address : Nat) (value : BitVec 64) :
       have same := (JoltIOSetupFrame.store_raw_same _ _ _ _ headStore).1
       rcases List.mem_cons.mp member with atHead | inTail
       · subst k
-        exact store_raw_device_readable _ _ _ _ (below _ List.mem_cons_self) ordered headStore
-      · rw [← device_load_presence_of_layout before.jolt_device middle.jolt_device _ same]
+        exact store_raw_device_readable _ _ _ _ (below _ List.mem_cons_self) headStore
+      · rw [← device_readable_of_layout before.jolt_device middle.jolt_device _ same]
         exact ih middle after (fun k member => below k (List.mem_cons_of_mem _ member))
-          (by simpa only [same] using ordered) stored k inTail
+          stored k inTail
 
 theorem read_doubleword_present (byte : Nat → Option (BitVec 8)) (address : Nat)
     (present : ∀ k < 8, (byte (address + k)).isSome = true) :
@@ -424,10 +206,12 @@ theorem read_doubleword_present (byte : Nat → Option (BitVec 8)) (address : Na
   simp only [Nat.add_zero] at h0
   simp only [JoltISA.read_doubleword?, h0, h1, h2, h3, h4, h5, h6, h7, Option.isSome_some]
 
+/-- A successful aligned store has the old word recorded by the tracer.
+The RAM and I/O reads use shared memory and zero defaults; for example,
+an untouched mapped output word has old value zero. -/
 theorem store_doubleword_old_present (state after : SailJoltState) (address value : BitVec 64)
-    (result : Result Bool ExecutionResult) (present : RamBytesPresent state)
-    (ordered : state.jolt_device.memory_layout.panic.toNat <
-      state.jolt_device.memory_layout.termination.toNat)
+    (result : Result Bool ExecutionResult)
+    (alignedBase : state.jolt_device.memory_layout.get_lowest_address.toNat % 8 = 0)
     (stored : JoltISA.Mmu.store_doubleword address value state = .ok result after) :
     (JoltISA.trace_doubleword? state address).isSome = true := by
   simp only [JoltISA.Mmu.store_doubleword] at stored
@@ -438,45 +222,41 @@ theorem store_doubleword_old_present (state after : SailJoltState) (address valu
     · rename_i inRam
       split at stored
       · rename_i valid
-        have belowHeap : address.toNat < state.jolt_device.memory_layout.heap_end.toNat := by
-          simp only [JoltISA.Mmu.effective_address_ok,
-            ite_eq_right (by omega : ¬ address.toNat < JoltISA.RAM_START_ADDRESS),
-            ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at valid
-          exact valid.2
-        rw [JoltISA.trace_doubleword?, ite_eq_right (by omega)]
-        apply read_doubleword_present
-        intro k hk
-        apply present _ (by omega)
-        have bound := heap_end_le_ram_backing_end state.jolt_device
-        have multiple : JoltISA.Mmu.ram_backing_end state.jolt_device % 8 = 0 := by
-          simp [JoltISA.Mmu.ram_backing_end, JoltISA.RAM_START_ADDRESS]
-        omega
+        have below : address.toNat < JoltISA.Mmu.ram_backing_end state.jolt_device := by
+          simp only [Bool.and_eq_true, JoltISA.Mmu.effective_address_ok,
+            if_neg (by omega : ¬ address.toNat < JoltISA.RAM_START_ADDRESS),
+            decide_eq_true_eq] at valid
+          exact valid.1
+        have endAligned := ram_backing_end_aligned state.jolt_device alignedBase
+        simp [JoltISA.trace_doubleword?,
+          show ¬ address.toNat < JoltISA.RAM_START_ADDRESS by omega,
+          show address.toNat + 8 ≤ JoltISA.Mmu.ram_backing_end state.jolt_device by omega]
       · cases stored
     · rename_i notRam
       split at stored
       · rename_i finalState writes
-        rw [JoltISA.trace_doubleword?, ite_eq_left (by omega)]
+        rw [JoltISA.trace_doubleword?, if_pos (by omega)]
         apply read_doubleword_present
         intro k hk
-        apply store_bytes_device_readable address.toNat value (List.range 8) state finalState
-          ?_ ordered writes k (List.mem_range.mpr hk)
-        intro k member
-        have hk := List.mem_range.mp member
-        have base : JoltISA.RAM_START_ADDRESS = 2147483648 := rfl
-        omega
+        have readable := store_bytes_device_readable address.toNat value (List.range 8)
+          state finalState (fun k member => by
+            have hk := List.mem_range.mp member
+            have base : JoltISA.RAM_START_ADDRESS = 2147483648 := rfl
+            omega) writes k (List.mem_range.mpr hk)
+        simp [JoltDevice.load?, readable]
       · cases stored
 
-theorem HonestTrace.panic_lt_termination {joltInstance : JoltInstance SourceInstruction}
+theorem HonestTrace.preState_lowest_address_aligned {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (position : Nat) (row : TraceRow trace.bytecode)
     (atPosition : trace.rows[position]? = some row) :
-    row.preState.jolt_device.memory_layout.panic.toNat <
-      row.preState.jolt_device.memory_layout.termination.toNat := by
+    row.preState.jolt_device.memory_layout.get_lowest_address.toNat % 8 = 0 := by
   induction position generalizing row with
   | zero =>
     obtain ⟨_, _, startState⟩ := trace.starts row atPosition
     rw [startState]
-    exact new_panic_lt_termination _ _ (initial_state_device _ _ _ trace.initialized).1
+    change trace.initialState.jolt_device.memory_layout.get_lowest_address.toNat % 8 = 0
+    exact initial_state_lowest_address_aligned _ _ _ trace.initialized
   | succ position ih =>
     obtain ⟨inRange, _⟩ := Array.getElem?_eq_some_iff.mp atPosition
     have previousAt : trace.rows[position]? = some trace.rows[position] :=
@@ -489,24 +269,21 @@ theorem HonestTrace.panic_lt_termination {joltInstance : JoltInstance SourceInst
     · rw [link.2, same]; exact previous
     · obtain ⟨_, _, _, _, startState⟩ := link
       rw [startState]
-      change trace.rows[position].postState.jolt_device.memory_layout.panic.toNat <
-        trace.rows[position].postState.jolt_device.memory_layout.termination.toNat
+      change trace.rows[position].postState.jolt_device.memory_layout.get_lowest_address.toNat % 8 = 0
       rw [same]
       exact previous
 
 /-- A successful register-read/store sequence has an old word at its accessed
-address, provided initialized RAM bytes remain present and panic precedes termination.
+address, provided the mapped RAM domain is word-aligned.
 `addressOf` maps the effective address to the accessed address; the two masks
 allow an alignment check before or after reading the value source.
 For example, SD uses `id`, mask 0 before the read and mask 7 after it.
 Jolt's tracer: `tracer/src/instruction/sd.rs` (`SD::exec`) and
-`tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+`tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 private theorem store_sequence_old_present (base value : JoltISA.Src) (imm : BitVec 64)
     (addressOf : BitVec 64 → BitVec 64) (beforeMask afterMask : BitVec 64)
     (fault : ExceptionType) (state after : SailJoltState)
-    (present : RamBytesPresent state)
-    (ordered : state.jolt_device.memory_layout.panic.toNat <
-      state.jolt_device.memory_layout.termination.toNat)
+    (aligned : state.jolt_device.memory_layout.get_lowest_address.toNat % 8 = 0)
     (runs : (do
       let baseValue ← JoltISA.readSrc base
       let ea := baseValue + imm
@@ -539,14 +316,14 @@ private theorem store_sequence_old_present (base value : JoltISA.Src) (imm : Bit
               (addressOf (JoltISA.sourceValue base state + imm)) storedValue state with
           | error failure final => simp only [EStateM.bind, stored] at runs; cases runs
           | ok result final =>
-            exact store_doubleword_old_present _ _ _ _ _ present ordered stored
+            exact store_doubleword_old_present _ _ _ _ _ aligned stored
         · cases runs
     · cases runs
 
 /-- Runtime advice leaves SD and floor stores unchanged; for example,
 VirtualStoreH still stores its source register, not an advice value.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) and
-`tracer/src/instruction/sd.rs` (`SD::exec`) at `c6703570`. -/
+`tracer/src/instruction/sd.rs` (`SD::exec`) at `ff6fc6568`. -/
 private theorem store_runtime_advice {instruction : JoltISA.Instr}
     (advice : instruction.RuntimeAdvice) (base value : JoltISA.Src) (imm : BitVec 64)
     (fault : ExceptionType)
@@ -562,7 +339,7 @@ row in an initialized, linked honest trace.
 `isStore` identifies both the store and its accessed address; floor stores
 clear all three low bits, so a byte floor store at effective address 11 reads
 its old word at 8.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`) at `ff6fc6568`. -/
 theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (inBounds : i < trace.rows.size) (address : BitVec 64)
@@ -574,8 +351,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
       | _ => False) :
     (JoltISA.trace_doubleword? trace.rows[i].preState address).isSome = true := by
   have atPosition := Array.getElem?_eq_getElem inBounds
-  have present := trace.ram_present i trace.rows[i] atPosition
-  have ordered := trace.panic_lt_termination i trace.rows[i] atPosition
+  have aligned := trace.preState_lowest_address_aligned i trace.rows[i] atPosition
   have runs := trace.executes trace.rows[i] (Array.getElem_mem inBounds)
   have andZero (ea : BitVec 64) : ea &&& 0 = 0 := BitVec.and_zero
   split at isStore
@@ -585,7 +361,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
       (Or.inl selected), selected] at runs
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm id 0 7
-      (ExceptionType.E_SAMO_Addr_Align ()) trace.rows[i].preState trace.rows[i].postState present ordered ?_
+      (ExceptionType.E_SAMO_Addr_Align ()) trace.rows[i].preState trace.rows[i].postState aligned ?_
     simpa only [andZero, ↓reduceIte, id_eq] using! runs
   · rename_i base value imm fault selected
     subst address
@@ -593,7 +369,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
       (Or.inr (Or.inl selected)), selected] at runs
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 0 0
-      fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
+      fault trace.rows[i].preState trace.rows[i].postState aligned ?_
     simpa only [andZero, ↓reduceIte] using! runs
   · rename_i base value imm fault selected
     subst address
@@ -601,7 +377,7 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
       (Or.inr (Or.inr (Or.inl selected))), selected] at runs
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 1 0
-      fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
+      fault trace.rows[i].preState trace.rows[i].postState aligned ?_
     simpa only [andZero, ↓reduceIte] using! runs
   · rename_i base value imm fault selected
     subst address
@@ -609,6 +385,6 @@ theorem HonestTrace.store_word_present {joltInstance : JoltInstance SourceInstru
       (Or.inr (Or.inr (Or.inr selected))), selected] at runs
     simp only [JoltISA.execInstr] at runs
     refine store_sequence_old_present base value imm (fun ea => ea &&& ~~~7) 3 0
-      fault trace.rows[i].preState trace.rows[i].postState present ordered ?_
+      fault trace.rows[i].preState trace.rows[i].postState aligned ?_
     simpa only [andZero, ↓reduceIte] using! runs
   · exact False.elim isStore

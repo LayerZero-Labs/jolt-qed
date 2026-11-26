@@ -4,6 +4,7 @@ import JoltConstraints.translation.Constraints.BytecodeRaAtEntryEqOne
 import JoltConstraints.translation.Constraints.BytecodeRaChunkBooleanity
 import JoltConstraints.translation.Constraints.BytecodeRaChunkHammingWeight
 import JoltConstraints.translation.Constraints.ImmEqBytecodeRead
+import JoltConstraints.translation.Constraints.InstructionAddressCanonical
 import JoltConstraints.translation.Constraints.InstructionFlagsEqBytecodeRead
 import JoltConstraints.translation.Constraints.InstructionRaChunkBooleanity
 import JoltConstraints.translation.Constraints.InstructionRaChunkHammingWeight
@@ -21,7 +22,7 @@ import JoltConstraints.translation.Constraints.NextIsNoopEqShift
 import JoltConstraints.translation.Constraints.NextIsVirtualEqShift
 import JoltConstraints.translation.Constraints.NextPCEqPCPlusOneIfInline
 import JoltConstraints.translation.Constraints.NextPCEqShift
-import JoltConstraints.translation.Constraints.NextUnexpandedPCEqLookupIfShouldJump
+import JoltConstraints.translation.Constraints.NextUnexpandedPCEqLookupIfJump
 import JoltConstraints.translation.Constraints.NextUnexpandedPCEqPCPlusImmIfShouldBranch
 import JoltConstraints.translation.Constraints.NextUnexpandedPCEqShift
 import JoltConstraints.translation.Constraints.NextUnexpandedPCUpdateOtherwise
@@ -31,10 +32,8 @@ import JoltConstraints.translation.Constraints.ProductEqLeftInputMulRightInput
 import JoltConstraints.translation.Constraints.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
 import JoltConstraints.translation.Constraints.RamAddrEqZeroIfNotLoadStore
 import JoltConstraints.translation.Constraints.RamAddressEqRamRaf
-import JoltConstraints.translation.Constraints.RamHammingWeightBooleanity
 import JoltConstraints.translation.Constraints.RamOutputEqPublicIo
 import JoltConstraints.translation.Constraints.RamRaChunkBooleanity
-import JoltConstraints.translation.Constraints.RamRaChunkHammingWeight
 import JoltConstraints.translation.Constraints.RamRaEqChunkProduct
 import JoltConstraints.translation.Constraints.RamReadEqRamWriteIfLoad
 import JoltConstraints.translation.Constraints.RamReadEqRdWriteIfLoad
@@ -59,7 +58,9 @@ import JoltConstraints.translation.Constraints.Rs2EqRamWriteIfStore
 import JoltConstraints.translation.Constraints.Rs2RaEqBytecodeRead
 import JoltConstraints.translation.Constraints.Rs2ValueEqRegistersRead
 import JoltConstraints.translation.Constraints.ShouldBranchEqLookupOutputMulBranch
-import JoltConstraints.translation.Constraints.ShouldJumpEqJumpMulNotNextIsNoop
+import JoltConstraints.translation.Constraints.HaltEndRule
+import JoltConstraints.translation.Constraints.RamAccessCount
+import JoltConstraints.translation.Constraints.RamWriteProtected
 import JoltConstraints.translation.Constraints.UnexpandedPCEqBytecodeRead
 
 open LeanRV64D
@@ -73,7 +74,7 @@ namespace JoltConstraints
 structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
     (bytecode : Array JoltInstructionRow)
     (initialRam : Nat → BitVec 64)
-    (io : JoltDevice)
+    (io : JoltPublicIo)
     (entry : Fin (2 ^ params.logBytecodeK))
     (witness : WitnessType F params) : Prop where
   -- Stage 1: base RV64 relations
@@ -91,7 +92,7 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
   assertLookupOne : JoltConstraints.assertLookupOne witness
   rdWriteEqLookupIfWriteLookupToRd : JoltConstraints.rdWriteEqLookupIfWriteLookupToRd witness
   rdWriteEqPCPlusConstIfJump : JoltConstraints.rdWriteEqPCPlusConstIfJump witness
-  nextUnexpandedPCEqLookupIfShouldJump : JoltConstraints.nextUnexpandedPCEqLookupIfShouldJump witness
+  nextUnexpandedPCEqLookupIfJump : JoltConstraints.nextUnexpandedPCEqLookupIfJump witness
   nextUnexpandedPCEqPCPlusImmIfShouldBranch : JoltConstraints.nextUnexpandedPCEqPCPlusImmIfShouldBranch witness
   nextUnexpandedPCUpdateOtherwise : JoltConstraints.nextUnexpandedPCUpdateOtherwise witness
   nextPCEqPCPlusOneIfInline : JoltConstraints.nextPCEqPCPlusOneIfInline witness
@@ -99,7 +100,10 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
   -- Stage 2: product and RAM relations
   productEqLeftInputMulRightInput : JoltConstraints.productEqLeftInputMulRightInput witness
   shouldBranchEqLookupOutputMulBranch : JoltConstraints.shouldBranchEqLookupOutputMulBranch witness
-  shouldJumpEqJumpMulNotNextIsNoop : JoltConstraints.shouldJumpEqJumpMulNotNextIsNoop witness
+  haltEndRule : JoltConstraints.haltEndRule io.panic witness
+  ramWriteProtected : JoltConstraints.ramWriteProtected
+    (fun k => ramWriteProtectedMask bytecode io.memory_layout k.val) witness
+  ramAccessCount : JoltConstraints.ramAccessCount witness
   ramReadValueEqRamRead : JoltConstraints.ramReadValueEqRamRead witness
   ramWriteValueEqRamReadWrite : JoltConstraints.ramWriteValueEqRamReadWrite witness
   ramAddressEqRamRaf : JoltConstraints.ramAddressEqRamRaf io.memory_layout witness
@@ -122,6 +126,8 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
   lookupOutputEqInstructionReadRaf : JoltConstraints.lookupOutputEqInstructionReadRaf witness
   leftLookupOperandEqInstructionRaf : JoltConstraints.leftLookupOperandEqInstructionRaf witness
   rightLookupOperandEqInstructionRaf : JoltConstraints.rightLookupOperandEqInstructionRaf witness
+  -- Akita build only (characteristic below 2^128): canonical identity-RAF addresses.
+  instructionAddressCanonical : JoltConstraints.instructionAddressCanonical witness
   registersValEqPrefixRdInc : JoltConstraints.registersValEqPrefixRdInc witness
   -- Stage 6: bytecode and selector relations
   pcEqBytecodeRead : JoltConstraints.pcEqBytecodeRead witness
@@ -138,13 +144,11 @@ structure ConstraintEquations {F : Type} [Field F] {params : WitnessParams}
   instructionRaChunkBooleanity : JoltConstraints.instructionRaChunkBooleanity witness
   bytecodeRaChunkBooleanity : JoltConstraints.bytecodeRaChunkBooleanity witness
   ramRaChunkBooleanity : JoltConstraints.ramRaChunkBooleanity witness
-  ramHammingWeightBooleanity : JoltConstraints.ramHammingWeightBooleanity witness
   ramRaEqChunkProduct : JoltConstraints.ramRaEqChunkProduct witness
   instructionRaEqChunkProduct : JoltConstraints.instructionRaEqChunkProduct witness
   -- Stage 7: hamming weights
   instructionRaChunkHammingWeight : JoltConstraints.instructionRaChunkHammingWeight witness
   bytecodeRaChunkHammingWeight : JoltConstraints.bytecodeRaChunkHammingWeight witness
-  ramRaChunkHammingWeight : JoltConstraints.ramRaChunkHammingWeight witness
 
 /-- The relation for a fixed instance and explicit prover inputs. Trusted advice
 is part of the instance; Jolt's verifier holds a commitment to it, and we model

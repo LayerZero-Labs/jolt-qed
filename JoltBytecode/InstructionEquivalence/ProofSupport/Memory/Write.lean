@@ -268,10 +268,11 @@ theorem JoltISA.Mmu.store_doubleword_eq_sail (js : SailJoltState) (addr value : 
     (hda : AlignedDwordAccess addr)
     (hpmp : Assumptions.StorePmpOk addr 8 js.sail)
     (hmmio : Assumptions.NotWritableMmio addr 8 js.sail)
-    (hlegal : JoltISA.Mmu.effective_address_ok js.jolt_device addr.toNat true = true) :
+    (hlegal : JoltISA.Mmu.effective_address_ok js.jolt_device addr.toNat true = true)
+    (hprotected : JoltISA.Mmu.protected_store_ok js addr.toNat value 8 = true) :
     JoltISA.Mmu.store_doubleword addr value js =
       liftSail (vmem_write_addr (Virtaddr addr) 8 value (Store Data) false false false) js := by
-  rw [JoltISA.Mmu.store_doubleword_ram js addr value hda.align hmmio.ram hlegal]
+  rw [JoltISA.Mmu.store_doubleword_ram js addr value hda.align hmmio.ram hlegal hprotected]
   unfold liftSail
   rw [vmem_write_addr_dword_store_reduces addr value js.sail hpriv hmprv hda.toAlignedAccess
     hpmp hmmio, ← JoltISA.Mmu.write_ram_doubleword_eq]
@@ -293,14 +294,14 @@ theorem execInstr_sd_vreg_run_of_write (base value : VReg) (imm : BitVec 12)
     (hmprv : Assumptions.MstatusMprvZero js.sail)
     (hpmp : Assumptions.StorePmpOk (js.vregs base + sign_extend (m := 64) imm) 8 js.sail)
     (hmmio : Assumptions.NotWritableMmio (js.vregs base + sign_extend (m := 64) imm) 8 js.sail)
-    (hjolt : Assumptions.JoltRamStoreOk (js.vregs base + sign_extend (m := 64) imm) js) :
+    (hjolt : Assumptions.JoltRamStoreOk (js.vregs base + sign_extend (m := 64) imm) js (js.vregs value) 8) :
     (execInstr (JoltISA.Encoded.SD (.vreg base) (.vreg value) imm)).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } := by
   have hda := aligned_dword_access_of_align _ h_align
   rw [vmem_write_addr_dword_store_reduces _ _ js.sail hpriv hmprv hda.toAlignedAccess hpmp hmmio] at h
   cases h
   rw [execInstr_sd_vreg_run base value imm js h_align h_ram
-    (Mmu.effective_address_ok_of_store h_ram hjolt), Mmu.write_ram_doubleword_eq]
+    (Mmu.effective_address_ok_of_store h_ram hjolt) hjolt.preserves_protected, Mmu.write_ram_doubleword_eq]
 
 -- The same, from architectural-register base and value sources.
 theorem execInstr_sd_xreg_xreg_run_of_write
@@ -319,7 +320,7 @@ theorem execInstr_sd_xreg_xreg_run_of_write
     (hmprv : Assumptions.MstatusMprvZero js.sail)
     (hpmp : Assumptions.StorePmpOk (baseValue + sign_extend (m := 64) imm) 8 js.sail)
     (hmmio : Assumptions.NotWritableMmio (baseValue + sign_extend (m := 64) imm) 8 js.sail)
-    (hjolt : Assumptions.JoltRamStoreOk (baseValue + sign_extend (m := 64) imm) js) :
+    (hjolt : Assumptions.JoltRamStoreOk (baseValue + sign_extend (m := 64) imm) js stored 8) :
     (execInstr (JoltISA.Encoded.SD (.xreg base) (.xreg value) imm)).run js =
       .ok RETIRE_SUCCESS { js with sail := s' } := by
   have hda := aligned_dword_access_of_align _ h_align
@@ -327,7 +328,7 @@ theorem execInstr_sd_xreg_xreg_run_of_write
     at hwrite
   cases hwrite
   rw [execInstr_sd_xreg_xreg_run base value imm js baseValue stored hbase hvalue h_align h_ram
-    (Mmu.effective_address_ok_of_store h_ram hjolt), Mmu.write_ram_doubleword_eq]
+    (Mmu.effective_address_ok_of_store h_ram hjolt) hjolt.preserves_protected, Mmu.write_ram_doubleword_eq]
 
 end JoltISA
 

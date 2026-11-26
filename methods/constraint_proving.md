@@ -5,20 +5,20 @@ goal is to establish that a witness produced from a Rust-accepted execution
 satisfies the corresponding Jolt constraint. A Lean predicate matching a Rust
 equation is only the starting point; it does not establish completeness.
 
-## Current state (2026-11-02)
+## Current state (2026-11-25)
 
-Start with [soundness.md](soundness.md#current-state-2026-11-02) for the pins and build status, and with [constraints.md](../JoltConstraints/documentation/constraints.md#migration-outline) for the migration order.
-The bytecode library builds with its seven existing `sorry`s, but the constraints do not build against the migrated bytecode.
-Do not read an old `DONE` label as a claim about `c6703570`.
+All 63 constraints in [constraints.md](../JoltConstraints/documentation/constraints.md) have a completeness proof at the Jolt pin `ff6fc6568`, and neither `JoltBytecode/` nor `JoltConstraints/` has a `sorry`.
+The last three, (01), (08) and (11), were proved on 2026-11-25 (`HonestTrace.access_noWrap`).
+Use this workflow when a re-pin or a model change reopens a completeness theorem.
 An equation definition, a proof body in source, a successful module build and a source-correspondence audit are different evidence; report which of these you have actually checked.
 
-Read target files without editing the Jolt checkout:
+Read target files without editing the Jolt checkout, at the recorded pin:
 
 ```sh
-git -C /Users/ari.biswas/Work-with-A16z/jolt show c6703570:<path>
+git -C <jolt checkout> show ff6fc6568:<path>
 ```
 
-The target sources for the migration are:
+The 2026-11-02 constraints migration, which targeted `c6703570`, read these sources:
 
 | Concern | Target Jolt source |
 |---|---|
@@ -43,7 +43,7 @@ Rules that apply to every migration proof:
 
 - Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed.
 - Helper statements may change within the approved scope; do not add a premise to an existing theorem without Ari's permission.
-- The completeness obligations (01), (37), (38) and `HonestTrace.prover_config_holds_highest_slot` (#1951 item 4) stay as they are; the RAM-bounds theorem `HonestTrace.witness_params_ram_bounds` is proved since Step 5.
+- Every completeness theorem is proved, including (01), (37), (38), `HonestTrace.prover_config_holds_highest_slot` (#1951 item 4) and the RAM-bounds theorem `HonestTrace.witness_params_ram_bounds`.
   Add no new `sorry`, and never replace a proved fact with `sorry`.
 - Do not use `native_decide` or `decide +kernel`, and do not raise `maxHeartbeats`.
 - Before a Lake build, run `pgrep -fl lake` and wait if another build is active; build serially.
@@ -94,8 +94,8 @@ and what is already proved or admitted; do not count a theorem containing
 
 ## 2. Audit the Rust-to-Lean correspondence first
 
-Inspect the **local Rust checkout** supplied by the user, currently
-`$HOME/Work-with-A16z/jolt`. GitHub links are documentation pointers,
+Inspect the **local Rust checkout** supplied by the user, at the recorded pin
+(`ff6fc6568` at the time of writing). GitHub links are documentation pointers,
 not the source scan. Record the local Rust commit and relevant worktree changes
 so the comparison is reproducible.
 
@@ -147,12 +147,13 @@ these before introducing any new condition:
 | `HonestTrace.noEarlyNextPCChange`, `HonestTrace.registerOperandsCanonical` | Facts about what `expand` emits (`trace_interface.lean`), from `expand_program_rows_valid`. Check which property is actually needed. |
 | `initialized`, `HonestTrace.startsAtEntry`, `HonestTrace.startsAtInitial` | Initial-state shape, first bytecode entry, and first row's prepared state. |
 | `linked`, `HonestTrace.linkedState`, `HonestTrace.successor` | Consecutive state preparation and the next row's index or source address after a final row. |
-| `stops`, `runs_until_stop`, `nonempty` | Jolt's tracer's stopping rule (a self-jump that would repeat, a16z/jolt PR #2109), and a nonempty run. |
+| `stops`, `runs_until_stop`, `nonempty` | Jolt's tracer's stopping rule: the last row is an explicit halt (`jolt.success` or a panic EBREAK), no earlier row is one, and the run is nonempty. |
 
 `HonestTrace.Terminated` (`execution_conditions.lean`) packages `stops` for a
 nonempty trace; `HonestTrace.terminated` derives it. Whether the code in memory
-stays the bytecode is not a trace field: it follows from the instance assumption
-`JoltInstance.CodeUnchanged` (`HonestTrace.code_unchanged`).
+stays the bytecode is not a trace field and not an assumption: Jolt's tracer
+rejects every store that changes a code byte, and the whole-run proof derives
+that the code stays intact (`JoltCodeIntact.of_block`).
 
 If a proof stalls, search the `JoltBytecode/` project before writing a new
 assumption or re-proving ISA facts. Useful starting points are
@@ -219,11 +220,14 @@ has residual `-2^64` in the proof field. The
 [report](../bug-report/ram-address-wrap.md) traces this through a valid ELF,
 the tracer, proof-trace conversion, witness extraction, and the R1CS row. A
 no-wrap premise would exclude that Rust-accepted execution, so it cannot be
-added just to close the theorem. Its completeness theorem remains `sorry`
-because the counterexample shows a Jolt bug in the current Rust behavior and
-constraint; it is not a theorem awaiting only more proof tactics. Once Jolt
-fixes the issue, inspect the updated local Rust code, rerun the reproducer,
-recheck Rust-to-Lean correspondence, and then try the theorem again.
+added just to close the theorem. The theorem stayed `sorry` while the
+counterexample showed a Jolt bug in the Rust behavior and constraint of that
+time; it was not a theorem awaiting only more proof tactics. At `ff6fc6568`
+Jolt's tracer accepts a memory address only in `[0x40000000, 2^63 + 2^31)`,
+so it rejects the wrapping load at address `0`, and (01) was proved on
+2026-11-25 without a new premise. This is the sequence to follow when Jolt
+fixes an issue: inspect the updated Rust code, rerun the reproducer, recheck
+Rust-to-Lean correspondence, and then try the theorem again.
 
 Record the final status in the relevant review notes: proved, translation
 issue, Rust completeness issue, proof gap, or user-deferred. Include the

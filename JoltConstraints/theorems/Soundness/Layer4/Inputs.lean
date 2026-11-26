@@ -1,4 +1,5 @@
-import JoltConstraints.theorems.Soundness.Layer4.Table
+import JoltConstraints.theorems.Soundness.Layer1.Bytecode
+import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
 
 open LeanRV64D
 
@@ -34,7 +35,7 @@ include charAbove2pow127 context equations
 source columns, which are still field values.
 For example, LD selects RdWriteValue, while VirtualShiftDataB selects Rs2Value
 plus the signed immediate.
-See Jolt's verifier at c6703570, `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`
+See Jolt's verifier at ff6fc6568, `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`
 (`InputVirtualization::unbatched_relation`). -/
 theorem instructionInputs_of_selected_bytecode
     (t : Fin params.traceLength) (slot : Fin (2 ^ params.logBytecodeK))

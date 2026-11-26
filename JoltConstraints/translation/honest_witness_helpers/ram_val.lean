@@ -1,4 +1,3 @@
-import JoltConstraints.translation.honest_trace
 import JoltConstraints.translation.witness_helpers.ram_state
 import JoltConstraints.translation.witness_helpers.ram_ra
 import JoltConstraints.translation.honest_witness_helpers.ram_read_value
@@ -13,7 +12,7 @@ namespace HonestWitness
 
 open TraceWitness
 
--- Rust: [materialize_ram_val](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/ram.rs).
+-- Rust: [materialize_ram_val](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/backend/trace/ram.rs).
 -- Start from the initial image and apply preceding captured stores. At the
 -- current accessed address, use the captured PRE-access read value. This override
 -- matters for device words whose readback differs from their last stored value.

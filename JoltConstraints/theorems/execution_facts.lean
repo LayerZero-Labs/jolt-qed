@@ -4,11 +4,6 @@ one is proved from the instruction semantics in JoltBytecode.
 -/
 import JoltConstraints.translation.honest_trace
 import JoltConstraints.theorems.layout_facts
-import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.MmuJolt
-import Mathlib.Tactic.IntervalCases
-import JoltBytecode.InstructionEquivalence.ProofSupport.BundleLemmas
-import JoltBytecode.InstructionEquivalence.ProofSupport.Preservation
 
 open LeanRV64D
 
@@ -16,112 +11,13 @@ set_option autoImplicit false
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
-namespace SailAndVRegsUnchanged
-
--- A successful step leaves Sail state and virtual registers as they were.
-def Preserves {Value : Type} (step : JoltMonad Value) : Prop :=
-  StatePreservation.Preserves
-    (fun before after => after.sail = before.sail ∧ after.vregs = before.vregs) step
-
-theorem pure_rule {Value : Type} (value : Value) : Preserves (pure value) :=
-  StatePreservation.pure_rule
-    (relation := fun (before after : SailJoltState) =>
-      after.sail = before.sail ∧ after.vregs = before.vregs)
-    (fun _ => ⟨rfl, rfl⟩) value
-
--- Composing two such steps preserves both components.
-theorem bind_rule {Value Next : Type} {first : JoltMonad Value}
-    {next : Value → JoltMonad Next}
-    (keepsFirst : Preserves first) (keepsNext : ∀ value, Preserves (next value)) :
-    Preserves (first >>= next) :=
-  StatePreservation.bind_rule
-    (fun _ _ _ first next => ⟨next.1.trans first.1, next.2.trans first.2⟩)
-    keepsFirst keepsNext
-
--- Reading a register, architectural or virtual, changes neither component.
-theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) := by
-  intro state after value runs
-  cases source with
-  | vreg register =>
-    simp only [JoltISA.readSrc_vreg, readVReg_run] at runs
-    cases runs
-    exact ⟨rfl, rfl⟩
-  | xreg register =>
-    exact StatePreservation.liftSail_rule
-      (relation := fun before after => after.sail = before.sail ∧
-        after.vregs = before.vregs)
-      (fun _ _ same => ⟨same, rfl⟩)
-      (fun sail after value runs => rX_bits_pure register sail value after runs)
-      state after value runs
-
-theorem get_rule : Preserves (get : JoltMonad SailJoltState) :=
-  StatePreservation.get_rule (fun _ => ⟨rfl, rfl⟩)
-
-theorem throw_rule {Value : Type} (failure : Error exception) :
-    Preserves (throw failure : JoltMonad Value) :=
-  StatePreservation.throw_rule _ failure
-
--- A modification that keeps both components unchanged has the same property.
-theorem modify_rule (change : SailJoltState → SailJoltState)
-    (keeps : ∀ state,
-      (change state).sail = state.sail ∧ (change state).vregs = state.vregs) :
-    Preserves (modify change : JoltMonad Unit) :=
-  StatePreservation.modify_rule change keeps
-
--- Loading one byte changes neither component.
-theorem load_rule (address : BitVec 64) : Preserves (JoltISA.Mmu.load address) := by
-  intro state after value runs
-  rw [JoltISA.Mmu.load_state runs]
-  exact ⟨rfl, rfl⟩
-
--- Reading host-call bytes through MMU loads changes neither component.
-theorem readHostBytes_rule (overflowChecks incrementAfterLast : Bool) {width : Nat}
-    (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    Preserves (JoltISA.readHostBytes JoltISA.Mmu.load
-      overflowChecks incrementAfterLast pointer count bytes) := by
-  induction count generalizing pointer bytes with
-  | zero => exact pure_rule _
-  | succ count ih =>
-    dsimp only [JoltISA.readHostBytes]
-    refine bind_rule (load_rule _) (fun result => ?_)
-    cases result with
-    | Err failure => exact pure_rule _
-    | Ok byte =>
-      split_ifs
-      · exact bind_rule (throw_rule _) (fun _ => ih _ _)
-      · exact bind_rule (pure_rule _) (fun _ => ih _ _)
-
-end SailAndVRegsUnchanged
-
-namespace SailUnchanged
-
--- A successful Jolt step preserves the Sail component of its state.
-def Preserves {Value : Type} (step : JoltMonad Value) : Prop :=
-  StatePreservation.Preserves (fun before after => after.sail = before.sail) step
-
-theorem read_rule (source : JoltISA.Src) : Preserves (JoltISA.readSrc source) :=
-  fun state after value runs =>
-    (SailAndVRegsUnchanged.read_rule source state after value runs).1
-
-end SailUnchanged
-
 -- A successful HostIO call may append advice; it leaves Sail state and virtual
 -- registers unchanged.
 theorem execHostIO_keeps_state (state after : SailJoltState) (result : ExecutionResult)
     (runs : JoltISA.execHostIO state = .ok result after) :
     after.sail = state.sail ∧ after.vregs = state.vregs := by
-  have keeps : SailAndVRegsUnchanged.Preserves JoltISA.execHostIO := by
-    unfold JoltISA.execHostIO JoltISA.execHostIOWith
-    refine SailAndVRegsUnchanged.bind_rule SailAndVRegsUnchanged.get_rule (fun config => ?_)
-    dsimp only
-    split
-    · exact SailAndVRegsUnchanged.pure_rule _
-    · preservation_auto [SailAndVRegsUnchanged.readHostBytes_rule _ _ _ _ _,
-        SailAndVRegsUnchanged.read_rule _, SailAndVRegsUnchanged.pure_rule _,
-        SailAndVRegsUnchanged.throw_rule _,
-        SailAndVRegsUnchanged.modify_rule _ (fun _ => ⟨rfl, rfl⟩)]
-        using SailAndVRegsUnchanged.bind_rule
-  exact keeps state after result runs
+  rcases JoltISA.execHostIO_result state with result' | ⟨_, result'⟩ <;>
+    rw [result'] at runs <;> cases runs <;> exact ⟨rfl, rfl⟩
 
 theorem execHostIO_keeps_sail (state after : SailJoltState) (result : ExecutionResult)
     (runs : JoltISA.execHostIO state = .ok result after) :
@@ -442,6 +338,12 @@ theorem execHostIO_rule : Preserves JoltISA.execHostIO :=
   regs_unchanged_rule (fun state after result runs => by
     rw [execHostIO_keeps_sail state after result runs])
 
+/-- Recording a halt keeps the register map; for example, setting panic only
+updates the device claim and CPU halt marker. -/
+theorem recordHalt_rule (kind : JoltHaltKind) :
+    Preserves (modify (JoltISA.recordHalt kind) : JoltMonad Unit) :=
+  regs_unchanged_rule (fun _ _ _ runs => by cases runs; rfl)
+
 end RegistersKept
 
 macro "registers_kept_auto" : tactic => `(tactic|
@@ -458,6 +360,7 @@ macro "registers_kept_auto" : tactic => `(tactic|
   | with_reducible exact RegistersKept.load_doubleword_rule _
   | with_reducible exact RegistersKept.store_doubleword_rule _ _
   | with_reducible exact RegistersKept.execHostIO_rule
+  | with_reducible exact RegistersKept.recordHalt_rule _
   | split
   | refine RegistersKept.bind_rule ?_ (fun _ => ?_))
 
@@ -482,7 +385,7 @@ theorem execInstr_keeps_registers (instruction : JoltISA.Instr) (state after : S
         exact RegistersKept.bind_rule (RegistersKept.write_rule destination adviceValue)
           (fun _ => RegistersKept.pure_rule _)
           { before with adviceTape := tape } afterLoad value loadRuns beforePresent
-    all_goals simp only [JoltISA.execInstr]
+    all_goals simp only [JoltISA.execInstr, JoltISA.execHalt]
     all_goals registers_kept_auto
   exact keeps state after result runs present
 
@@ -519,18 +422,13 @@ theorem initial_state_registers_present {Source : Type} (joltInstance : JoltInst
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
     AllRegistersPresent initialState.sail := by
-  unfold JoltInstance.initial_state at built
-  cases layoutResult : joltInstance.memory_layout with
-  | none =>
-    simp only [layoutResult, bind, Option.bind] at built
-    cases built
-  | some layout =>
-    simp only [layoutResult, bind, Option.bind] at built
-    repeat' split at built
-    all_goals first
-      | (cases built
-         exact init_state_registers_present _ _ _ _ _)
-      | cases built
+  obtain ⟨layout, _, _, _, _, built⟩ := initial_state_build joltInstance privateInputs initialState built
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ built
+  rw [shape]
+  exact init_state_registers_present joltInstance.program.entry_address
+    (initialRam layout joltInstance.program.memory_init)
+    { panic := false, memory_layout := layout }
+    { bytes := privateInputs.advice_tape, readPosition := 0 } {}
 
 -- In an honest trace, every row starts with every Sail register present.
 theorem HonestTrace.registers_present {joltInstance : JoltInstance SourceInstruction}
@@ -716,24 +614,19 @@ theorem init_state_sourceValue (entryAddress : BitVec 64) (ram : Array (BitVec 8
 
 -- The instance's initial state has every register, real or virtual, at 0, as Rust's
 -- Cpu::new sets them.
--- See : jolt/tracer/src/emulator/cpu.rs:448 at 5def437f (x: [0; REGISTER_COUNT])
+-- See : jolt/tracer/src/emulator/cpu.rs:464 at ff6fc6568 (x: [0; REGISTER_COUNT])
 theorem initial_state_sourceValue {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState)
     (source : JoltISA.Src) :
     JoltISA.sourceValue source initialState = 0 := by
-  unfold JoltInstance.initial_state at built
-  cases layoutResult : joltInstance.memory_layout with
-  | none =>
-    simp only [layoutResult, bind, Option.bind] at built
-    cases built
-  | some layout =>
-    simp only [layoutResult, bind, Option.bind] at built
-    repeat' split at built
-    all_goals first
-      | (cases built
-         exact init_state_sourceValue _ _ _ _ _ source)
-      | cases built
+  obtain ⟨layout, _, _, _, _, built⟩ := initial_state_build joltInstance privateInputs initialState built
+  obtain ⟨_, _, _, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ built
+  rw [shape]
+  exact init_state_sourceValue joltInstance.program.entry_address
+    (initialRam layout joltInstance.program.memory_init)
+    { panic := false, memory_layout := layout }
+    { bytes := privateInputs.advice_tape, readPosition := 0 } {} source
 
 -- An address whose low three bits are 0 is a multiple of 8.
 theorem toNat_mod_eight (address : BitVec 64) (lowBits : address &&& 7 = 0) :
@@ -837,58 +730,46 @@ theorem HonestTraceRow.store_aligned {bytecode : Array JoltInstructionRow}
 
 namespace JoltISA.Mmu
 
--- A byte below address 8 reads 0: Rust's device returns 0 below RAM outside its regions.
--- See : jolt/tracer/src/emulator/mmu.rs:450-478 (load_raw)
---       jolt/common/src/jolt_device.rs:121-148 (JoltDevice::load)
+/-- An unmapped byte below address eight cannot be read.
+For example, address zero is the RAM selector sentinel and fails the tracer's guard.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`assert_effective_address`). -/
 theorem load_raw_low (state : SailJoltState) (config : MemoryConfig)
     (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
     (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
     (address : Nat) (low : address < 8) :
-    load_raw? state address = some 0 := by
-  obtain ⟨notInput, notTrusted, notUntrusted, notOutput, notPanic, notTermination, belowEnd⟩ :=
+    load_raw? state address = none := by
+  obtain ⟨notInput, notTrusted, notUntrusted, notOutput, belowEnd⟩ :=
     state.jolt_device.low_address_free config built aboveEight address low
-  have ramStart : JoltISA.RAM_START_ADDRESS = 0x80000000 := rfl
-  unfold load_raw? effective_address_ok JoltDevice.load?
-  simp only [notInput, notTrusted, notUntrusted, notOutput, notPanic, notTermination, ramStart]
-  have belowRam : address < 2147483648 := by omega
-  have zeroFilled : address ≤ 2147483648 - 8 := by omega
-  simp [belowRam, zeroFilled, belowEnd, show ¬ 2147483648 ≤ address by omega,
-    show ¬ 4128 ≤ address by omega, show ¬ 33554432 ≤ address by omega,
-    show ¬ 201326592 ≤ address by omega, show ¬ 268435456 ≤ address by omega,
-    show ¬ 268439552 ≤ address by omega]
+  simp [load_raw?, effective_address_ok, JoltDevice.readable, JoltDevice.is_io_gap,
+    notInput, notTrusted, notUntrusted, notOutput, Nat.not_le.mpr belowEnd,
+    show address < RAM_START_ADDRESS by unfold RAM_START_ADDRESS; omega]
 
--- A byte below address 8 cannot be written: no output, panic or termination word is there.
--- See : jolt/tracer/src/emulator/mmu.rs:644-667 (store_raw)
+/-- An unmapped byte below address eight cannot be written.
+For example, a store to the zero sentinel fails before its protection check.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`assert_effective_address`). -/
 theorem store_raw_low (state : SailJoltState) (config : MemoryConfig)
     (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
     (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
     (address : Nat) (low : address < 8) (value : BitVec 8) :
     store_raw? state address value = none := by
-  obtain ⟨_, _, _, notOutput, notPanic, notTermination, _⟩ :=
+  obtain ⟨notInput, notTrusted, notUntrusted, notOutput, belowEnd⟩ :=
     state.jolt_device.low_address_free config built aboveEight address low
-  have ramStart : JoltISA.RAM_START_ADDRESS = 0x80000000 := rfl
-  unfold store_raw? effective_address_ok
-  simp [notOutput, notPanic, notTermination, ramStart,
-    show ¬ 0x80000000 ≤ address by omega, show address < 0x80000000 by omega,
-    show ¬ 0x02000000 ≤ address by omega, show ¬ 0x0c000000 ≤ address by omega,
-    show ¬ 0x10000000 ≤ address by omega, show ¬ 0x10001000 ≤ address by omega]
+  simp [store_raw?, effective_address_ok, JoltDevice.readable, JoltDevice.is_io_gap,
+    notInput, notTrusted, notUntrusted, notOutput, Nat.not_le.mpr belowEnd,
+    show address < RAM_START_ADDRESS by unfold RAM_START_ADDRESS; omega]
 
-
--- An LD at address 0 reads 0 and changes nothing: all eight bytes are below 8.
--- See : jolt/tracer/src/emulator/mmu.rs:329-337, 619-635 (load_doubleword, load_doubleword_raw)
+/-- A doubleword load at zero fails on its first unmapped byte.
+For example, an LD with base and immediate zero cannot retire.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`load_doubleword_raw`). -/
 theorem load_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
     (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
     (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat) :
-    load_doubleword 0 state = .ok (.Ok 0) state := by
-  have byte := load_raw_low state config built aboveEight
-  have ramStart : RAM_START_ADDRESS = 0x80000000 := rfl
-  unfold load_doubleword read_doubleword?
-  simp [ramStart, byte 0 (by decide), byte 1 (by decide), byte 2 (by decide),
-    byte 3 (by decide), byte 4 (by decide), byte 5 (by decide), byte 6 (by decide),
-    byte 7 (by decide)]
+    load_doubleword 0 state = .error (Error.Assertion "Load Failed") state := by
+  simp [load_doubleword, read_doubleword?, RAM_START_ADDRESS,
+    load_raw_low state config built aboveEight 0 (by decide)]
 
 -- An SD at address 0 fails: its first byte cannot be written.
--- See : jolt/tracer/src/emulator/mmu.rs:437-443, 729-748 (store_doubleword, store_doubleword_raw)
+-- See : jolt/tracer/src/emulator/mmu.rs:553-559, 729-748 (store_doubleword, store_doubleword_raw)
 theorem store_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
     (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
     (aboveEight : 8 < state.jolt_device.memory_layout.get_lowest_address.toNat)
@@ -901,7 +782,9 @@ theorem store_doubleword_zero (state : SailJoltState) (config : MemoryConfig)
 
 end JoltISA.Mmu
 
--- An LD that retires from address 0 only writes 0 to its destination.
+/-- The zero-address branch is impossible for a retired LD.
+Thus its captured destination can be eliminated in completeness case analysis;
+for example, the zero selector branch of LD contributes no RAM increment. -/
 theorem execInstr_load_zero (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA.Dst)
     (base : JoltISA.Src) (imm : BitVec 64) (state after : SailJoltState) (config : MemoryConfig)
     (built : MemoryLayout.new config = some state.jolt_device.memory_layout)
@@ -919,20 +802,9 @@ theorem execInstr_load_zero (faultClass : JoltISA.LoadFaultClass) (dst : JoltISA
     obtain ⟨middleSame, baseIs⟩ := readSrc_value base state middle baseValue baseRead
     simp only [bind, EStateM.bind, baseRead] at runs
     rw [middleSame, baseIs, atZero] at runs
-    -- address 0 is aligned, and the load reads 0 without changing the state
-    rw [ite_eq_left (by decide), EStateM.bind, JoltISA.Mmu.load_doubleword_zero state config built aboveEight]
-      at runs
-    dsimp only at runs
-    rw [EStateM.bind] at runs
-    -- what is left is the write of 0 to the destination
-    cases written : JoltISA.writeDst dst 0 state with
-    | error failure final =>
-      rw [written] at runs
-      cases runs
-    | ok _ final =>
-      rw [written] at runs
-      cases runs
-      rfl
+    rw [ite_eq_left (by decide), EStateM.bind,
+      JoltISA.Mmu.load_doubleword_zero state config built aboveEight] at runs
+    cases runs
 
 -- An SD at address 0 never retires.
 theorem execInstr_store_nonzero (base value : JoltISA.Src) (imm : BitVec 64)

@@ -8,7 +8,7 @@ namespace JoltConstraints
 /-- The low word of a floor index is the wrapping effective address; for
 example, base zero plus immediate -16 has low word `2^64 - 16`.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`to_lookup_index`) at `c6703570`. -/
+(`to_lookup_index`) at `ff6fc6568`. -/
 private theorem floor_index_low (base imm : BitVec 64) :
     (BitVec.ofInt 128 (base.toNat + imm.toInt)).setWidth 64 = base + imm := by
   rw [BitVec.ofInt_add, BitVec.setWidth_add _ _ (by decide), BitVec.ofInt_natCast]
@@ -24,7 +24,7 @@ private theorem floor_index_low (base imm : BitVec 64) :
 any width; widths 1, 2 and 4 give masks 7, 6 and 4 respectively.
 For example, width 2 at effective address 10 returns 2, even if the sum wrapped.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/address_offset.rs`
-(`AddressOffsetTable::materialize_entry`) at `c6703570`. -/
+(`AddressOffsetTable::materialize_entry`) at `ff6fc6568`. -/
 theorem addressOffset_entry {F : Type} [Field F] (width : Nat) (base imm : BitVec 64) :
     addressOffsetTableEntry (F := F) width
       (BitVec.ofInt 128 (base.toNat + imm.toInt)).toFin =

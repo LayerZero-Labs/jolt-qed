@@ -2,7 +2,7 @@
 Trace data, without assumptions about execution, initialization or row linkage.
 The corresponding honesty certificates live in `honest_trace.lean`.
 
-At public pin 8bbb2357, Rust uses `jolt_riscv::JoltTraceRow` for execution and
+At public pin ff6fc6568, Rust uses `jolt_riscv::JoltTraceRow` for execution and
 proof rows. This is a state-based abstraction of completed modeled cycles, not a
 translation of its packed storage or every row accepted by its checked constructor.
 Rust stores optional captures separately from encoded operands; missing captures
@@ -17,7 +17,7 @@ set_option autoImplicit false
 
 -- In the bytecode, a VirtualAdvice instruction's value is a placeholder. The tracer
 -- supplies the real value when it runs the instruction, and the trace row records it.
--- Jolt tracer: [runtime advice patching](https://github.com/a16z/jolt/blob/5def437f21a0006e13c063a03f0b5a7c9b93cd6f/tracer/src/instruction/mod.rs#L215-L241).
+-- Jolt tracer: [runtime advice patching](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/tracer/src/instruction/mod.rs#L228-L254).
 -- The unified Rust row retains the result through its captured destination value.
 def JoltISA.Instr.RuntimeAdvice : JoltISA.Instr → Type
   | .VirtualAdvice .. => BitVec 64
@@ -48,7 +48,7 @@ For example, a word floor row at `ea = 12` records `some 8`.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`) and
 `crates/jolt-riscv/src/trace_row.rs` (`ram_address`);
 Jolt's prover: `crates/jolt-program/src/execution/trace.rs`
-(`ExecutionDimensions::from_rows`) at `c6703570`. -/
+(`ExecutionDimensions::from_rows`) at `ff6fc6568`. -/
 def TraceRow.ram_address {bytecode : Array JoltInstructionRow}
     (row : TraceRow bytecode) : Option Nat :=
   match bytecode[row.rowIndex].instruction with

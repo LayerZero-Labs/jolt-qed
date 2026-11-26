@@ -4,7 +4,7 @@ import JoltBytecode.InstructionEquivalence.ProofSupport.InstructionLemmas
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.ProofSupport.Projection
 import JoltBytecode.InstructionEquivalence.ProofSupport.Basic
-import Mathlib
+import JoltBytecode.MathlibTactics
 
 open LeanRV64D
 

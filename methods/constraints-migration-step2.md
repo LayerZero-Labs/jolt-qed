@@ -28,7 +28,8 @@ Work order: first fix every module that does not depend on a wrap case, then the
    The three completeness callers of the old classifiers use `opcodeFlag_load_cases` or `opcodeFlag_store_cases` and handle the new loads and stores.
 3. Constraint (01).
    Rename the theorem to `honestWitness_ramAddrEqRs1PlusImmMinusLookupIfLoadStore` and its file to match, and state it against the new (01).
-   Its body stays `sorry`: it is the existing (01) gap, false until a16z/jolt#1949 is fixed.
+   Its body stayed `sorry` in this step, as the (01) gap of a16z/jolt#1949.
+   It was proved on 2026-11-25: honest memory rows never wrap their address (`HonestTrace.access_noWrap`).
    Replace its docstring with this one, unchanged (Ari approved it on 2026-11-03):
 
    ```lean
@@ -45,7 +46,7 @@ Work order: first fix every module that does not depend on a wrap case, then the
    `ld x1, -16(x0)` gives `RamAddress t = 2^64 - 16`, but the right side is
    `0 + (-16) - 0 = -16`; they differ by `2^64`, and the constraint is not
    satisfied.
-   Left as `sorry` until a16z/jolt#1949 is fixed.
+   Proved since 2026-11-25: honest rows never wrap (`HonestTrace.access_noWrap`).
 
    Rust, at `c6703570`:
    - (01): `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
@@ -66,7 +67,8 @@ Work order: first fix every module that does not depend on a wrap case, then the
 6. Constraint (11), `RightLookupEqRightInputOtherwise.lean`.
    For rows without combined operands, (11) now needs the index's right half to equal the right instruction input.
    Prove that once, as a lemma over the index cases, and use it.
-   On a ShiftData row it holds only when `rs2 + imm` does not wrap, and that is false for some honest runs (a16z/jolt#1949).
+   On a ShiftData row it holds only when `rs2 + imm` does not wrap (a16z/jolt#1949).
+   This step assumed some honest runs wrap; on 2026-11-25 the lemma below was proved, because the floor store two rows later never wraps (`HonestTrace.shiftData_store`).
    Ari decided on 2026-11-03: no new premise.
    Put exactly that fact in one lemma whose body is `sorry`, stated for one row of an honest trace, as Ari approved on 2026-11-03:
 
@@ -98,7 +100,7 @@ Work order: first fix every module that does not depend on a wrap case, then the
    `RightLookupOperand t = (rs2 + imm) mod 2^64`.
    When `rs2 + imm` wraps, for example `rs2 = 0` and `imm = -16`, the two differ
    by `2^64`, and the constraint is not satisfied.
-   Left as `sorry` until a16z/jolt#1949 is fixed.
+   Proved since 2026-11-25: honest rows never wrap (`HonestTrace.access_noWrap`).
 
    Rust, at `c6703570`:
    - (11): `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
@@ -115,8 +117,10 @@ Work order: first fix every module that does not depend on a wrap case, then the
    ```
 
    Add the lemma to "Proofs owed" in `model_review.md`, next to (01), as false until #1949 is fixed.
+   It was proved on 2026-11-25 and left "Proofs owed".
 7. Constraint (08), `RightLookupAdd.lean`, and any further case of the same wrap.
    On a floor row, (08) needs the right lookup operand `(rs1 + imm)` as a 128-bit word to equal `rs1 + imm` in the field; that fails when `rs1 + imm` is negative (a16z/jolt#1949).
+   On 2026-11-25 the lemma below was proved: no honest floor row has a negative sum (`HonestTrace.access_noWrap`).
    Ari decided on 2026-11-03 to treat it like (01) and (11): no new premise.
    Put exactly that fact in one lemma whose body is `sorry`, stated for one row of an honest trace, as Ari approved on 2026-11-03:
 
@@ -151,7 +155,7 @@ Work order: first fix every module that does not depend on a wrap case, then the
    `lb x1, -16(x0)` gives `RightLookupOperand t = 2^128 - 16`, but the right side
    is `0 + (-16) = -16`; they differ by `2^128`, and the constraint is not
    satisfied.
-   Left as `sorry` until a16z/jolt#1949 is fixed.
+   Proved since 2026-11-25: honest rows never wrap (`HonestTrace.access_noWrap`).
 
    Rust, at `c6703570`:
    - (08): `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs` (`RightLookupAdd`).

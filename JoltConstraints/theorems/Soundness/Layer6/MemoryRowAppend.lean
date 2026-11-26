@@ -1,4 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer6.RamCutAgreement
+import JoltConstraints.theorems.Soundness.Layer6.PlainRow
+import JoltConstraints.theorems.Soundness.Layer5.CodeRegionFrame
+import JoltConstraints.theorems.Soundness.Layer5.TapeDeviceFrame
 
 open LeanRV64D
 
@@ -8,8 +11,8 @@ namespace JoltInstance
 open JoltConstraints JoltConstraints.Soundness
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
-/-- The cut image supplies ordinary RAM at the prepared state and device words
-at the retained prefix; for example, both are available before an LD. -/
+/-- The represented cut supplies every shared-memory word at the prepared state.
+For example, this supplies an input LD and a RAM LD with the same agreement. -/
 theorem ExpansionState.memoryAt
     {F : Type} [Field F] {params : WitnessParams}
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
@@ -17,38 +20,35 @@ theorem ExpansionState.memoryAt
     {run : UntrustedAnswerRun inst inputs} {first : Fin context.bytecode.size} {done : Nat}
     (state : ExpansionState witness context run first done) (bound : run.rows.size < params.traceLength)
     {next : Fin run.bytecode.size} {pre : SailJoltState} (entry : RawRowEntry run next pre) :
-    OrdinaryRamAgreement context.io.memory_layout (fun index => witness.RamVal index ⟨run.rows.size, bound⟩) pre ∧
-    DeviceRamAgreement (fun index => witness.RamVal index ⟨run.rows.size, bound⟩) run.toTrace := by
-  obtain ⟨ram, device⟩ := (ramAgreement_iff context run _).mp (state.represents.cutRam.1 bound)
+    SharedRamAgreement context.io.memory_layout
+      (fun index => witness.RamVal index ⟨run.rows.size, bound⟩) pre := by
+  have ram := (ramAgreement_iff run.toTrace _).mp (state.represents.cutRam.1 bound)
   have prepared := rawEntry_prepared entry (state.registers bound)
-  refine ⟨?_, device⟩
-  intro index inRam
+  intro index
   rw [prepared.2.1]
   rw [initial_state_memory_layout context run.initialized] at ram
-  exact ram index inRam
+  exact ram index
 
-/-- Enlarging the recorded store event weakens only the conditional obligation
-that termination remain zero; for example, include a newly appended store row. -/
-theorem memory_step_mono
-    {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
-    {t : Fin params.traceLength} {trace : Trace} {step : TraceRow trace.bytecode} {old new : Prop}
-    (memory : DeviceMemoryStepAgreement witness t trace step old) (implies : old → new) :
-    DeviceMemoryStepAgreement witness t trace step new := by
-  refine ⟨fun next => ⟨(memory.1 next).1, (memory.1 next).2.1, ?_⟩, memory.2⟩
-  intro absent
-  exact (memory.1 next).2.2 (fun old => absent (implies old))
+/-- Preparing the next row retains the initialized layout and protected code span.
+For example, source-boundary PC preparation changes neither memory invariant. -/
+theorem rawEntry_memory_invariants
+    {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs} {params : WitnessParams}
+    (context : ConstraintContext inst inputs params) (run : UntrustedAnswerRun inst inputs)
+    {next : Fin run.bytecode.size} {pre : SailJoltState} (entry : RawRowEntry run next pre) :
+    pre.jolt_device.memory_layout = context.io.memory_layout ∧
+      pre.codeRegion = ramCodeRegion context.bytecode context.io.memory_layout := by
+  have initialLayout := initial_state_memory_layout context run.initialized
+  have layout := run.final_device_same.1.trans initialLayout
+  have bytecodeEq : run.bytecode = context.bytecode :=
+    Option.some.inj (run.expands.symm.trans context.expands)
+  have code := run.final_codeRegion
+  rw [initialLayout, bytecodeEq] at code
+  rcases rawEntry_state entry with rfl | ⟨address, compressed, rfl⟩
+  · exact ⟨layout, code⟩
+  · exact ⟨layout, code⟩
 
-private theorem exists_fin_push {α : Type} (rows : Array α) (step : α) (property : α → Prop) :
-    (∃ i : Fin (rows.push step).size, property (rows.push step)[i]) ↔
-      (∃ i : Fin rows.size, property rows[i]) ∨ property step := by
-  simp only [Fin.exists_iff, Fin.getElem_fin, ← Array.exists_mem_iff_exists_getElem,
-    Array.mem_push, or_and_right, exists_or]
-  simp
-
-/-- A successful memory row with both memory agreements extends the expansion.
-The store event includes old termination stores and the newly appended row
-(`storeTouches TouchesTermination`), so an output SD preserves termination zero
-while a termination SD or floor store discharges that obligation. -/
+/-- A successful memory row extends the expansion with full shared-word agreement.
+For example, an output SD and a RAM SD use the same append proof. -/
 theorem append_memory_row
     {F : Type} [Field F] (joltField : JoltField F) {params : WitnessParams}
     {inst : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
@@ -70,32 +70,32 @@ theorem append_memory_row
         ∃ dst ∈ run.bytecode[step.rowIndex].instruction.destination?,
           register = TraceWitness.destinationRegisterAddress dst)
         witness ⟨run.rows.size + 1, next⟩ step.postState)
-    (memory : DeviceMemoryStepAgreement witness ⟨run.rows.size, bound⟩ run.toTrace step
-      ((∃ i : Fin run.rows.size, run.StoresTerminationAt i) ∨ storeTouches TouchesTermination step)) :
+    (memory :
+      (∀ next : run.rows.size + 1 < params.traceLength,
+        SharedRamAgreement context.io.memory_layout
+          (fun index => witness.RamVal index ⟨run.rows.size + 1, next⟩) step.postState) ∧
+      (∀ last : run.rows.size + 1 = params.traceLength,
+        SharedRamAgreement context.io.memory_layout witness.RamValFinal step.postState)) :
     PlainRowExtension witness context run first done bound := by
-  let extended := appendUntrustedRow run step 0 executes (rawEntry_starts entry) (rawEntry_linked entry)
   have image (values : Fin params.ramSize → F)
-      (ram : OrdinaryRamAgreement run.initialState.jolt_device.memory_layout values step.postState)
-      (device : DeviceRamAgreement values {run.toTrace with rows := run.rows.push step}) :=
-    (ramAgreement_iff context extended values).mpr
-      ⟨by simpa only [extended, appendUntrustedRow, finalTraceState_push] using ram, device⟩
+      (ram : SharedRamAgreement context.io.memory_layout values step.postState) :
+      ∀ index, values index = ((TraceWitness.finalRamWord
+        { run.toTrace with rows := run.rows.push step } index.val).toNat : F) := by
+    intro index
+    rw [finalRamWord_eq_ram_doubleword, finalTraceState_push,
+      initial_state_memory_layout context run.initialized]
+    exact ram index
   have represented : RepresentsPrefix witness {run.toTrace with rows := run.rows.push step} := by
     refine { rows with cutRam := ⟨?_, ?_⟩ }
     · intro next
       have h : run.rows.size + 1 < params.traceLength := by simpa only [Array.size_push] using next
-      simpa only [extended, appendUntrustedRow, Array.size_push] using
-        image _ (memory.1 h).1 (memory.1 h).2.1
+      simpa only [Array.size_push] using image _ (memory.1 h)
     · intro last
       have h : run.rows.size + 1 = params.traceLength := by simpa only [Array.size_push] using last
-      exact image _ (memory.2 h).1 (memory.2 h).2
+      exact image _ (memory.2 h)
   obtain ⟨atRow, _, _, _, _⟩ := state.selectedRow unfinished bound step.rowIndex indexIs
-  obtain ⟨candidate, traceEq, answers, extendsRun, size, after⟩ := append_expansion_row_of_termination
+  obtain ⟨candidate, traceEq, answers, extendsRun, size, after⟩ := append_expansion_row
     joltField witness context equations run first done state unfinished bound step 0 indexIs executes entry represented
-    (fun next noStore => (memory.1 next).2.2 (by
-      intro stored
-      apply noStore
-      apply (exists_fin_push run.rows step (storeTouches TouchesTermination)).mpr
-      exact stored))
     (fun next => (registers next).mono (expansionLive_after context.bytecode first done _ atRow))
   refine ⟨step, 0, candidate, indexIs, entry, present, traceEq, executes, ?_, ?_,
     answers, extendsRun, size, after⟩
