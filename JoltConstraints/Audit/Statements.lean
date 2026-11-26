@@ -68,12 +68,14 @@ statement JoltInstance.completeness
     Trace.matches_outputs joltInstance trace.toTrace →
       trace.SpoilAssertsPass →
         ∀ (config : ProverConfig) (proverAccepts : Trace.prover_config joltInstance trace.toTrace = some config),
-          JoltConstraints.AllConstraints joltInstance privateInputs
-            (HonestTrace.honestWitness (trace.witness_params config proverAccepts) trace)
+          joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63 →
+            JoltConstraints.AllConstraints joltInstance privateInputs
+              (HonestTrace.honestWitness (trace.witness_params config proverAccepts) trace)
 statement JoltInstance.completeness_someWitness
   ∀ {F : Type} [inst : Field F] (joltInstance : JoltInstance SourceInstruction),
     joltInstance.InLanguage →
-      ∃ privateInputs params witness, JoltConstraints.AllConstraints joltInstance privateInputs witness
+      joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63 →
+        ∃ privateInputs params witness, JoltConstraints.AllConstraints joltInstance privateInputs witness
 statement WholeRun.HonestTrace.sail_reproduces
   ∀ {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) {elf : WholeRun.ElfSections},
@@ -196,7 +198,7 @@ fingerprint cdba7d85142ccfc6 JoltConstraints.ConstraintEquations
 fingerprint e7522cd82290f336 JoltConstraints.VerifierSizes.adviceVars
 fingerprint 5d807eece99a4241 JoltConstraints.VerifierSizes.checkedNextPowerOfTwo
 fingerprint 19cc0c72019617ac JoltConstraints.VerifierSizes.committedLogKChunk
-fingerprint 5c2617ffca30b924 JoltConstraints.VerifierSizes.dorySetupLogN
+fingerprint bcb0f1af1b19c197 JoltConstraints.VerifierSizes.dorySetupLogN
 fingerprint 412704d2ac96f7f7 JoltConstraints.VerifierSizes.maxRamSize
 fingerprint 0c4269fe5b9fc7a8 JoltConstraints.VerifierSizes.minRamSize
 fingerprint f889ef9e793c7e7c JoltConstraints.VerifierSizes.remapWordAddress
@@ -494,7 +496,7 @@ fingerprint 9ed378d4708799cd JoltISA.lbuProgramAuto
 fingerprint e4eeccfa22897f8f JoltISA.lhProgramAuto
 fingerprint 584d7fa48aa13421 JoltISA.lhuProgramAuto
 fingerprint 2ceae9a3c6f4a345 JoltISA.lrdProgramAuto
-fingerprint 84e5558001e13708 JoltISA.lrwProgramAuto
+fingerprint 5d0ee099e38094bb JoltISA.lrwProgramAuto
 fingerprint 48e3df1974c1b082 JoltISA.luiValue
 fingerprint 890f92d3a3a9d56f JoltISA.lwProgramAuto
 fingerprint 0f812b7d28909583 JoltISA.lwuProgramAuto
@@ -556,11 +558,11 @@ fingerprint 82d04651a02cddbb JoltInstance
 fingerprint 96870fa52d635144 JoltInstance.InLanguage
 fingerprint f5225139defedc5b JoltInstance.RamRegionFits
 fingerprint 846aa3fa461fb4ce JoltInstance.bytecode
-fingerprint 99e8b86b28a56aa1 JoltInstance.completeness
-fingerprint 12899078341d4c7a JoltInstance.completeness_someWitness
+fingerprint c253ffa520d5eb4d JoltInstance.completeness
+fingerprint 80f129558c034eb5 JoltInstance.completeness_someWitness
 fingerprint d2a81868d78c24e6 JoltInstance.initial_state
 fingerprint c2cf38db2def1990 JoltInstance.memory_layout
-fingerprint 60f26ebc5c882574 JoltInstance.one_hot_fits_setup
+fingerprint e4ed76d6ee0e2df1 JoltInstance.one_hot_fits_setup
 fingerprint 716bc56a18818986 JoltInstance.public_io
 fingerprint f940de405774e031 JoltInstance.ramRegionFits
 fingerprint 093b6a70d53010e6 JoltInstance.ram_size_in_bounds
