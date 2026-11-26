@@ -222,7 +222,7 @@ def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Sour
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
 -- The program is not empty: its memory image loads at least one byte.
--- Every program whose run Jolt's prover accepts meets this
+-- Every program whose run passes the prover's sizing meets this
 -- (`HonestTrace.prover_config_image_nonempty`): the prover rejects an empty trace,
 -- and a program with an instruction loads that instruction's bytes.
 def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Source) : Prop :=

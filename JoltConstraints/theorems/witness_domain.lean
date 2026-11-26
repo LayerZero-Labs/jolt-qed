@@ -70,7 +70,7 @@ theorem MemoryLayout.get_lowest_address_toNat (layout : MemoryLayout) :
   unfold MemoryLayout.get_lowest_address
   split <;> omega
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), its RAM size
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), its RAM size
 `config.ram_K` is a power of two.
 For example, a run touching word 1000 gets `ram_K = 1024 = 2^10`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,

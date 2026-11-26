@@ -204,11 +204,11 @@ theorem HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstructio
   · rw [Array.getElem?_eq_none (by omega)]
     rfl
 
-/-- Completeness at Jolt's sizes: when Jolt's prover accepts the honest trace with
-config `config` (`proverAccepts`), the honest witness at Jolt's witness sizes
-(`HonestTrace.witness_params`) satisfies every constraint, against Jolt's preprocessed
-bytecode `slots`, the verifier's entry slot `entry` and the public I/O `io` the verifier
-checks the proof against.
+/-- Completeness at Jolt's sizes: when the prover's sizing (`derive_from_dimensions`)
+succeeds on the honest trace with config `config` (`proverAccepts`), the honest witness
+at Jolt's witness sizes (`HonestTrace.witness_params`) satisfies every constraint,
+against Jolt's preprocessed bytecode `slots`, the verifier's entry slot `entry` and the
+public I/O `io` the verifier checks the proof against.
 It needs the existing premises below and inherits the gaps listed in `model_review.md`
 ("Proofs owed").
 For example, a 300-row run that touches RAM word 1000 is checked on a 512-cycle witness
@@ -217,7 +217,7 @@ theorem HonestTrace.allConstraints_prover_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    -- Jolt's prover accepts the run and picks these sizes
+    -- the prover's sizing (`derive_from_dimensions`) succeeds and picks these sizes
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
     -- the default Dory setup exists: its `next_power_of_two` does not overflow
     (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63)

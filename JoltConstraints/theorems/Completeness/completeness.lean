@@ -4,7 +4,7 @@ it in Jolt's language, the witness Jolt's prover builds, at the sizes Jolt's pro
 picks, satisfies every modeled constraint. The statement assumes one thing about the
 instance: its maximum padded trace length is at most `2^63`, so that the default
 Dory setup exists (`VerifierSizes.dorySetupLogN`). It needs no premise that the
-program is nonempty: a program whose run Jolt's prover accepts is not empty
+program is nonempty: a program whose run passes the prover's sizing is not empty
 (`HonestTrace.prover_config_image_nonempty`).
 The address-wrap cases of a16z/jolt#1949 are proved: honest memory rows never
 wrap their effective address. The shared-memory RAM-history obligations are proved.
@@ -71,8 +71,11 @@ Jolt's prover picks.
 For any instance `joltInstance`, take any private inputs `privateInputs` and any honest
 trace `trace` of the instance on them that meets the three conditions of
 `JoltInstance.InLanguage`: it ends with the claimed outputs (`claimsRunOutputs`), no spoil
-assert fails (`spoilAssertsPass`), and Jolt's prover accepts it with config `config`
-(`proverAccepts`).
+assert fails (`spoilAssertsPass`), and the prover's sizing succeeds
+(`derive_from_dimensions`) with config `config` (`proverAccepts`). Jolt's prover can
+still refuse such a run in stage 0 (`crates/jolt-prover/src/dory/stages/stage0.rs:134-156`),
+when an advice grid is wider than the main commitment grid; this theorem says only that
+the constraints accept the honest witness.
 Assume also that the instance's maximum padded trace length is at most `2^63`
 (`setupSized`). Above that, `max_padded_trace_length.next_power_of_two()` overflows
 `usize` in `setup_total_vars` (`crates/jolt-prover/src/dory/preprocessing.rs:196-210`),

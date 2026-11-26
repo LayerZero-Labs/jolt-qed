@@ -385,7 +385,7 @@ theorem HonestTrace.highest_ram_slot_lt_maximum {joltInstance : JoltInstance Sou
     rw [backing] at reachesHeap
     omega
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`) of a nonempty program,
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`) of a nonempty program,
 Jolt's verifier computes its RAM minimum (`VerifierSizes.minRamSize`, Jolt's
 `compute_min_ram_k`): the image's start and end words are the ones Jolt's prover already
 computed, the word index of `RAM_START_ADDRESS` exists because the lowest address is
@@ -493,7 +493,7 @@ the verifier computes both its minimum and its maximum
 (`HonestTrace.verifier_ram_minimum_computes`, `HonestTrace.witness_params_ram_maximum`),
 and Jolt's RAM size `config.ram_K` lies between them
 (`HonestTrace.witness_params_ram_minimum_of_nonempty`).
-The program is not empty, because Jolt's prover accepts its run
+The program is not empty, because its run passes the prover's sizing
 (`HonestTrace.prover_config_image_nonempty`).
 For example, with lowest address `0x7fff8000` and `heap_end = 0x80010000`, a run
 touching word 1000 with an image of words 4096 to 4135 gets

@@ -173,8 +173,8 @@ theorem checkedTraceLength_eq_padded (rows padded : Nat)
 
 end ProverConfig
 
--- Jolt's prover accepts only traces whose nonzero RAM addresses are at or above the
--- lowest address.
+-- The prover's sizing succeeds only on traces whose nonzero RAM addresses are at or
+-- above the lowest address.
 private theorem HonestTrace.prover_config_addresses_ok
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -189,7 +189,7 @@ private theorem HonestTrace.prover_config_addresses_ok
     (trace.rows.toList.filterMap (fun (row : TraceRow trace.bytecode) => row.ram_address))
       trace.initialState.jolt_device.memory_layout touched touchChecked).1
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), the length it pads to,
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), the length it pads to,
 `config.trace_length`, is the run's padded length `padded_trace_length trace.rows.size`
 (the power of two above the row count, at least 256), and it is at most the instance's
 maximum padded length.
@@ -217,8 +217,8 @@ theorem HonestTrace.prover_config_last_halt
       trace.bytecode[last.rowIndex].instruction.haltKind?.isSome) = true := by
   exact (ProverConfig.deriveFromDimensions_sizes _ _ _ _ _ config proverAccepts).1.2
 
-/-- Jolt's prover accepts a run only of a program whose memory image loads at least one byte.
-The prover rejects an empty trace (`deriveFromDimensions`). Each trace row runs a row of the
+/-- The prover's sizing succeeds only on a run of a program whose memory image loads at least
+one byte: it rejects an empty trace (`deriveFromDimensions`). Each trace row runs a row of the
 expanded bytecode, which is empty when the program has no instructions. Every instruction has
 a byte in the image (`Rv64ProgramImage.instruction_loaded`).
 For example, an ELF with an empty text section has no instructions and an empty trace, and
@@ -284,8 +284,8 @@ def Trace.highest_ram_slot (trace : Trace) : Nat :=
   ((trace.rows.toList.filterMap (·.ram_address)).filterMap
     (remap_address trace.initialState.jolt_device.memory_layout)).max?.getD 0
 
-/-- Jolt's RAM size for the honest trace, unfolded. When Jolt's prover accepts the trace
-(`proverAccepts`), it remaps the program image's lowest address to a word index
+/-- Jolt's RAM size for the honest trace, unfolded. When the prover's sizing succeeds
+on the trace (`proverAccepts`), it remaps the program image's lowest address to a word index
 `imageStart` (none for address 0), and `config.ram_K` is the power of two that rounds up
 the larger of one more than the highest touched word (`Trace.highest_ram_slot`) and the
 image's end, `imageStart + program_image_len_words + 1`; both that end and `config.ram_K`
@@ -320,8 +320,8 @@ theorem HonestTrace.prover_config_ram_K
   rw [sizeIs, ← touchedIs]
   rfl
 
-/-- Jolt's RAM table holds the highest RAM word the run touches: when Jolt's prover accepts
-the honest trace (`proverAccepts`), the highest touched word index
+/-- Jolt's RAM table holds the highest RAM word the run touches: when the prover's sizing
+succeeds on the honest trace (`proverAccepts`), the highest touched word index
 `h = Trace.highest_ram_slot` is below Jolt's RAM size `K = config.ram_K`.
 A table of `K` words holds indices `0` to `K - 1`, so this needs `h < K`.
 Since a16z/jolt#2250, Jolt's prover picks
@@ -341,7 +341,7 @@ theorem HonestTrace.prover_config_holds_highest_slot
   exact Nat.lt_of_lt_of_le (Nat.lt_succ_self _)
     ((Nat.le_max_left _ _).trans (Nat.le_pow_clog (by decide : 1 < 2) _))
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), every memory address
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), every memory address
 a row touches (`TraceRow.ram_address`) is 0 (no access), or is at or above the layout's
 lowest address and has a word index (`remap_address`) below Jolt's RAM size
 `config.ram_K`.
@@ -377,7 +377,7 @@ theorem HonestTrace.prover_config_ram_fits
     exact Or.inr ⟨above, _, slotIs,
       Nat.lt_of_le_of_lt atMost (trace.prover_config_holds_highest_slot config proverAccepts)⟩
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), its RAM size
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), its RAM size
 `config.ram_K` is at least 2: the program image's end is at least 2, since the image
 spans at least one word and the prover adds one more.
 So a RAM word index splits into at least one chunk.
