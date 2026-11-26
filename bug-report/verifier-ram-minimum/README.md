@@ -1,3 +1,12 @@
++++
+status = "fixed-upstream"
+reproduced_at = "3cb4e24361ae2006e9713ae65d58a3fa51fd0518"
+fixed_by = "a16z/jolt#2451"
+upstream = ""
+registry = ["image.instruction_loaded"]
+note = "derive_from_dimensions rejects an empty trace (TraceDoesNotEndInHalt). The model proves the former premise ImageNonempty from that check and the image field instruction_loaded."
++++
+
 # Empty program: prover RAM size falls below the verifier minimum
 
 **Status: fixed in Jolt by `ff6fc6568`; the assumption is gone.** a16z told us by phone on

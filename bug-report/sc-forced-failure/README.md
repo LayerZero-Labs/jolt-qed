@@ -1,3 +1,12 @@
++++
+status = "fixed-upstream"
+reproduced_at = "00508a09"
+fixed_by = "a16z/jolt#2039"
+upstream = "a16z/jolt#2037"
+registry = []
+note = "Reported as a16z/jolt#2037 (closed 2026-10-12). Since a16z/jolt#2039 the SC sequences compute success from the reservation instead of taking it as advice. Not rerun at ff6fc6568."
++++
+
 # A prover can make SC.W fail when the reservation holds
 
 **Status:** found and run on 2026-10-09; not reported upstream. Whether it is a bug

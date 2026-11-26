@@ -1,0 +1,503 @@
+# Registry of the premises of jolt-qed's headline theorems.
+#
+# Every binder of the headline theorems, every field of `Rv64ProgramImage` and of
+# `WholeRun.BlockConforms`, every `sorry` in JoltConstraints/ and JoltBytecode/, and the
+# scope premises have an entry here. reports/2026-11-25-stale-assumptions.md explains why.
+#
+# Checks:
+# - The build checks the binder and field lists in JoltConstraints/Audit/Premises.lean.
+# - scripts/check-assumptions.py checks that this file agrees with those lists, with the
+#   `sorry`s in the source, with the fields of `Rv64ProgramImage`, with the necessity
+#   witnesses, and with the headers of bug-report/*/README.md.
+# - .github/workflows/jolt-main-drift.yml compares every anchor file at the pin with Jolt
+#   main each night and lists the entries whose anchor files changed.
+#
+# Fields of an entry:
+#   name               a short, unique name; bug-report headers refer to entries by it.
+#   lean               the Lean declaration, field or expression.
+#   kind               premise:     an assumption the model does not prove;
+#                      scope:       excludes a part of Jolt the proofs do not cover yet;
+#                      correspondence: a place where the model is a transcription of Jolt's
+#                                   code that no theorem compares with that code, and where
+#                                   the two are known to differ or are not shown to agree;
+#                                   the headline theorems are about the model;
+#                      field:       a premise on the field F;
+#                      image-field: a proof field of Rv64ProgramImage, a fact every instance carries;
+#                      derived:     a former premise that is now a theorem; the entry keeps
+#                                   the Jolt functions its proof depends on watched;
+#                      sorry:       an unproved lemma;
+#                      statement:   what the theorem is about (the constraints accept, the
+#                                   instance is in Jolt's language, the prover's sizing succeeds);
+#                      data:        an ordinary quantified object.
+#   appears_in         where it is a binder or field: "<theorem or structure> (<name>)",
+#                      exactly as in JoltConstraints/Audit/Premises.lean. Entries that are not
+#                      binders or fields (correspondence, derived, some scope) have none.
+#   file               for a sorry: the file that holds it.
+#   anchors            Jolt functions it depends on: "<path> (<fn>)" at `jolt_rev`.
+#   witness            a necessity witness (JoltConstraints/Audit/Necessity.lean).
+#   witness_shows      what the witness proves, and what it does not; required with `witness`.
+#                      A witness tests the premise at the boundary its theorem states; it
+#                      shows the premise is needed for a headline theorem only when it builds
+#                      an object that meets every other premise of that theorem.
+#   derived_by         a theorem that proves the fact from another premise, or from nothing.
+#                      Every witness and derived_by is a line of #audit_statements in
+#                      JoltConstraints/Audit/Statements.lean, which checks that the name exists,
+#                      its axioms, and its statement.
+#   no_witness_reason  why it has no witness. Every entry other than `data` has a witness
+#                      or this reason.
+#   upstream           the upstream issue, if any.
+#   bug_report         the bug-report folder or file, if any.
+
+jolt_rev = "ff6fc656813d950565c9f6e1258b78bdaf0e60e8"
+
+# ---------------------------------------------------------------------------
+# Premises
+
+[[entry]]
+name = "JoltField"
+lean = "JoltField"
+kind = "field"
+appears_in = [
+  "JoltInstance.soundness (joltField)",
+  "JoltInstance.sail_soundness (joltField)",
+]
+anchors = [
+  "crates/jolt-algebra/src/algebra.rs (JoltField)",
+  "crates/jolt-algebra/src/solinas/mod.rs (Prime128Offset6A23801F)",
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (rv64_trace_constraints)",
+]
+witness = "JoltConstraints.Audit.joltField_not_implied"
+witness_shows = """Only that `[Field F]` does not imply JoltField: ZMod 2 is a field that \
+breaks it. It does not show that soundness needs the premise. JoltInstance.completeness_someWitness \
+holds over every field, and no instance outside the language with a satisfying assignment of \
+AllConstraints over ZMod 2 is built. If a later change made AllConstraints imply JoltField, the \
+witness would keep building. Follow-up: an instance that is not InLanguage with a satisfying \
+assignment over a small field, which needs a concrete program and constraint assignment."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "DecodedFrom"
+lean = "Rv64ProgramImage.DecodedFrom"
+kind = "premise"
+appears_in = [
+  "WholeRun.HonestTrace.sail_reproduces (hdecoded)",
+  "JoltInstance.sail_soundness (hdecoded)",
+]
+anchors = [
+  "crates/jolt-program/src/image/elf.rs (decode_elf)",
+  "crates/jolt-program/src/image/elf.rs (decode_text_section)",
+  "crates/jolt-program/src/image/elf.rs (merge_ranges)",
+  "crates/jolt-program/src/preprocess/ram.rs (code_region)",
+  "crates/jolt-program/src/image/decode.rs (decode_instruction)",
+]
+no_witness_reason = """Trust boundary (a platform premise in docs/whole-run-theorem.md): it \
+says that the program is what Jolt's decode_elf builds from the parsed ELF. No constraint \
+can check it, and every program Jolt builds satisfies it, so no model object should break it."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "BlockConforms.riscv"
+lean = "WholeRun.BlockConforms.riscv"
+kind = "scope"
+appears_in = [
+  "WholeRun.HonestTrace.sail_reproduces (hconf)",
+  "WholeRun.BlockConforms (riscv)",
+]
+anchors = [
+  "crates/jolt-program/src/image/decode.rs (decode_custom)",
+  "crates/jolt-riscv/src/kind.rs (SourceInstruction)",
+]
+witness = "JoltConstraints.Audit.blockConformsRiscv_not_implied"
+witness_shows = """Only that DecodedFrom admits a program with a row of one of Jolt's own \
+instructions (AdviceLD), so DecodedFrom alone does not rule out such rows. It builds no trace: \
+no HonestTrace, no halt, no accepted prover configuration, and no block of a HaltPrefix that \
+breaks BlockConforms.riscv. If a later change made the other premises of sail_reproduces exclude \
+such blocks, the witness would keep building. Follow-up: a HonestTrace of a decoded program whose \
+HaltPrefix has a block with a `.jolt` row, which needs a concrete run of the program."""
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Scope and correspondence: boundaries that are not binders. The theorems are about the
+# model; these entries record where the model is known not to cover, or not shown to match,
+# what Jolt runs.
+
+[[entry]]
+name = "DoryConfiguration"
+lean = "JoltConstraints.ConstraintContext.traceLengthFloor"
+kind = "scope"
+anchors = [
+  "crates/jolt-verifier/src/config.rs (MIN_PADDED_TRACE_LENGTH)",
+  "crates/jolt-verifier/src/verifier.rs (validate_trace_length)",
+  "crates/jolt-prover/src/config.rs (derive_from_dimensions)",
+  "crates/jolt-prover/src/config.rs (one_hot_config)",
+]
+no_witness_reason = """Scope boundary, not a premise: the configuration model \
+(JoltConstraints/translation/prover_config.lean, ConstraintContext) is Jolt's build without \
+the `akita` feature. It pads traces to at least 256 cycles (MIN_PADDED_TRACE_LENGTH), where \
+an Akita build pads to 4096 and always uses log_k_chunk = 4 in one_hot_config. The field \
+inequalities and the constraint algebra cover Akita's field; trace sizing, one-hot chunking \
+and acceptance are Dory-specific. Follow-up: parameterize ProverConfig and the witness \
+construction by protocol mode; LayerZero-Labs/jolt-qed#76 records the design."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "DefaultDorySetup"
+lean = "JoltInstance.one_hot_fits_setup"
+kind = "scope"
+anchors = [
+  "crates/jolt-prover/src/dory/preprocessing.rs (from_shared)",
+  "crates/jolt-prover/src/dory/preprocessing.rs (from_shared_parts)",
+  "crates/jolt-prover/src/dory/preprocessing.rs (setup_total_vars)",
+  "crates/jolt-verifier/src/preprocessing.rs (new)",
+  "crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs (try_from)",
+  "crates/jolt-dory/src/scheme.rs (verify)",
+]
+no_witness_reason = """Scope boundary, not a premise: the model checks the one-hot opening against the setup that Jolt's automatic constructor picks (from_shared, setup_total_vars). from_shared_parts accepts any Dory setup, and JoltVerifierPreprocessing::new never compares its size with that default. The verifier's chunk checks (JoltFormulaDimensions::try_from) require only that the committed width divides the virtual width and that the virtual width divides 128, so a committed width of 128 passes. Example: logT = 8, both widths 128, and a setup with max_log_n = 136 pass every verifier check, while JoltField only gives 2^128 - 2^64 < char, which does not bound 2^128 by the characteristic. The soundness theorems therefore cover verifiers built with the default setup. Closing this needs no Jolt change: only width 128 is unsafe, Dory accepts it only with max_log_n >= 136, and an instance parameter for the setup size with the condition setupLogN <= 135 excludes it. LayerZero-Labs/jolt-qed#76 records the design."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "SetupSized"
+lean = "joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63"
+kind = "premise"
+appears_in = [
+  "JoltInstance.completeness (setupSized)",
+  "JoltInstance.completeness_someWitness (setupSized)",
+]
+anchors = ["crates/jolt-prover/src/dory/preprocessing.rs (setup_total_vars)"]
+no_witness_reason = """Completeness only. Jolt's default Dory setup rounds the maximum padded trace length with next_power_of_two, which panics above 2^63; there is then no setup for the honest prover, and the model's dorySetupLogN returns none. Soundness needs no such premise."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "TracerInitialization"
+lean = "JoltInstance.initial_state"
+kind = "correspondence"
+anchors = [
+  "crates/jolt-program/src/image/elf.rs (decode_elf)",
+  "tracer/src/emulator/mod.rs (setup_program)",
+  "tracer/src/emulator/mod.rs (tohost_address)",
+  "tracer/src/emulator/mod.rs (TEST_MEMORY_CAPACITY)",
+  "tracer/src/lib.rs (create_emulator)",
+  "common/src/jolt_device.rs (try_with_io)",
+]
+no_witness_reason = """Correspondence gap: the model initializes RAM from decode_elf's \
+memory_init (every section at or above RAM_START_ADDRESS), while Jolt's tracer \
+(setup_program) loads only sections of type 1, 14, 15 and 16 with a positive file offset \
+and size, and caps memory at TEST_MEMORY_CAPACITY when the ELF has a nonzero `tohost` \
+symbol. An allocated readable section of another type (for example a NOTE section) \
+initializes model memory but not tracer memory. ElfSections records no section type, file \
+offset or symbols, so DecodedFrom cannot state agreement, and no Lean object can witness \
+the difference. Follow-up: model setup_program and prove agreement with initial_state on a \
+defined ELF subset, or expose an initialization-agreement premise."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "HostAllocation"
+lean = "JoltISA.readHostBytes"
+kind = "correspondence"
+anchors = [
+  "tracer/src/emulator/host_io.rs (read_host_bytes)",
+  "tracer/src/emulator/cpu.rs (handle_advice_write)",
+]
+no_witness_reason = """Correspondence gap: the model assumes host allocation succeeds \
+(JoltBytecode/JoltISA/HostIO.lean). Jolt's read_host_bytes returns an Allocation error when \
+`try_reserve` fails, and handle_advice_write then logs it and appends nothing to the advice \
+tape. Allocation depends on the host machine, not on the guest, so no Lean object can \
+witness it."""
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Derived: former premises that are now theorems (reports/2026-11-25-stale-assumptions.md).
+# Each keeps the Jolt functions its proof transcribes watched, so that a Jolt change that
+# removes the check shows up in the nightly report.
+
+[[entry]]
+name = "derived.HeapNoWrap"
+lean = "layout.heap_end.toNat ≤ 2 ^ 64 - 8 (formerly the premise JoltInstance.HeapNoWrap)"
+kind = "derived"
+anchors = [
+  "common/src/jolt_device.rs (validate_heap_end)",
+  "common/src/jolt_device.rs (max_ram_k)",
+  "common/src/jolt_device.rs (try_new)",
+]
+derived_by = "new_heap_end_le"
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "derived.ImageNonempty"
+lean = "Rv64ProgramImage.ImageNonempty (formerly a completeness premise)"
+kind = "derived"
+anchors = ["crates/jolt-prover/src/config.rs (derive_from_dimensions)"]
+derived_by = "HonestTrace.prover_config_image_nonempty"
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "derived.RamRegionFits"
+lean = "JoltInstance.RamRegionFits (formerly a soundness premise)"
+kind = "derived"
+anchors = ["common/src/jolt_device.rs (max_ram_k)"]
+derived_by = "JoltInstance.ramRegionFits"
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Proof fields of Rv64ProgramImage
+
+[[entry]]
+name = "image.program_end_ge_ram_start"
+lean = "Rv64ProgramImage.program_end_ge_ram_start"
+kind = "image-field"
+appears_in = ["Rv64ProgramImage (program_end_ge_ram_start)"]
+anchors = ["crates/jolt-program/src/image/elf.rs (decode_elf)"]
+derived_by = "Rv64ProgramImage.DecodedFrom.programEndGeRamStart"
+no_witness_reason = """Implied by DecodedFrom (derived_by). It stays a field because \
+JoltInstance.soundness and JoltInstance.completeness take any instance, not one built from \
+an ELF."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "image.memory_init_in_program"
+lean = "Rv64ProgramImage.memory_init_in_program"
+kind = "image-field"
+appears_in = ["Rv64ProgramImage (memory_init_in_program)"]
+anchors = ["crates/jolt-program/src/image/elf.rs (decode_elf)"]
+witness = "JoltConstraints.Audit.memoryInitInProgram_not_derived"
+witness_shows = """That the transcription of decode_elf (ElfSections.layout?) yields a layout \
+with a loaded byte at or past program_end, so DecodedFrom does not imply this field. The witness \
+is at the boundary where the field would be derived; the field itself is a proof field every \
+instance carries, not a binder."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "image.next_pc_no_wrap"
+lean = "Rv64ProgramImage.next_pc_no_wrap"
+kind = "image-field"
+appears_in = ["Rv64ProgramImage (next_pc_no_wrap)"]
+anchors = [
+  "crates/jolt-program/src/image/elf.rs (decode_elf)",
+  "crates/jolt-program/src/image/elf.rs (decode_text_section)",
+]
+derived_by = "Rv64ProgramImage.DecodedFrom.nextPCNoWrap"
+no_witness_reason = """Implied by DecodedFrom (derived_by). It stays a field because \
+JoltInstance.soundness and JoltInstance.completeness take any instance, not one built from \
+an ELF."""
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "image.instruction_loaded"
+lean = "Rv64ProgramImage.instruction_loaded"
+kind = "image-field"
+appears_in = ["Rv64ProgramImage (instruction_loaded)"]
+anchors = [
+  "crates/jolt-program/src/image/elf.rs (decode_elf)",
+  "crates/jolt-program/src/image/elf.rs (decode_text_section)",
+]
+derived_by = "Rv64ProgramImage.DecodedFrom.instructionLoaded"
+no_witness_reason = """Implied by DecodedFrom (derived_by). It stays a field because \
+JoltInstance.soundness and JoltInstance.completeness take any instance, not one built from \
+an ELF."""
+upstream = ""
+bug_report = "bug-report/verifier-ram-minimum"
+
+[[entry]]
+name = "image.data"
+lean = "Rv64ProgramImage"
+kind = "data"
+appears_in = [
+  "Rv64ProgramImage (instructions)",
+  "Rv64ProgramImage (memory_init)",
+  "Rv64ProgramImage (program_end)",
+  "Rv64ProgramImage (entry_address)",
+]
+anchors = ["crates/jolt-program/src/image/elf.rs (decode_elf)"]
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Statements: what the theorems are about. Each is a check Jolt itself runs or the
+# relation the theorem proves something about, not an assumption about the model.
+
+[[entry]]
+name = "AllConstraints"
+lean = "JoltConstraints.AllConstraints"
+kind = "statement"
+appears_in = [
+  "JoltInstance.soundness (satisfied)",
+  "JoltInstance.sail_soundness (satisfied)",
+]
+anchors = [
+  "crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs (rv64_trace_constraints)",
+]
+no_witness_reason = "The hypothesis of soundness: the constraints accept the witness."
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "InLanguage"
+lean = "JoltInstance.InLanguage"
+kind = "statement"
+appears_in = ["JoltInstance.completeness_someWitness (inLanguage)"]
+anchors = [
+  "jolt-sdk/src/host_utils.rs (prove_program)",
+  "crates/jolt-prover/src/config.rs (derive_from_dimensions)",
+  "tracer/src/instruction/virtual_assert_eq.rs (exec)",
+]
+no_witness_reason = "The hypothesis of completeness: the instance is in Jolt's language."
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "matches_outputs"
+lean = "HonestTrace.matches_outputs"
+kind = "statement"
+appears_in = ["JoltInstance.completeness (claimsRunOutputs)"]
+anchors = ["jolt-sdk/src/host_utils.rs (prove_program)"]
+no_witness_reason = "Part of JoltInstance.InLanguage: the run ends with the claimed outputs."
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "SpoilAssertsPass"
+lean = "Trace.SpoilAssertsPass"
+kind = "statement"
+appears_in = ["JoltInstance.completeness (spoilAssertsPass)"]
+anchors = [
+  "tracer/src/instruction/virtual_assert_eq.rs (exec)",
+  "jolt-platform/src/spoil.rs (spoil_proof)",
+]
+no_witness_reason = "Part of JoltInstance.InLanguage: no spoil assert fails."
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "prover_config"
+lean = "HonestTrace.prover_config"
+kind = "statement"
+appears_in = [
+  "JoltInstance.completeness (proverAccepts)",
+]
+anchors = ["crates/jolt-prover/src/config.rs (derive_from_dimensions)"]
+no_witness_reason = """Part of JoltInstance.InLanguage: the prover's sizing \
+(derive_from_dimensions) succeeds on the trace. Stage 0 of the prover can still refuse an \
+instance whose advice grid is wider than the main grid. \
+JoltInstance.sail_soundness obtains it from JoltInstance.soundness. The Sail reproduction \
+(WholeRun.HonestTrace.sail_reproduces) does not need it and no longer takes it."""
+upstream = ""
+bug_report = ""
+
+# ---------------------------------------------------------------------------
+# Data: ordinary quantified objects, listed so the check is total.
+
+[[entry]]
+name = "data.field"
+lean = "F"
+kind = "data"
+appears_in = [
+  "JoltInstance.soundness (F)",
+  "JoltInstance.soundness (inst)",
+  "JoltInstance.completeness (F)",
+  "JoltInstance.completeness (inst)",
+  "JoltInstance.completeness_someWitness (F)",
+  "JoltInstance.completeness_someWitness (inst)",
+  "JoltInstance.sail_soundness (F)",
+  "JoltInstance.sail_soundness (inst)",
+]
+anchors = []
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.instance"
+lean = "JoltInstance"
+kind = "data"
+appears_in = [
+  "JoltInstance.soundness (joltInstance)",
+  "JoltInstance.completeness (joltInstance)",
+  "JoltInstance.completeness_someWitness (joltInstance)",
+  "WholeRun.HonestTrace.sail_reproduces (joltInstance)",
+  "JoltInstance.sail_soundness (joltInstance)",
+]
+anchors = []
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.privateInputs"
+lean = "JoltPrivateInputs"
+kind = "data"
+appears_in = [
+  "JoltInstance.soundness (privateInputs)",
+  "JoltInstance.completeness (privateInputs)",
+  "WholeRun.HonestTrace.sail_reproduces (privateInputs)",
+  "JoltInstance.sail_soundness (givenInputs)",
+]
+anchors = []
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.witness"
+lean = "WitnessType"
+kind = "data"
+appears_in = [
+  "JoltInstance.soundness (params)",
+  "JoltInstance.soundness (witness)",
+  "JoltInstance.sail_soundness (params)",
+  "JoltInstance.sail_soundness (witness)",
+]
+anchors = []
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.trace"
+lean = "HonestTrace"
+kind = "data"
+appears_in = [
+  "JoltInstance.completeness (trace)",
+  "JoltInstance.completeness (config)",
+  "WholeRun.HonestTrace.sail_reproduces (trace)",
+]
+anchors = ["tracer/src/emulator/cpu.rs (halt)"]
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.elf"
+lean = "WholeRun.ElfSections"
+kind = "data"
+appears_in = [
+  "WholeRun.HonestTrace.sail_reproduces (elf)",
+  "JoltInstance.sail_soundness (elf)",
+]
+anchors = []
+upstream = ""
+bug_report = ""
+
+[[entry]]
+name = "data.haltPrefix"
+lean = "WholeRun.HaltPrefix"
+kind = "data"
+appears_in = [
+  "WholeRun.HonestTrace.sail_reproduces (pre)",
+  "WholeRun.HonestTrace.sail_reproduces (halt)",
+  "WholeRun.HonestTrace.sail_reproduces (final)",
+  "WholeRun.HonestTrace.sail_reproduces (hp)",
+]
+# `hp` is a certificate, not an assumption: HonestTrace.haltPrefix supplies one for every
+# honest trace, and JoltInstance.sail_soundness obtains it that way.
+anchors = ["tracer/src/emulator/cpu.rs (halt)"]
+upstream = ""
+bug_report = ""

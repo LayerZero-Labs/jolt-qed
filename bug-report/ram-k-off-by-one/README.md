@@ -1,3 +1,12 @@
++++
+status = "fixed-upstream"
+reproduced_at = "8e536f199735ac8187156aa589ed1387722a079a"
+fixed_by = "a16z/jolt#2250"
+upstream = "a16z/jolt#1951"
+registry = []
+note = "Item 4 of a16z/jolt#1951. At ff6fc6568, derive_from_dimensions sizes RAM from touched + 1. Not rerun at ff6fc6568."
++++
+
 # `ram_K` one slot too small: still present at `8e536f19`
 
 Already reported upstream as

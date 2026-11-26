@@ -30,11 +30,14 @@ jobs:
       # LeanRV64D is generated Sail output and is treated as trusted input.
       # A PR may change it only by regenerating it from the pinned inputs in
       # sail-import/PROVENANCE.toml. When a PR touches the root module, anything
-      # below LeanRV64D/, the pinned inputs, the scripts that use them, or the
-      # Lean copy of the memory regions (WholeRun/Relation.lean), CI
-      # rebuilds the pinned Sail compiler, regenerates the model and requires
-      # the checked-in tree to be byte-for-byte identical.
+      # below LeanRV64D/, the pinned inputs, the scripts that use them, the
+      # Lean copy of the memory regions (WholeRun/Relation.lean), or the Lake
+      # files that pin the Lean Sail runtime and the toolchain (lakefile.toml,
+      # lake-manifest.json, lean-toolchain), CI rebuilds the pinned Sail
+      # compiler, regenerates the model and requires the checked-in tree to be
+      # byte-for-byte identical.
       # This checks PRs; the main rules must enforce it and disallow direct pushes.
+      # The next step runs the checks that need no build on every run.
       - name: Protect generated Sail sources
         id: sail
         if: github.event_name == 'pull_request'
@@ -44,7 +47,8 @@ jobs:
         run: |
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
               sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh \
-              JoltConstraints/theorems/WholeRun/Relation.lean; then
+              JoltConstraints/theorems/WholeRun/Relation.lean \
+              lakefile.toml lake-manifest.json lean-toolchain; then
             echo "regenerate=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -55,8 +59,14 @@ jobs:
           echo "Generated Sail sources or their pinned inputs changed:"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- LeanRV64D.lean LeanRV64D/ \
             sail-import/ scripts/regen-sail-model.sh scripts/check-sail-model.sh \
-            JoltConstraints/theorems/WholeRun/Relation.lean | head -50
+            JoltConstraints/theorems/WholeRun/Relation.lean \
+            lakefile.toml lake-manifest.json lean-toolchain | head -50
           echo "regenerate=true" >> "$GITHUB_OUTPUT"
+      # The Lean Sail runtime in lakefile.toml and lake-manifest.json must be
+      # [runtime] in PROVENANCE.toml, and the tree, input and memory-region
+      # digests must match, whether or not the PR touches them.
+      - name: Check the pinned Sail inputs
+        run: scripts/check-sail-model.sh --inputs-only
       - name: Install the Sail compiler's build dependencies
         if: steps.sail.outputs.regenerate == 'true'
         run: |
@@ -85,6 +95,25 @@ jobs:
             .lake/build/ir/LeanRV64D.*
             .lake/build/ir/LeanRV64D/
           key: leanrv64d-${{ runner.os }}-${{ hashFiles('LeanRV64D.lean', 'LeanRV64D/**', 'lean-toolchain', 'lake-manifest.json', 'lakefile.toml') }}
+      # assumptions.toml lists every premise, sorry and image field the
+      # headline theorems depend on (reports/2026-11-25-stale-assumptions.md).
+      # The script fails when a sorry, a field of Rv64ProgramImage or a binder
+      # listed in JoltConstraints/Audit/Premises.lean has no registry entry, when
+      # an entry is stale, or when a bug-report header is missing.
+      - name: Check the assumption registry
+        run: python3 scripts/check-assumptions.py
+      # The build checks the axioms of the audited theorems (#audit_statements in
+      # JoltConstraints/Audit/Statements.lean). This step rejects the mechanisms
+      # anywhere in the source: sorry, sorryAx, admit, unlisted axioms,
+      # native_decide, bv_decide, decide +kernel, maxHeartbeats, synthInstance
+      # options, respectTransparency false, and maxRecDepth outside the five
+      # generated Sail options in scripts/lean-policy-allowlist.toml. The tests
+      # in scripts/tests/ check that the scanner rejects known bypasses and that
+      # the drift report lists uncited changed Jolt files.
+      - name: Check the Lean source policy
+        run: |
+          python3 scripts/check-lean-policy.py
+          python3 -m unittest discover -s scripts/tests -v
       - uses: leanprover/lean-action@24581d74d674803a25a81b10b059c5c0cdd344c6 # v1.6.2
         with:
           build: true

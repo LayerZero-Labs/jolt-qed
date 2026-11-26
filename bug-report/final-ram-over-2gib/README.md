@@ -1,3 +1,12 @@
++++
+status = "fixed-upstream"
+reproduced_at = "629ed77b5"
+fixed_by = "a16z/jolt#2509"
+upstream = ""
+registry = []
+note = "The model documented this only; the note left model_review.md when the pin moved to ff6fc6568."
++++
+
 # Final RAM misplaces bytes more than 2 GiB above RAM_START
 
 **Status: fixed in Jolt by a16z/jolt#2509 (in `ff6fc6568`).** `final_ram_state` no longer has the

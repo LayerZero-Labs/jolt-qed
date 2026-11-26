@@ -7,6 +7,7 @@ Ari reviews the work; read this file before starting any task.
 
 The soundness proof is built top-down.
 State each lemma with `sorry` first, prove its caller from it, build, and stop for Ari's review before proving the lemma itself.
+CI rejects every `sorry` (see "Rules"), so a branch with a staged `sorry` cannot merge until the lemma is proved.
 Never write a bottom-up lemma that no staged statement needs.
 
 The state of the proof lives in the repository, not in any one session:
@@ -26,7 +27,7 @@ Git keeps old reports; delete a plan or report once its content is in the code o
 Claude, in a separate session, is the auditor.
 It reviews every staged statement and every report before Ari approves it.
 It checks for drift from Jolt's Rust code, false or weak statements, new assumptions, proof quality against this file, and whether the docs match the code.
-Write your reports so they can be checked: name each declaration with its file and line, and list every statement change, added hypothesis, `bv_decide` use and any proof slower than about ten seconds.
+Write your reports so they can be checked: name each declaration with its file and line, and list every statement change, added hypothesis and any proof slower than about ten seconds.
 
 ## When stuck, discuss first
 
@@ -51,13 +52,17 @@ If you believe a staged statement is false, stop and report the exact missing fa
 - Never write a theorem or `sorry` you know to be false.
 - Never leave `sorry` inside a proof body; make each gap its own named, stated lemma.
 - Never replace a proved fact with `sorry`.
-- Do not use `native_decide` or `decide +kernel`, and never raise `maxHeartbeats`.
-- `bv_decide` is accepted for now, to make progress; it will be removed later.
-  List every new use in your report, and add it to the `bv_decide` list in "Proofs owed" (`JoltConstraints/documentation/model_review.md`).
+- Follow the strict checking standard, which CI enforces on every file of `JoltBytecode/`, `JoltConstraints/` and `LeanRV64D/` (`scripts/check-lean-policy.py`):
+  no `sorry`, `admit` or `sorryAx`;
+  no `native_decide`, `bv_decide` or `decide +kernel` (or `kernel := true`);
+  no new `axiom` (the only axioms are the floating-point primitives of `LeanRV64D/RiscvExtras.lean` that `scripts/lean-policy-allowlist.toml` lists);
+  no `maxHeartbeats`, `synthInstance.*` or `respectTransparency false` options, and no `debug.skipKernelTC`;
+  `maxRecDepth` only at the five generated Sail definitions the allowlist names.
+  The build also checks that the headline theorems, necessity witnesses and derived facts depend only on `propext`, `Classical.choice` and `Quot.sound` (`JoltConstraints/Audit/Statements.lean`).
 - Delete every lemma no proof uses.
 - For now (Ari, 2026-10-22), correctness comes before speed: the first goal is to learn whether the soundness theorem is true.
   There is no time target for proofs; list any proof that takes more than about ten seconds in your report, so it can be sped up later.
-  This never allows raising `maxHeartbeats`, `native_decide` or `decide +kernel`.
+  This never allows anything the strict checking standard above rules out.
 - Commit only when Ari asks, and add no Co-Authored-By lines.
 - Keep git worktrees under `/Users/ari.biswas/Lean/`, never in `/private/tmp`, which macOS clears.
 
@@ -106,3 +111,29 @@ Each of these has made a staged statement false before.
   The model is pinned to the commit recorded in `methods/soundness.md` (currently `ff6fc6568`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
 - A run stops at its first explicit halt (`jolt.success` or EBREAK), as Jolt's tracer does at `ff6fc6568` (a16z/jolt#2417 and #2451).
+
+## Re-pinning Jolt
+
+The theorems are proved about one Jolt commit, the pin.
+`assumptions.toml` lists every premise, `sorry`, scope premise and field of `Rv64ProgramImage` the headline theorems depend on, with the Jolt functions each one cites (see `reports/2026-11-25-stale-assumptions.md`).
+On every re-pin:
+
+1. Read the open issue "Drift against Jolt main" (label `jolt-drift`).
+   The nightly workflow `.github/workflows/jolt-main-drift.yml` writes it: the registry entries whose anchor files changed since the pin, the other cited Jolt files that changed, the unclassified changed files (production Rust and build inputs that no anchor or citation names), the regenerated constraint data, and the state of each upstream issue.
+   Read every unclassified file and decide whether the model transcribes it; if it does, cite it in the Lean source.
+2. Move the pin in one commit: `jolt_rev` in `assumptions.toml`, `JOLT_REV` in `.github/workflows/constraint-generation.yml`, and the pin in `methods/soundness.md`.
+   `scripts/check-assumptions.py` fails when the first two differ.
+3. Run `python3 scripts/check-assumptions.py --jolt-dir <Jolt checkout>`.
+   It fails when an anchor's file is gone at the new pin or no longer mentions the anchor's function; update or remove that anchor.
+4. For each new Jolt check, and for each entry the issue flags, ask which registry entry the check makes provable.
+   A premise that Jolt now guarantees must be removed, not kept.
+   Its necessity witness (`JoltConstraints/Audit/Necessity.lean`) stops building once the check is transcribed; that failure is the signal, not a proof to repair.
+   Removing a premise changes a theorem statement, so it needs Ari's approval.
+5. When a binder or field changes, the build of `JoltConstraints/Audit/Premises.lean` fails and prints the new list.
+   When a headline statement, or a definition below it, changes, the build of `JoltConstraints/Audit/Statements.lean` fails and names each changed definition.
+   Review the change, then run `LAKE="<your lake command>" python3 scripts/update-audit-tables.py`, which rewrites both expected tables from the build.
+   Update the entry's `appears_in` in `assumptions.toml` to match, and run `scripts/check-assumptions.py`.
+6. Rerun the reproducer of each bug-report folder whose header says `status = "open"` or `"unknown"`, and update `status`, `reproduced_at` and `fixed_by`.
+   An entry whose upstream issue closed needs the same check.
+
+Anchors are compared file by file for now; function-level anchors build on #56 and come later.
