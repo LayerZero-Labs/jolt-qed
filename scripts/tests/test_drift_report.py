@@ -6,9 +6,12 @@ and checks that the report lists a changed file that no anchor or citation names
 files in crates that only the workspace manifest names and in a crate that main adds.
 """
 
+import contextlib
 import importlib.util
+import io
 import pathlib
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -132,7 +135,7 @@ class UnclassifiedFiles(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             pin = make_repo(tmp)
             out = [""]
-            drift.anchor_sections(out, tmp, "HEAD", pin, [])
+            drift.anchor_sections(out, drift.compare(tmp, "HEAD", pin, []))
         report = "\n".join(out)
         section = report.split("## Unclassified changed files", 1)[1].split("\n## ", 1)[0]
         for path in UNCLASSIFIED:
@@ -147,8 +150,55 @@ class UnclassifiedFiles(unittest.TestCase):
         self.assertIn("10 unclassified and 4 other", section)
 
 
+def run_main(argv, root, cited):
+    """Run the script's `main` in this process with the registry in `root` and the citations
+    `cited`, and return its exit status and standard output."""
+    saved = drift.ROOT, drift.resolved_citations, sys.argv
+    drift.ROOT = root
+    drift.resolved_citations = lambda jolt_dir, rev: (cited, {})
+    sys.argv = ["jolt-drift-report.py", *argv]
+    try:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            status = drift.main()
+        return status, stdout.getvalue()
+    finally:
+        drift.ROOT, drift.resolved_citations, sys.argv = saved
+
+
 class Evidence(unittest.TestCase):
-    def test_cut_parts_are_kept_in_the_evidence_directory(self):
+    def test_long_lists_are_full_in_the_artifact_and_cut_in_the_issue(self):
+        count = drift.MAX_LIST + 5
+        cited_paths = [f"tracer/src/cited/f{i:03d}.rs" for i in range(count)]
+        uncited_paths = [f"tracer/src/uncited/g{i:03d}.rs" for i in range(count)]
+        cited = {path: {f"JoltBytecode/Cites{i:03d}.lean"} for i, path in enumerate(cited_paths)}
+        pin_files = {path: "fn f() {}\n" for path in cited_paths + uncited_paths}
+        pin_files["Cargo.toml"] = manifest(["tracer"])
+        main_changes = {path: "fn f() { g() }\n" for path in cited_paths + uncited_paths}
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            pin = make_repo(tmp / "jolt", pin_files, main_changes)
+            (tmp / "assumptions.toml").write_text(f'jolt_rev = "{pin}"\nentry = []\n')
+            status, body = run_main(["--jolt-dir", str(tmp / "jolt"), "--evidence-dir",
+                                     str(tmp / "evidence")], tmp, cited)
+            self.assertEqual(status, 0, body)
+            report = (tmp / "evidence" / "report.md").read_text()
+            table = (tmp / "evidence" / "changed-files.tsv").read_text()
+        last_cited, last_uncited = cited_paths[-1], uncited_paths[-1]
+        # The issue body shows MAX_LIST items of each list and says where the rest is.
+        self.assertNotIn(f"`{last_cited}`", body)
+        self.assertNotIn(f"`{last_uncited}`", body)
+        self.assertEqual(body.count("… and 5 more"), 2)
+        # The evidence report shows every item.
+        for path in cited_paths + uncited_paths:
+            self.assertIn(f"`{path}`", report)
+        self.assertIn(f"`{last_cited}`: cited by `JoltBytecode/Cites{count - 1:03d}.lean`", report)
+        self.assertNotIn("more (", report)
+        # The table maps each cited file to the Lean files that cite it.
+        self.assertIn(f"cited\t{last_cited}\tJoltBytecode/Cites{count - 1:03d}.lean\t\n", table)
+        self.assertIn(f"unclassified\t{last_uncited}\t\t\n", table)
+
+    def test_long_diff_is_full_in_the_artifact_and_cut_in_the_issue(self):
         line = "+" + "x" * 99 + "\n"
         diff = "".join(f"{i:06d}{line}" for i in range(400))  # longer than MAX_DIFF
         self.assertGreater(len(diff), drift.MAX_DIFF)
@@ -171,8 +221,9 @@ class Evidence(unittest.TestCase):
             evidence = tmp / "evidence"
             self.assertEqual((evidence / "generated.diff").read_text(), diff)
             report = (evidence / "report.md").read_text()
-            self.assertIn("**Monitoring failed in this run.**", report)
-            self.assertEqual(result.stdout, report)
+        self.assertIn("**Monitoring failed in this run.**", report)
+        self.assertIn(diff, report)
+        self.assertNotIn("(cut;", report)
 
 
 if __name__ == "__main__":
