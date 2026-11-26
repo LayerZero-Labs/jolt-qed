@@ -219,6 +219,8 @@ theorem HonestTrace.allConstraints_prover_sizes
     (trace : HonestTrace joltInstance privateInputs)
     -- Jolt's prover accepts the run and picks these sizes
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
+    -- the default Dory setup exists: its `next_power_of_two` does not overflow
+    (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63)
     -- Jolt's preprocessed bytecode, and the entry slot its verifier uses
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
     (entry : Fin (2 ^ (trace.witness_params config proverAccepts).logBytecodeK))
@@ -259,7 +261,9 @@ theorem HonestTrace.allConstraints_prover_sizes
         unfold JoltInstance.public_io at publicIo
         rw [hasLayout] at publicIo
         contradiction
-      | some layout => exact trace.witness_params_one_hot_fits_setup config proverAccepts layout hasLayout
+      | some layout =>
+        exact trace.witness_params_one_hot_fits_setup config proverAccepts layout hasLayout
+          setupSized
     entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
   change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
     (trace.honestWitness (F := F) (trace.witness_params config proverAccepts))

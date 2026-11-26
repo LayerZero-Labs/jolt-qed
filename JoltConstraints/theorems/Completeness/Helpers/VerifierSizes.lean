@@ -101,12 +101,23 @@ private theorem chunks_mono {logT maxLogT : Nat} (shorter : logT ≤ maxLogT) :
   unfold VerifierSizes.committedLogKChunk
   split <;> split <;> omega
 
--- Chunks of the honest width for a trace no longer than the maximum fit the setup
--- sized for the maximum.
+-- The default setup exists when the maximum padded trace length is at most `2^63`,
+-- and chunks of the honest width for a trace no longer than the maximum fit it.
 theorem VerifierSizes.chunks_fit_dorySetupLogN (layout : MemoryLayout) (maxLength logT : Nat)
-    (shorter : logT ≤ Nat.clog 2 maxLength) :
-    logT + VerifierSizes.committedLogKChunk logT ≤ VerifierSizes.dorySetupLogN layout maxLength := by
+    (setupSized : maxLength ≤ 2 ^ 63) (shorter : logT ≤ Nat.clog 2 maxLength) :
+    ∃ setupLogN, VerifierSizes.dorySetupLogN layout maxLength = some setupLogN ∧
+      logT + VerifierSizes.committedLogKChunk logT ≤ setupLogN := by
+  have logSmall : Nat.clog 2 maxLength ≤ 63 := Nat.clog_le_of_le_pow setupSized
+  have rounded : VerifierSizes.checkedNextPowerOfTwo maxLength =
+      some (2 ^ Nat.clog 2 maxLength) := by
+    unfold VerifierSizes.checkedNextPowerOfTwo
+    have fits : 2 ^ Nat.clog 2 maxLength < 2 ^ 64 :=
+      Nat.pow_lt_pow_right (by decide) (by omega)
+    simp only [fits, ↓reduceIte]
   unfold VerifierSizes.dorySetupLogN
+  rw [rounded]
+  refine ⟨_, rfl, ?_⟩
+  rw [Nat.log_pow (by decide)]
   exact ((chunks_mono shorter).trans (le_max_left _ _)).trans (le_round_up_even _)
 
 end JoltConstraints
@@ -507,8 +518,9 @@ theorem HonestTrace.witness_params_ram_bounds
   exact ⟨atLeastMinimum, atMostMaximum⟩
 
 /-- The honest prover's one-hot chunks fit the verifier's Dory setup
-(`JoltInstance.one_hot_fits_setup`): its trace is no longer than the maximum padded
-length, and its chunk width is the setup's width for that length.
+(`JoltInstance.one_hot_fits_setup`): the default setup exists for a maximum padded
+length of at most `2^63`, the trace is no longer than that maximum, and its chunk
+width is the setup's width for that length.
 For example, a run padded to `2^9` cycles with 4-bit chunks needs 13 setup variables,
 and a setup sized for at least `2^9` cycles has at least that many.
 See jolt/crates/jolt-prover/src/dory/preprocessing.rs (`setup_total_vars`) at ff6fc6568. -/
@@ -516,7 +528,8 @@ theorem HonestTrace.witness_params_one_hot_fits_setup
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
-    (layout : MemoryLayout) (hasLayout : joltInstance.memory_layout = some layout) :
+    (layout : MemoryLayout) (hasLayout : joltInstance.memory_layout = some layout)
+    (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63) :
     joltInstance.one_hot_fits_setup (trace.witness_params config proverAccepts).logT
       (trace.witness_params config proverAccepts).chunkBits = true := by
   obtain ⟨isPadded, bounded⟩ := trace.prover_config_trace_length config proverAccepts
@@ -532,6 +545,9 @@ theorem HonestTrace.witness_params_one_hot_fits_setup
     rwa [Nat.clog_pow 2 _ (by decide)] at this
   have chunk : (trace.witness_params config proverAccepts).chunkBits =
       VerifierSizes.committedLogKChunk (trace.witness_params config proverAccepts).logT := rfl
+  obtain ⟨setupLogN, setupIs, fitsSetup⟩ :=
+    VerifierSizes.chunks_fit_dorySetupLogN layout _ _ setupSized shorter
   unfold JoltInstance.one_hot_fits_setup
-  rw [hasLayout, chunk, decide_eq_true_eq]
-  exact VerifierSizes.chunks_fit_dorySetupLogN layout _ _ shorter
+  simp only [hasLayout, setupIs, decide_eq_true_eq]
+  rw [chunk]
+  exact fitsSetup

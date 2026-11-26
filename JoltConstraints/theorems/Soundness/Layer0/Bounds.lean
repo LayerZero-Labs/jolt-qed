@@ -18,22 +18,37 @@ theorem VerifierSizes.adviceVars_le_64 (bytes : Nat) (fits : bytes < 2 ^ 64) :
   split <;> omega
 
 /-- The modeled Dory setup needs at most 72 variables: at most 64 for `maxLogT`,
-the rounded-up base-two logarithm of the maximum padded trace length; eight for
-the honest prover's one-hot chunk width (`committedLogKChunk`); and at most 64
-for either advice region.
+the base-two logarithm of the maximum padded trace length rounded up to a power of
+two below `2^64`; eight for the honest prover's one-hot chunk width
+(`committedLogKChunk`); and at most 64 for either advice region.
 Rounding the maximum up to an even number preserves the bound of 72.
 This uses the setup definition in `verifier_sizes.lean`; precommitted program
 tables (`extra_candidates`) are outside that model. Revisit 72 if they are added. -/
-theorem VerifierSizes.dorySetupLogN_le_72 (layout : MemoryLayout) (maxLength : Nat)
-    (fits : maxLength < 2 ^ 64) : VerifierSizes.dorySetupLogN layout maxLength ≤ 72 := by
-  have logBound : Nat.clog 2 maxLength ≤ 64 := Nat.clog_le_of_le_pow (Nat.le_of_lt fits)
-  have chunkBound : VerifierSizes.committedLogKChunk (Nat.clog 2 maxLength) ≤ 8 := by
-    unfold VerifierSizes.committedLogKChunk
+theorem VerifierSizes.dorySetupLogN_le_72 (layout : MemoryLayout) (maxLength setupLogN : Nat)
+    (computed : VerifierSizes.dorySetupLogN layout maxLength = some setupLogN) :
+    setupLogN ≤ 72 := by
+  unfold VerifierSizes.dorySetupLogN at computed
+  cases rounding : VerifierSizes.checkedNextPowerOfTwo maxLength with
+  | none => simp [rounding] at computed
+  | some rounded =>
+    rw [rounding] at computed
+    have roundedLt : rounded < 2 ^ 64 := by
+      unfold VerifierSizes.checkedNextPowerOfTwo at rounding
+      dsimp only at rounding
+      split at rounding
+      · cases rounding
+        assumption
+      · contradiction
+    have logBound : Nat.log 2 rounded ≤ 64 :=
+      (Nat.log_mono_right roundedLt.le).trans (Nat.log_pow (by decide) 64).le
+    have chunkBound : VerifierSizes.committedLogKChunk (Nat.log 2 rounded) ≤ 8 := by
+      unfold VerifierSizes.committedLogKChunk
+      split <;> omega
+    have trusted := VerifierSizes.adviceVars_le_64 _ layout.max_trusted_advice_size.isLt
+    have untrusted := VerifierSizes.adviceVars_le_64 _ layout.max_untrusted_advice_size.isLt
+    have value := Option.some.inj computed
+    subst value
     split <;> omega
-  have trusted := VerifierSizes.adviceVars_le_64 _ layout.max_trusted_advice_size.isLt
-  have untrusted := VerifierSizes.adviceVars_le_64 _ layout.max_untrusted_advice_size.isLt
-  dsimp only [VerifierSizes.dorySetupLogN]
-  split <;> omega
 
 /-- The verifier's setup check bounds the prover-chosen one-hot chunk width.
 No honest-prover `ProverChunkConfig` assumption is needed. -/
@@ -46,11 +61,13 @@ theorem ConstraintContext.chunkBits_le_72
   cases layoutIs : joltInstance.memory_layout with
   | none => simp [layoutIs] at fits
   | some layout =>
-    rw [layoutIs] at fits
-    have bound := of_decide_eq_true fits
-    have setupBound := VerifierSizes.dorySetupLogN_le_72 layout _
-      joltInstance.max_padded_trace_length.isLt
-    omega
+    cases setupIs : VerifierSizes.dorySetupLogN layout
+        joltInstance.max_padded_trace_length.toNat with
+    | none => simp [layoutIs, setupIs] at fits
+    | some setupLogN =>
+      simp only [layoutIs, setupIs, decide_eq_true_eq] at fits
+      have setupBound := VerifierSizes.dorySetupLogN_le_72 layout _ setupLogN setupIs
+      omega
 
 /-- A one-hot chunk has fewer entries than the characteristic.
 This supplies the cardinality bound used by the generic one-hot lemmas. -/
