@@ -1,7 +1,5 @@
 import LeanRV64D.Prelude
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -15,21 +13,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -65,7 +53,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -84,7 +71,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -147,11 +133,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -160,7 +144,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -192,6 +175,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -202,6 +186,12 @@ open AmocasOddRegisterReservedBehavior
 def plat_cache_block_size_exp : Nat := 6
 
 def plat_reservation_set_size_exp : Nat := 3
+
+def plat_reservation_require_exact_addr_match : Bool := true
+
+def plat_reservation_require_width_within : Bool := true
+
+def plat_reservation_invalidate_on_xret : Bool := false
 
 def plat_enable_dirty_update : Bool := false
 
@@ -250,6 +240,24 @@ def fetch_guest_page_fault_writes_xtval : Bool := false
 def software_check_fault_writes_xtval : Bool := true
 
 def reserved_exceptions_write_xtval : Bool := false
+
+def undefined_ExtContextPolicy (_ : Unit) : SailM ExtContextPolicy := do
+  (internal_pick [ExtContext_Off, ExtContext_TwoState, ExtContext_FourState])
+
+/-- Type quantifiers: arg_ : Nat, 0 ≤ arg_ ∧ arg_ ≤ 2 -/
+def ExtContextPolicy_of_num (arg_ : Nat) : ExtContextPolicy :=
+  match arg_ with
+  | 0 => ExtContext_Off
+  | 1 => ExtContext_TwoState
+  | _ => ExtContext_FourState
+
+def num_of_ExtContextPolicy (arg_ : ExtContextPolicy) : Int :=
+  match arg_ with
+  | .ExtContext_Off => 0
+  | .ExtContext_TwoState => 1
+  | .ExtContext_FourState => 2
+
+def plat_mstatus_legal_fs : ExtContextPolicy := ExtContext_Off
 
 def undefined_AmocasOddRegisterReservedBehavior (_ : Unit) : SailM AmocasOddRegisterReservedBehavior := do
   (internal_pick [AMOCAS_Fatal, AMOCAS_Illegal])

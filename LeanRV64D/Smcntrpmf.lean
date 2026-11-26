@@ -1,7 +1,5 @@
 import LeanRV64D.Types
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -15,21 +13,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -65,7 +53,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -84,7 +71,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -147,11 +133,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -160,7 +144,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -192,6 +175,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -211,19 +195,9 @@ def _get_CountSmcntrpmf_MINH (v : (BitVec 64)) : (BitVec 1) :=
 def _update_CountSmcntrpmf_MINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 62 62 x)
 
-def _update_HpmEvent_MINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v 62 62 x)
-
 def _set_CountSmcntrpmf_MINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_CountSmcntrpmf_MINH r v)
-
-def _get_HpmEvent_MINH (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 62 62)
-
-def _set_HpmEvent_MINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_HpmEvent_MINH r v)
 
 def _get_CountSmcntrpmf_SINH (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 61 61)
@@ -231,19 +205,9 @@ def _get_CountSmcntrpmf_SINH (v : (BitVec 64)) : (BitVec 1) :=
 def _update_CountSmcntrpmf_SINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 61 61 x)
 
-def _update_HpmEvent_SINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v 61 61 x)
-
 def _set_CountSmcntrpmf_SINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_CountSmcntrpmf_SINH r v)
-
-def _get_HpmEvent_SINH (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 61 61)
-
-def _set_HpmEvent_SINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_HpmEvent_SINH r v)
 
 def _get_CountSmcntrpmf_UINH (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 60 60)
@@ -251,19 +215,9 @@ def _get_CountSmcntrpmf_UINH (v : (BitVec 64)) : (BitVec 1) :=
 def _update_CountSmcntrpmf_UINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 60 60 x)
 
-def _update_HpmEvent_UINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v 60 60 x)
-
 def _set_CountSmcntrpmf_UINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_CountSmcntrpmf_UINH r v)
-
-def _get_HpmEvent_UINH (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 60 60)
-
-def _set_HpmEvent_UINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_HpmEvent_UINH r v)
 
 def _get_CountSmcntrpmf_VSINH (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 59 59)
@@ -271,19 +225,9 @@ def _get_CountSmcntrpmf_VSINH (v : (BitVec 64)) : (BitVec 1) :=
 def _update_CountSmcntrpmf_VSINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 59 59 x)
 
-def _update_HpmEvent_VSINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v 59 59 x)
-
 def _set_CountSmcntrpmf_VSINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_CountSmcntrpmf_VSINH r v)
-
-def _get_HpmEvent_VSINH (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 59 59)
-
-def _set_HpmEvent_VSINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_HpmEvent_VSINH r v)
 
 def _get_CountSmcntrpmf_VUINH (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 58 58)
@@ -291,19 +235,9 @@ def _get_CountSmcntrpmf_VUINH (v : (BitVec 64)) : (BitVec 1) :=
 def _update_CountSmcntrpmf_VUINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 58 58 x)
 
-def _update_HpmEvent_VUINH (v : (BitVec 64)) (x : (BitVec 1)) : (BitVec 64) :=
-  (Sail.BitVec.updateSubrange v 58 58 x)
-
 def _set_CountSmcntrpmf_VUINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
   let r ← do (reg_deref r_ref)
   writeRegRef r_ref (_update_CountSmcntrpmf_VUINH r v)
-
-def _get_HpmEvent_VUINH (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 58 58)
-
-def _set_HpmEvent_VUINH (r_ref : (RegisterRef (BitVec 64))) (v : (BitVec 1)) : SailM Unit := do
-  let r ← do (reg_deref r_ref)
-  writeRegRef r_ref (_update_HpmEvent_VUINH r v)
 
 def legalize_smcntrpmf (c : (BitVec 64)) (value : (BitVec 64)) : SailM (BitVec 64) := do
   let v := (Mk_CountSmcntrpmf value)

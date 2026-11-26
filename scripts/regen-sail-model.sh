@@ -5,9 +5,9 @@
 # (model/CMakeLists.txt at the pinned revision): `sail_common`, then
 # `lean_sail_common`, then `lean_sail_default`, then the module selection and the
 # project file. The module selection is the only intended difference from that
-# target; it is recorded in sail-import/PROVENANCE.toml. After generation, one
-# text rewrite is applied to RvfiDii.lean (see the end of this script and
-# [postprocess] in PROVENANCE.toml).
+# target; it is recorded in sail-import/PROVENANCE.toml. After generation the
+# script rewrites RvfiDii.lean ([postprocess] in PROVENANCE.toml) and adjusts the
+# limit options (steps a and b below).
 #
 # Usage:
 #   scripts/regen-sail-model.sh SAIL_BIN SAIL_RISCV_DIR OUT_DIR [MODULE ...]
@@ -82,5 +82,99 @@ if grep -q '(pure (print_' "$rvfi"; then
   echo 'regen-sail-model: RvfiDii.lean rewrite left a `(pure (print_` behind' >&2
   exit 1
 fi
+
+# Post-processing of the generated tree.
+#
+# a. Sail's Lean backend starts every generated file with
+#      set_option maxHeartbeats 1_000_000_000
+#      set_option maxRecDepth 1_000_000
+#    so that no declaration can ever hit a limit. Both lines are dropped: the
+#    checked-in model is then elaborated at Lean's default limits (200000
+#    heartbeats, maxRecDepth 512), the same as the proofs built on it, and no
+#    file-wide limit remains in the closure of the headline theorem. The script
+#    fails if a generated file does not carry exactly one copy of each line, so a
+#    change in Sail's output cannot pass silently. FakeReal, RiscvExtras and
+#    SpecializationV1 are copied verbatim from lean-sail and sail-riscv's
+#    handwritten support and carry no header.
+#
+# b. A few declarations still exceed a default limit. Each gets a
+#    `set_option ... in` directly before it (the declarations have no doc comment
+#    or attribute), with the smallest value that passes rounded up to the next 50
+#    (next 50000 for heartbeats). The values are measured with the options Lake
+#    passes when it builds the module (`--tstack`, `--setup`), not with a plain
+#    `lean` run, which gave smaller numbers:
+#    - is_CSR_accessible, read_CSR and write_CSR are one generated if-chain over
+#      every CSR address;
+#    - encdec_backwards is the decoder mapping over every 32-bit instruction, and
+#      encdec_backwards_matches is the same mapping returning a Bool.
+#    Proofs unfold the CSR chains and the mapping, so they are not split here. The
+#    follow-up is for the Sail Lean backend to split long chains into helper
+#    definitions, after which these options can go.
+#    The script fails unless each listed declaration is found exactly once, if
+#    any other limit option is left after step a, or if the tree does not end up
+#    with exactly the listed options.
+python3 - "$out_dir/Lean_RV64D" <<'EOF'
+import pathlib, re, sys
+
+root = pathlib.Path(sys.argv[1])
+
+# ---- a. the file-wide limit overrides -------------------------------------
+overrides = ("set_option maxHeartbeats 1_000_000_000", "set_option maxRecDepth 1_000_000")
+headerless = {"FakeReal.lean", "RiscvExtras.lean", "SpecializationV1.lean"}
+files = sorted(root.glob("LeanRV64D/**/*.lean")) + [root / "LeanRV64D.lean"]
+stripped = 0
+for path in files:
+    lines = path.read_text().split("\n")
+    if path.name in headerless:
+        if any(line in overrides for line in lines):
+            sys.exit(f"regen-sail-model: {path} unexpectedly carries a limit override")
+        continue
+    for override in overrides:
+        if lines.count(override) != 1:
+            sys.exit(f"regen-sail-model: {path} has {lines.count(override)} copies of "
+                     f"'{override}', expected exactly one")
+    path.write_text("\n".join(line for line in lines if line not in overrides))
+    stripped += 1
+if stripped == 0:
+    sys.exit("regen-sail-model: no generated file found")
+# No other limit option may remain anywhere in the tree, file-wide or local:
+# step b below adds the only ones. The check matches the option names anywhere in
+# the text, so a comment or a line break between `set_option` and the name cannot
+# hide one; Sail's output mentions them nowhere else.
+limit_name = re.compile(r"maxHeartbeats|maxRecDepth|maxSize")
+for path in files:
+    for n, line in enumerate(path.read_text().split("\n"), 1):
+        if limit_name.search(line):
+            sys.exit(f"regen-sail-model: {path}:{n} mentions a limit option after the header strip: '{line}'")
+
+# ---- b. per-declaration limits ---------------------------------------------
+LIMITS = [
+    ("SysControl", "is_CSR_accessible", [("maxRecDepth", 750)]),
+    ("ZicsrInsts", "read_CSR", [("maxRecDepth", 700)]),
+    ("ZicsrInsts", "write_CSR", [("maxRecDepth", 800)]),
+    ("InstsEnd", "encdec_backwards", [("maxRecDepth", 750)]),
+    ("InstsEnd", "encdec_backwards_matches", [("maxRecDepth", 750)]),
+]
+for module, name, options in LIMITS:
+    path = root / "LeanRV64D" / f"{module}.lean"
+    lines = path.read_text().split("\n")
+    pattern = re.compile(r"^(noncomputable )?def " + re.escape(name) + r"( |$)")
+    hits = [i for i, line in enumerate(lines) if pattern.match(line)]
+    if len(hits) != 1:
+        sys.exit(f"regen-sail-model: found {len(hits)} definitions of {name} in {path}, expected one")
+    i = hits[0]
+    if lines[i - 1] != "":
+        sys.exit(f"regen-sail-model: {name} is preceded by '{lines[i - 1]}', expected a blank line")
+    lines[i:i] = [f"set_option {option} {value} in" for option, value in options]
+    path.write_text("\n".join(lines))
+# The tree now mentions the limit options exactly on the lines step b inserted.
+expected = sorted((f"{module}.lean", f"set_option {option} {value} in")
+                  for module, _, options in LIMITS for option, value in options)
+found = sorted((path.name, line) for path in files for line in path.read_text().split("\n")
+               if limit_name.search(line))
+if found != expected:
+    sys.exit(f"regen-sail-model: the limit options in the tree are {found}, expected {expected}")
+print("regen-sail-model: post-processed the generated model", file=sys.stderr)
+EOF
 
 echo "regen-sail-model: wrote $out_dir/Lean_RV64D" >&2

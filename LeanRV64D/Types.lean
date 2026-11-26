@@ -2,7 +2,6 @@ import LeanRV64D.Flow
 import LeanRV64D.Mapping
 import LeanRV64D.HexBits
 import LeanRV64D.HexBitsSigned
-import LeanRV64D.DecBits
 import LeanRV64D.Prelude
 import LeanRV64D.Errors
 import LeanRV64D.AextTypes
@@ -12,8 +11,6 @@ import LeanRV64D.PlatformConfig
 import LeanRV64D.Extensions
 import LeanRV64D.TypesExt
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -27,21 +24,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -77,7 +64,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -96,7 +82,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -159,11 +144,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -172,7 +155,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -204,6 +186,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -350,6 +333,9 @@ def _update_Misa_MXL (v : (BitVec 64)) (x : (BitVec (64 - 1 - (64 - 2) + 1))) : 
 def Mk_Mstatus (v : (BitVec 64)) : (BitVec 64) :=
   v
 
+def _update_Mstatus_MPP (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
+  (Sail.BitVec.updateSubrange v 12 11 x)
+
 def _update_Mstatus_SXL (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
   (Sail.BitVec.updateSubrange v 35 34 x)
 
@@ -359,9 +345,6 @@ def _update_Mstatus_UXL (v : (BitVec 64)) (x : (BitVec 2)) : (BitVec 64) :=
 def _get_Misa_A (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 0 0)
 
-def _get_Misa_B (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 1 1)
-
 def _get_Misa_C (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 2 2)
 
@@ -370,9 +353,6 @@ def _get_Misa_D (v : (BitVec 64)) : (BitVec 1) :=
 
 def _get_Misa_F (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 5 5)
-
-def _get_Misa_H (v : (BitVec 64)) : (BitVec 1) :=
-  (Sail.BitVec.extractLsb v 7 7)
 
 def _get_Misa_M (v : (BitVec 64)) : (BitVec 1) :=
   (Sail.BitVec.extractLsb v 12 12)
@@ -446,7 +426,7 @@ def legalize_xenvcfg_cbie (cbie : (BitVec 2)) : SailM (BitVec 2) := do
       | .Xenvcfg_Fatal => (reserved_behavior "xenvcfg.CBIE = 0b10")
       | .Xenvcfg_ClearPermissions => (pure 0b00#2))
 
-def sys_enable_writable_fiom : Bool := true
+def sys_enable_writable_fiom : Bool := false
 
 def Mk_Seccfg (v : (BitVec 64)) : (BitVec 64) :=
   v
@@ -689,9 +669,6 @@ def currentlyEnabled (merge_var : extension) : SailM Bool := do
     (pure (hartSupports Ext_Ssccptr)) <&&> (do
       (currentlyEnabled Ext_Sv32) <||> (do
         (currentlyEnabled Ext_Sv39)))
-  | .Ext_Zicbop => (pure (hartSupports Ext_Zicbop))
-  | .Ext_Zihintntl => (pure (hartSupports Ext_Zihintntl))
-  | .Ext_Zihintpause => (pure (hartSupports Ext_Zihintpause))
   | .Ext_C => (pure (hartSupports Ext_C)) <&&> (do (pure ((_get_Misa_C (← readReg misa)) == 1#1)))
   | .Ext_Zca =>
     (pure (hartSupports Ext_Zca)) <&&> (do
@@ -708,47 +685,12 @@ def currentlyEnabled (merge_var : extension) : SailM Bool := do
   | .Ext_Ziccrse => (pure (hartSupports Ext_Ziccrse))
   | .Ext_M => (pure (hartSupports Ext_M)) <&&> (do (pure ((_get_Misa_M (← readReg misa)) == 1#1)))
   | .Ext_Zmmul => (pure (hartSupports Ext_Zmmul)) <||> (do (currentlyEnabled Ext_M))
-  | .Ext_B => (pure (hartSupports Ext_B)) <&&> (do (pure ((_get_Misa_B (← readReg misa)) == 1#1)))
-  | .Ext_Zba => (pure (hartSupports Ext_Zba)) <||> (do (currentlyEnabled Ext_B))
   | .Ext_Zbb => (pure (hartSupports Ext_Zbb)) <||> (do (currentlyEnabled Ext_B))
   | .Ext_Zbkb => (pure (hartSupports Ext_Zbkb))
-  | .Ext_Zbc => (pure (hartSupports Ext_Zbc))
-  | .Ext_Zbkc => (pure (hartSupports Ext_Zbkc))
-  | .Ext_Zbs => (pure (hartSupports Ext_Zbs)) <||> (do (currentlyEnabled Ext_B))
-  | .Ext_Zcb => (pure (hartSupports Ext_Zcb)) <&&> (do (currentlyEnabled Ext_Zca))
-  | .Ext_H =>
-    (pure (hartSupports Ext_H)) <&&> (do
-      (pure ((_get_Misa_H (← readReg misa)) == 1#1)) <&&> (do
-        (virtual_memory_supported ())))
-  | .Ext_Zknh => (pure (hartSupports Ext_Zknh))
-  | .Ext_Zkne => (pure (hartSupports Ext_Zkne))
-  | .Ext_Zknd => (pure (hartSupports Ext_Zknd))
-  | .Ext_Zksh => (pure (hartSupports Ext_Zksh))
-  | .Ext_Zksed => (pure (hartSupports Ext_Zksed))
-  | .Ext_Zkr => (pure (hartSupports Ext_Zkr))
-  | .Ext_Zbkx => (pure (hartSupports Ext_Zbkx))
   | .Ext_Zicsr => (pure (hartSupports Ext_Zicsr))
-  | .Ext_Svinval => (pure (hartSupports Ext_Svinval))
-  | .Ext_Zihpm => (pure (hartSupports Ext_Zihpm)) <&&> (do (currentlyEnabled Ext_Zicsr))
-  | .Ext_Sscofpmf => (pure (hartSupports Ext_Sscofpmf)) <&&> (do (currentlyEnabled Ext_Zihpm))
-  | .Ext_Zawrs => (pure (hartSupports Ext_Zawrs))
-  | .Ext_Zicfiss =>
-    (pure (hartSupports Ext_Zicfiss)) <&&> (do
-      (currentlyEnabled Ext_Zicsr) <&&> (do
-        (currentlyEnabled Ext_Zimop) <&&> (do
-          (currentlyEnabled Ext_Zaamo))))
-  | .Ext_Zicond => (pure (hartSupports Ext_Zicond))
-  | .Ext_Zicntr => (pure (hartSupports Ext_Zicntr)) <&&> (do (currentlyEnabled Ext_Zicsr))
-  | .Ext_Zicbom => (pure (hartSupports Ext_Zicbom))
-  | .Ext_Zibi => (pure (hartSupports Ext_Zibi))
-  | .Ext_Zicboz => (pure (hartSupports Ext_Zicboz))
-  | .Ext_Zifencei => (pure (hartSupports Ext_Zifencei))
-  | .Ext_Ssqosid => (pure (hartSupports Ext_Ssqosid)) <&&> (do (currentlyEnabled Ext_Zicsr))
-  | .Ext_Zimop => (pure (hartSupports Ext_Zimop))
-  | .Ext_Zcmop => (pure (hartSupports Ext_Zcmop)) <&&> (do (currentlyEnabled Ext_Zca))
   | _ =>
     (do
-      sail_assert false "Pattern match failure at mops/Zcmop/zcmop_insts.sail:9.0-9.97"
+      sail_assert false "Pattern match failure at extensions/Zicsr/zicsr_insts.sail:12.0-12.69"
       throw Error.Exit)
 termination_by (let ext := merge_var
 (currentlyEnabled_measure ext)).toNat
@@ -810,13 +752,6 @@ def is_zfinx_enabled_by_stateen (_ : Unit) : SailM Bool := do
   (check_stateen_bit (← readReg cur_privilege) STATEEN_FCSR 0)
 termination_by (let () := ()
 8).toNat
-def virtual_memory_supported (_ : Unit) : SailM Bool := do
-  (currentlyEnabled Ext_Sv32) <||> (do
-    (currentlyEnabled Ext_Sv39) <||> (do
-      (currentlyEnabled Ext_Sv48) <||> (do
-        (currentlyEnabled Ext_Sv57))))
-termination_by (let _ := ()
-3).toNat
 end
 
 def legalize_menvcfg (o : (BitVec 64)) (v : (BitVec 64)) : SailM (BitVec 64) := do
@@ -1117,196 +1052,6 @@ def csr_name_map_forwards (arg_ : (BitVec 12)) : SailM String := do
   | 0x10E => (pure "sstateen2")
   | 0x10F => (pure "sstateen3")
   | 0x180 => (pure "satp")
-  | 0x015 => (pure "seed")
-  | 0xC03 => (pure "hpmcounter3")
-  | 0xC04 => (pure "hpmcounter4")
-  | 0xC05 => (pure "hpmcounter5")
-  | 0xC06 => (pure "hpmcounter6")
-  | 0xC07 => (pure "hpmcounter7")
-  | 0xC08 => (pure "hpmcounter8")
-  | 0xC09 => (pure "hpmcounter9")
-  | 0xC0A => (pure "hpmcounter10")
-  | 0xC0B => (pure "hpmcounter11")
-  | 0xC0C => (pure "hpmcounter12")
-  | 0xC0D => (pure "hpmcounter13")
-  | 0xC0E => (pure "hpmcounter14")
-  | 0xC0F => (pure "hpmcounter15")
-  | 0xC10 => (pure "hpmcounter16")
-  | 0xC11 => (pure "hpmcounter17")
-  | 0xC12 => (pure "hpmcounter18")
-  | 0xC13 => (pure "hpmcounter19")
-  | 0xC14 => (pure "hpmcounter20")
-  | 0xC15 => (pure "hpmcounter21")
-  | 0xC16 => (pure "hpmcounter22")
-  | 0xC17 => (pure "hpmcounter23")
-  | 0xC18 => (pure "hpmcounter24")
-  | 0xC19 => (pure "hpmcounter25")
-  | 0xC1A => (pure "hpmcounter26")
-  | 0xC1B => (pure "hpmcounter27")
-  | 0xC1C => (pure "hpmcounter28")
-  | 0xC1D => (pure "hpmcounter29")
-  | 0xC1E => (pure "hpmcounter30")
-  | 0xC1F => (pure "hpmcounter31")
-  | 0xC83 => (pure "hpmcounter3h")
-  | 0xC84 => (pure "hpmcounter4h")
-  | 0xC85 => (pure "hpmcounter5h")
-  | 0xC86 => (pure "hpmcounter6h")
-  | 0xC87 => (pure "hpmcounter7h")
-  | 0xC88 => (pure "hpmcounter8h")
-  | 0xC89 => (pure "hpmcounter9h")
-  | 0xC8A => (pure "hpmcounter10h")
-  | 0xC8B => (pure "hpmcounter11h")
-  | 0xC8C => (pure "hpmcounter12h")
-  | 0xC8D => (pure "hpmcounter13h")
-  | 0xC8E => (pure "hpmcounter14h")
-  | 0xC8F => (pure "hpmcounter15h")
-  | 0xC90 => (pure "hpmcounter16h")
-  | 0xC91 => (pure "hpmcounter17h")
-  | 0xC92 => (pure "hpmcounter18h")
-  | 0xC93 => (pure "hpmcounter19h")
-  | 0xC94 => (pure "hpmcounter20h")
-  | 0xC95 => (pure "hpmcounter21h")
-  | 0xC96 => (pure "hpmcounter22h")
-  | 0xC97 => (pure "hpmcounter23h")
-  | 0xC98 => (pure "hpmcounter24h")
-  | 0xC99 => (pure "hpmcounter25h")
-  | 0xC9A => (pure "hpmcounter26h")
-  | 0xC9B => (pure "hpmcounter27h")
-  | 0xC9C => (pure "hpmcounter28h")
-  | 0xC9D => (pure "hpmcounter29h")
-  | 0xC9E => (pure "hpmcounter30h")
-  | 0xC9F => (pure "hpmcounter31h")
-  | 0x323 => (pure "mhpmevent3")
-  | 0x324 => (pure "mhpmevent4")
-  | 0x325 => (pure "mhpmevent5")
-  | 0x326 => (pure "mhpmevent6")
-  | 0x327 => (pure "mhpmevent7")
-  | 0x328 => (pure "mhpmevent8")
-  | 0x329 => (pure "mhpmevent9")
-  | 0x32A => (pure "mhpmevent10")
-  | 0x32B => (pure "mhpmevent11")
-  | 0x32C => (pure "mhpmevent12")
-  | 0x32D => (pure "mhpmevent13")
-  | 0x32E => (pure "mhpmevent14")
-  | 0x32F => (pure "mhpmevent15")
-  | 0x330 => (pure "mhpmevent16")
-  | 0x331 => (pure "mhpmevent17")
-  | 0x332 => (pure "mhpmevent18")
-  | 0x333 => (pure "mhpmevent19")
-  | 0x334 => (pure "mhpmevent20")
-  | 0x335 => (pure "mhpmevent21")
-  | 0x336 => (pure "mhpmevent22")
-  | 0x337 => (pure "mhpmevent23")
-  | 0x338 => (pure "mhpmevent24")
-  | 0x339 => (pure "mhpmevent25")
-  | 0x33A => (pure "mhpmevent26")
-  | 0x33B => (pure "mhpmevent27")
-  | 0x33C => (pure "mhpmevent28")
-  | 0x33D => (pure "mhpmevent29")
-  | 0x33E => (pure "mhpmevent30")
-  | 0x33F => (pure "mhpmevent31")
-  | 0xB03 => (pure "mhpmcounter3")
-  | 0xB04 => (pure "mhpmcounter4")
-  | 0xB05 => (pure "mhpmcounter5")
-  | 0xB06 => (pure "mhpmcounter6")
-  | 0xB07 => (pure "mhpmcounter7")
-  | 0xB08 => (pure "mhpmcounter8")
-  | 0xB09 => (pure "mhpmcounter9")
-  | 0xB0A => (pure "mhpmcounter10")
-  | 0xB0B => (pure "mhpmcounter11")
-  | 0xB0C => (pure "mhpmcounter12")
-  | 0xB0D => (pure "mhpmcounter13")
-  | 0xB0E => (pure "mhpmcounter14")
-  | 0xB0F => (pure "mhpmcounter15")
-  | 0xB10 => (pure "mhpmcounter16")
-  | 0xB11 => (pure "mhpmcounter17")
-  | 0xB12 => (pure "mhpmcounter18")
-  | 0xB13 => (pure "mhpmcounter19")
-  | 0xB14 => (pure "mhpmcounter20")
-  | 0xB15 => (pure "mhpmcounter21")
-  | 0xB16 => (pure "mhpmcounter22")
-  | 0xB17 => (pure "mhpmcounter23")
-  | 0xB18 => (pure "mhpmcounter24")
-  | 0xB19 => (pure "mhpmcounter25")
-  | 0xB1A => (pure "mhpmcounter26")
-  | 0xB1B => (pure "mhpmcounter27")
-  | 0xB1C => (pure "mhpmcounter28")
-  | 0xB1D => (pure "mhpmcounter29")
-  | 0xB1E => (pure "mhpmcounter30")
-  | 0xB1F => (pure "mhpmcounter31")
-  | 0xB83 => (pure "mhpmcounter3h")
-  | 0xB84 => (pure "mhpmcounter4h")
-  | 0xB85 => (pure "mhpmcounter5h")
-  | 0xB86 => (pure "mhpmcounter6h")
-  | 0xB87 => (pure "mhpmcounter7h")
-  | 0xB88 => (pure "mhpmcounter8h")
-  | 0xB89 => (pure "mhpmcounter9h")
-  | 0xB8A => (pure "mhpmcounter10h")
-  | 0xB8B => (pure "mhpmcounter11h")
-  | 0xB8C => (pure "mhpmcounter12h")
-  | 0xB8D => (pure "mhpmcounter13h")
-  | 0xB8E => (pure "mhpmcounter14h")
-  | 0xB8F => (pure "mhpmcounter15h")
-  | 0xB90 => (pure "mhpmcounter16h")
-  | 0xB91 => (pure "mhpmcounter17h")
-  | 0xB92 => (pure "mhpmcounter18h")
-  | 0xB93 => (pure "mhpmcounter19h")
-  | 0xB94 => (pure "mhpmcounter20h")
-  | 0xB95 => (pure "mhpmcounter21h")
-  | 0xB96 => (pure "mhpmcounter22h")
-  | 0xB97 => (pure "mhpmcounter23h")
-  | 0xB98 => (pure "mhpmcounter24h")
-  | 0xB99 => (pure "mhpmcounter25h")
-  | 0xB9A => (pure "mhpmcounter26h")
-  | 0xB9B => (pure "mhpmcounter27h")
-  | 0xB9C => (pure "mhpmcounter28h")
-  | 0xB9D => (pure "mhpmcounter29h")
-  | 0xB9E => (pure "mhpmcounter30h")
-  | 0xB9F => (pure "mhpmcounter31h")
-  | 0x723 => (pure "mhpmevent3h")
-  | 0x724 => (pure "mhpmevent4h")
-  | 0x725 => (pure "mhpmevent5h")
-  | 0x726 => (pure "mhpmevent6h")
-  | 0x727 => (pure "mhpmevent7h")
-  | 0x728 => (pure "mhpmevent8h")
-  | 0x729 => (pure "mhpmevent9h")
-  | 0x72A => (pure "mhpmevent10h")
-  | 0x72B => (pure "mhpmevent11h")
-  | 0x72C => (pure "mhpmevent12h")
-  | 0x72D => (pure "mhpmevent13h")
-  | 0x72E => (pure "mhpmevent14h")
-  | 0x72F => (pure "mhpmevent15h")
-  | 0x730 => (pure "mhpmevent16h")
-  | 0x731 => (pure "mhpmevent17h")
-  | 0x732 => (pure "mhpmevent18h")
-  | 0x733 => (pure "mhpmevent19h")
-  | 0x734 => (pure "mhpmevent20h")
-  | 0x735 => (pure "mhpmevent21h")
-  | 0x736 => (pure "mhpmevent22h")
-  | 0x737 => (pure "mhpmevent23h")
-  | 0x738 => (pure "mhpmevent24h")
-  | 0x739 => (pure "mhpmevent25h")
-  | 0x73A => (pure "mhpmevent26h")
-  | 0x73B => (pure "mhpmevent27h")
-  | 0x73C => (pure "mhpmevent28h")
-  | 0x73D => (pure "mhpmevent29h")
-  | 0x73E => (pure "mhpmevent30h")
-  | 0x73F => (pure "mhpmevent31h")
-  | 0xDA0 => (pure "scountovf")
-  | 0x14D => (pure "stimecmp")
-  | 0x15D => (pure "stimecmph")
-  | 0x011 => (pure "ssp")
-  | 0xC00 => (pure "cycle")
-  | 0xC01 => (pure "time")
-  | 0xC02 => (pure "instret")
-  | 0xC80 => (pure "cycleh")
-  | 0xC81 => (pure "timeh")
-  | 0xC82 => (pure "instreth")
-  | 0xB00 => (pure "mcycle")
-  | 0xB02 => (pure "minstret")
-  | 0xB80 => (pure "mcycleh")
-  | 0xB82 => (pure "minstreth")
-  | 0x181 => (pure "srmcfg")
   | reg => (hex_bits_12_forwards reg)
 
 def csr_name (csr : (BitVec 12)) : SailM String := do
@@ -1341,11 +1086,6 @@ def exceptionType_to_str (e : ExceptionType) : String :=
   | .E_Breakpoint .Brk_Hardware => "hardware-breakpoint"
   | .E_Extension e => (ext_exc_type_to_str e)
 
-def bitype_mnemonic_forwards (arg_ : biop) : String :=
-  match arg_ with
-  | .BEQI => "beqi"
-  | .BNEI => "bnei"
-
 def btype_mnemonic_forwards (arg_ : bop) : String :=
   match arg_ with
   | .BEQ => "beq"
@@ -1354,12 +1094,6 @@ def btype_mnemonic_forwards (arg_ : bop) : String :=
   | .BGE => "bge"
   | .BLTU => "bltu"
   | .BGEU => "bgeu"
-
-def cbop_mnemonic_forwards (arg_ : cbop_zicbom) : String :=
-  match arg_ with
-  | .CBO_CLEAN => "cbo.clean"
-  | .CBO_FLUSH => "cbo.flush"
-  | .CBO_INVAL => "cbo.inval"
 
 def encdec_reg_backwards (arg_ : (BitVec 5)) : SailM regidx := do
   let r := arg_
@@ -1529,7 +1263,7 @@ def itype_mnemonic_forwards (arg_ : iop) : String :=
   | .ORI => "ori"
   | .ANDI => "andi"
 
-/-- Type quantifiers: k_ex255672_ : Bool -/
+/-- Type quantifiers: k_ex196064_ : Bool -/
 def maybe_u_forwards (arg_ : Bool) : String :=
   match arg_ with
   | true => "u"
@@ -1545,19 +1279,6 @@ def mul_mnemonic_forwards (arg_ : mul_op) : SailM String := do
     (do
       sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
-
-def ntl_name_forwards (arg_ : ntl_type) : String :=
-  match arg_ with
-  | .NTL_P1 => "p1"
-  | .NTL_PALL => "pall"
-  | .NTL_S1 => "s1"
-  | .NTL_ALL => "all"
-
-def prefetch_mnemonic_forwards (arg_ : cbop_zicbop) : String :=
-  match arg_ with
-  | .PREFETCH_I => "prefetch.i"
-  | .PREFETCH_R => "prefetch.r"
-  | .PREFETCH_W => "prefetch.w"
 
 def rtype_mnemonic_forwards (arg_ : rop) : String :=
   match arg_ with
@@ -1629,23 +1350,6 @@ def width_mnemonic_wide_forwards (arg_ : Nat) : String :=
   | 8 => "d"
   | _ => "q"
 
-def zba_rtype_mnemonic_forwards (arg_ : (BitVec 2)) : SailM String := do
-  match arg_ with
-  | 0b01 => (pure "sh1add")
-  | 0b10 => (pure "sh2add")
-  | 0b11 => (pure "sh3add")
-  | _ =>
-    (do
-      sail_assert false "Pattern match failure at unknown location"
-      throw Error.Exit)
-
-def zba_rtypeuw_mnemonic_forwards (arg_ : (BitVec 2)) : String :=
-  match arg_ with
-  | 0b00 => "add.uw"
-  | 0b01 => "sh1add.uw"
-  | 0b10 => "sh2add.uw"
-  | _ => "sh3add.uw"
-
 def zbb_extop_mnemonic_forwards (arg_ : extop_zbb) : String :=
   match arg_ with
   | .SEXTB => "sext.b"
@@ -1669,43 +1373,8 @@ def zbb_rtypew_mnemonic_forwards (arg_ : bropw_zbb) : String :=
   | .ROLW => "rolw"
   | .RORW => "rorw"
 
-def zbkb_rtype_mnemonic_forwards (arg_ : brop_zbkb) : String :=
-  match arg_ with
-  | .PACK => "pack"
-  | .PACKH => "packh"
-
-def zbs_iop_mnemonic_forwards (arg_ : biop_zbs) : String :=
-  match arg_ with
-  | .BCLRI => "bclri"
-  | .BEXTI => "bexti"
-  | .BINVI => "binvi"
-  | .BSETI => "bseti"
-
-def zbs_rtype_mnemonic_forwards (arg_ : brop_zbs) : String :=
-  match arg_ with
-  | .BCLR => "bclr"
-  | .BEXT => "bext"
-  | .BINV => "binv"
-  | .BSET => "bset"
-
-def zicond_mnemonic_forwards (arg_ : zicondop) : String :=
-  match arg_ with
-  | .CZERO_EQZ => "czero.eqz"
-  | .CZERO_NEZ => "czero.nez"
-
 def assembly_forwards (arg_ : instruction) : SailM String := do
   match arg_ with
-  | .ZICBOP (cbop, rs1, offset) =>
-    (pure (String.append (prefetch_mnemonic_forwards cbop)
-        (String.append (spc_forwards ())
-          (String.append (← (hex_bits_12_forwards offset))
-            (String.append "("
-              (String.append (opt_spc_forwards ())
-                (String.append (← (reg_name_forwards rs1))
-                  (String.append (opt_spc_forwards ()) (String.append ")" "")))))))))
-  | .NTL op => (pure (String.append "ntl." (String.append (ntl_name_forwards op) "")))
-  | .C_NTL op => (pure (String.append "c.ntl." (String.append (ntl_name_forwards op) "")))
-  | .PAUSE () => (pure "pause")
   | .LPAD lpl =>
     (pure (String.append "lpad"
         (String.append (spc_forwards ()) (String.append (← (hex_bits_20_forwards lpl)) ""))))
@@ -1910,28 +1579,6 @@ def assembly_forwards (arg_ : instruction) : SailM String := do
                   (String.append (← (reg_name_forwards rs1))
                     (String.append (sep_forwards ())
                       (String.append (← (reg_name_forwards rs2)) ""))))))))))
-  | .SLLIUW (shamt, rs1, rd) =>
-    (pure (String.append "slli.uw"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (hex_bits_6_forwards shamt)) ""))))))))
-  | .ZBA_RTYPEUW (rs2, rs1, rd, shamt) =>
-    (pure (String.append (zba_rtypeuw_mnemonic_forwards shamt)
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .ZBA_RTYPE (rs2, rs1, rd, shamt) =>
-    (pure (String.append (← (zba_rtype_mnemonic_forwards shamt))
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
   | .RORIW (shamt, rs1, rd) =>
     (pure (String.append "roriw"
         (String.append (spc_forwards ())
@@ -2007,42 +1654,6 @@ def assembly_forwards (arg_ : instruction) : SailM String := do
         (String.append (spc_forwards ())
           (String.append (← (reg_name_forwards rd))
             (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .CLMUL (rs2, rs1, rd) =>
-    (pure (String.append "clmul"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .CLMULH (rs2, rs1, rd) =>
-    (pure (String.append "clmulh"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .CLMULR (rs2, rs1, rd) =>
-    (pure (String.append "clmulr"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .ZBS_IOP (shamt, rs1, rd, op) =>
-    (pure (String.append (zbs_iop_mnemonic_forwards op)
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (hex_bits_6_forwards shamt)) ""))))))))
-  | .ZBS_RTYPE (rs2, rs1, rd, op) =>
-    (pure (String.append (zbs_rtype_mnemonic_forwards op)
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
   | .C_NOP 0b000000 => (pure "c.nop")
   | .C_NOP imm =>
     (do
@@ -2324,326 +1935,6 @@ def assembly_forwards (arg_ : instruction) : SailM String := do
         (do
           sail_assert false "Pattern match failure at unknown location"
           throw Error.Exit))
-  | .C_LBU (uimm, rdc, rsc1) =>
-    (pure (String.append "c.lbu"
-        (String.append (spc_forwards ())
-          (String.append (← (creg_name_forwards rdc))
-            (String.append (sep_forwards ())
-              (String.append (← (hex_bits_2_forwards uimm))
-                (String.append (opt_spc_forwards ())
-                  (String.append "("
-                    (String.append (opt_spc_forwards ())
-                      (String.append (← (creg_name_forwards rsc1))
-                        (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))))))
-  | .C_LHU (uimm, rdc, rsc1) =>
-    (pure (String.append "c.lhu"
-        (String.append (spc_forwards ())
-          (String.append (← (creg_name_forwards rdc))
-            (String.append (sep_forwards ())
-              (String.append (← (hex_bits_2_forwards uimm))
-                (String.append (opt_spc_forwards ())
-                  (String.append "("
-                    (String.append (opt_spc_forwards ())
-                      (String.append (← (creg_name_forwards rsc1))
-                        (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))))))
-  | .C_LH (uimm, rdc, rsc1) =>
-    (pure (String.append "c.lh"
-        (String.append (spc_forwards ())
-          (String.append (← (creg_name_forwards rdc))
-            (String.append (sep_forwards ())
-              (String.append (← (hex_bits_2_forwards uimm))
-                (String.append (opt_spc_forwards ())
-                  (String.append "("
-                    (String.append (opt_spc_forwards ())
-                      (String.append (← (creg_name_forwards rsc1))
-                        (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))))))
-  | .C_SB (uimm, rsc1, rsc2) =>
-    (pure (String.append "c.sb"
-        (String.append (spc_forwards ())
-          (String.append (← (creg_name_forwards rsc2))
-            (String.append (sep_forwards ())
-              (String.append (← (hex_bits_2_forwards uimm))
-                (String.append (opt_spc_forwards ())
-                  (String.append "("
-                    (String.append (opt_spc_forwards ())
-                      (String.append (← (creg_name_forwards rsc1))
-                        (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))))))
-  | .C_SH (uimm, rsc1, rsc2) =>
-    (pure (String.append "c.sh"
-        (String.append (spc_forwards ())
-          (String.append (← (creg_name_forwards rsc2))
-            (String.append (sep_forwards ())
-              (String.append (← (hex_bits_2_forwards uimm))
-                (String.append (opt_spc_forwards ())
-                  (String.append "("
-                    (String.append (opt_spc_forwards ())
-                      (String.append (← (creg_name_forwards rsc1))
-                        (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))))))
-  | .C_ZEXT_B rsdc =>
-    (pure (String.append "c.zext.b"
-        (String.append (spc_forwards ()) (String.append (← (creg_name_forwards rsdc)) ""))))
-  | .C_SEXT_B rsdc =>
-    (pure (String.append "c.sext.b"
-        (String.append (spc_forwards ()) (String.append (← (creg_name_forwards rsdc)) ""))))
-  | .C_ZEXT_H rsdc =>
-    (pure (String.append "c.zext.h"
-        (String.append (spc_forwards ()) (String.append (← (creg_name_forwards rsdc)) ""))))
-  | .C_SEXT_H rsdc =>
-    (pure (String.append "c.sext.h"
-        (String.append (spc_forwards ()) (String.append (← (creg_name_forwards rsdc)) ""))))
-  | .C_ZEXT_W rsdc =>
-    (pure (String.append "c.zext.w"
-        (String.append (spc_forwards ()) (String.append (← (creg_name_forwards rsdc)) ""))))
-  | .C_NOT rsdc =>
-    (pure (String.append "c.not"
-        (String.append (spc_forwards ()) (String.append (← (creg_name_forwards rsdc)) ""))))
-  | .C_MUL (rsdc, rsc2) =>
-    (pure (String.append "c.mul"
-        (String.append (spc_forwards ())
-          (String.append (← (creg_name_forwards rsdc))
-            (String.append (sep_forwards ()) (String.append (← (creg_name_forwards rsc2)) ""))))))
-  | .SHA256SIG0 (rs1, rd) =>
-    (pure (String.append "sha256sig0"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SHA256SIG1 (rs1, rd) =>
-    (pure (String.append "sha256sig1"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SHA256SUM0 (rs1, rd) =>
-    (pure (String.append "sha256sum0"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SHA256SUM1 (rs1, rd) =>
-    (pure (String.append "sha256sum1"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .AES32ESMI (bs, rs2, rs1, rd) =>
-    (pure (String.append "aes32esmi"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (reg_name_forwards rs2))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_2_forwards bs)) ""))))))))))
-  | .AES32ESI (bs, rs2, rs1, rd) =>
-    (pure (String.append "aes32esi"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (reg_name_forwards rs2))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_2_forwards bs)) ""))))))))))
-  | .AES32DSMI (bs, rs2, rs1, rd) =>
-    (pure (String.append "aes32dsmi"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (reg_name_forwards rs2))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_2_forwards bs)) ""))))))))))
-  | .AES32DSI (bs, rs2, rs1, rd) =>
-    (pure (String.append "aes32dsi"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (reg_name_forwards rs2))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_2_forwards bs)) ""))))))))))
-  | .SHA512SIG0L (rs2, rs1, rd) =>
-    (pure (String.append "sha512sig0l"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .SHA512SIG0H (rs2, rs1, rd) =>
-    (pure (String.append "sha512sig0h"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .SHA512SIG1L (rs2, rs1, rd) =>
-    (pure (String.append "sha512sig1l"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .SHA512SIG1H (rs2, rs1, rd) =>
-    (pure (String.append "sha512sig1h"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .SHA512SUM0R (rs2, rs1, rd) =>
-    (pure (String.append "sha512sum0r"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .SHA512SUM1R (rs2, rs1, rd) =>
-    (pure (String.append "sha512sum1r"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .AES64KS1I (rnum, rs1, rd) =>
-    (pure (String.append "aes64ks1i"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (hex_bits_4_forwards rnum)) ""))))))))
-  | .AES64KS2 (rs2, rs1, rd) =>
-    (pure (String.append "aes64ks2"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .AES64IM (rs1, rd) =>
-    (pure (String.append "aes64im"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .AES64ESM (rs2, rs1, rd) =>
-    (pure (String.append "aes64esm"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .AES64ES (rs2, rs1, rd) =>
-    (pure (String.append "aes64es"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .AES64DSM (rs2, rs1, rd) =>
-    (pure (String.append "aes64dsm"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .AES64DS (rs2, rs1, rd) =>
-    (pure (String.append "aes64ds"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .SHA512SIG0 (rs1, rd) =>
-    (pure (String.append "sha512sig0"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SHA512SIG1 (rs1, rd) =>
-    (pure (String.append "sha512sig1"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SHA512SUM0 (rs1, rd) =>
-    (pure (String.append "sha512sum0"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SHA512SUM1 (rs1, rd) =>
-    (pure (String.append "sha512sum1"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SM3P0 (rs1, rd) =>
-    (pure (String.append "sm3p0"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SM3P1 (rs1, rd) =>
-    (pure (String.append "sm3p1"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .SM4ED (bs, rs2, rs1, rd) =>
-    (pure (String.append "sm4ed"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (reg_name_forwards rs2))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_2_forwards bs)) ""))))))))))
-  | .SM4KS (bs, rs2, rs1, rd) =>
-    (pure (String.append "sm4ks"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (reg_name_forwards rs2))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_2_forwards bs)) ""))))))))))
-  | .ZBKB_RTYPE (rs2, rs1, rd, op) =>
-    (pure (String.append (zbkb_rtype_mnemonic_forwards op)
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .ZBKB_PACKW (rs2, rs1, rd) =>
-    (pure (String.append "packw"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .ZIP (rs1, rd) =>
-    (pure (String.append "zip"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .UNZIP (rs1, rd) =>
-    (pure (String.append "unzip"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .BREV8 (rs1, rd) =>
-    (pure (String.append "brev8"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))
-  | .XPERM8 (rs2, rs1, rd) =>
-    (pure (String.append "xperm8"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .XPERM4 (rs2, rs1, rd) =>
-    (pure (String.append "xperm4"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
   | .CSRImm (csr, imm, rd, op) =>
     (pure (String.append (csr_mnemonic_forwards op)
         (String.append "i"
@@ -2660,121 +1951,6 @@ def assembly_forwards (arg_ : instruction) : SailM String := do
             (String.append (sep_forwards ())
               (String.append (← (csr_name_map_forwards csr))
                 (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))))))
-  | .SINVAL_VMA (rs1, rs2) =>
-    (pure (String.append "sinval.vma"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rs1))
-            (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))
-  | .SFENCE_W_INVAL () => (pure "sfence.w.inval")
-  | .SFENCE_INVAL_IR () => (pure "sfence.inval.ir")
-  | .WRS .WRS_STO => (pure "wrs.sto")
-  | .WRS .WRS_NTO => (pure "wrs.nto")
-  | .SSPUSH rs2 =>
-    (pure (String.append "sspush"
-        (String.append (spc_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))
-  | .C_SSPUSH () =>
-    (pure (String.append "c.sspush"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards (← (encdec_reg_backwards 0b00001#5)))) ""))))
-  | .SSPOPCHK rs1 =>
-    (pure (String.append "sspopchk"
-        (String.append (spc_forwards ()) (String.append (← (reg_name_forwards rs1)) ""))))
-  | .C_SSPOPCHK () =>
-    (pure (String.append "c.sspopchk"
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards (← (encdec_reg_backwards 0b00101#5)))) ""))))
-  | .SSRDP rd =>
-    (pure (String.append "ssrdp"
-        (String.append (spc_forwards ()) (String.append (← (reg_name_forwards rd)) ""))))
-  | .SSAMOSWAP (aq, rl, rs2, rs1, width, rd) =>
-    (do
-      if (((width == 4) || (width == 8)) : Bool)
-      then
-        (pure (String.append "ssamoswap."
-            (String.append (width_mnemonic_forwards width)
-              (String.append (maybe_aqrl_forwards (aq, rl))
-                (String.append (spc_forwards ())
-                  (String.append (← (reg_name_forwards rd))
-                    (String.append (sep_forwards ())
-                      (String.append (← (reg_name_forwards rs2))
-                        (String.append (sep_forwards ())
-                          (String.append "("
-                            (String.append (opt_spc_forwards ())
-                              (String.append (← (reg_name_forwards rs1))
-                                (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZICOND_RTYPE (rs2, rs1, rd, op) =>
-    (pure (String.append (zicond_mnemonic_forwards op)
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rd))
-            (String.append (sep_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) ""))))))))
-  | .ZICBOM (cbop, rs1) =>
-    (pure (String.append (cbop_mnemonic_forwards cbop)
-        (String.append (spc_forwards ())
-          (String.append "("
-            (String.append (opt_spc_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))
-  | .BITYPE (imm, 0b00000, rs1, op) =>
-    (pure (String.append (bitype_mnemonic_forwards op)
-        (String.append (spc_forwards ())
-          (String.append (← (reg_name_forwards rs1))
-            (String.append (sep_forwards ())
-              (String.append "-1"
-                (String.append (sep_forwards ())
-                  (String.append (← (hex_bits_signed_13_forwards imm)) ""))))))))
-  | .BITYPE (imm, cimm, rs1, op) =>
-    (do
-      if ((cimm != 0b00000#5) : Bool)
-      then
-        (pure (String.append (bitype_mnemonic_forwards op)
-            (String.append (spc_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (sep_forwards ())
-                  (String.append (← (hex_bits_5_forwards cimm))
-                    (String.append (sep_forwards ())
-                      (String.append (← (hex_bits_signed_13_forwards imm)) ""))))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZICBOZ rs1 =>
-    (pure (String.append "cbo.zero"
-        (String.append (spc_forwards ())
-          (String.append "("
-            (String.append (opt_spc_forwards ())
-              (String.append (← (reg_name_forwards rs1))
-                (String.append (opt_spc_forwards ()) (String.append ")" ""))))))))
-  | .FENCEI (0x000, rs, rd) =>
-    (do
-      if (((rs == zreg) && (rd == zreg)) : Bool)
-      then (pure "fence.i")
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZIMOP_MOP_R (mop, rs1, rd) =>
-    (pure (String.append "mop.r."
-        (String.append (← (dec_bits_5_forwards mop))
-          (String.append (spc_forwards ())
-            (String.append (← (reg_name_forwards rd))
-              (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs1)) "")))))))
-  | .ZIMOP_MOP_RR (mop, rs2, rs1, rd) =>
-    (pure (String.append "mop.rr."
-        (String.append (← (dec_bits_3_forwards mop))
-          (String.append (spc_forwards ())
-            (String.append (← (reg_name_forwards rd))
-              (String.append (sep_forwards ())
-                (String.append (← (reg_name_forwards rs1))
-                  (String.append (sep_forwards ()) (String.append (← (reg_name_forwards rs2)) "")))))))))
-  | .ZCMOP mop =>
-    (pure (String.append "c.mop."
-        (String.append (← (dec_bits_4_forwards ((mop : (BitVec 3)) +++ 1#1))) "")))
   | .ILLEGAL s =>
     (pure (String.append "illegal"
         (String.append (spc_forwards ()) (String.append (← (hex_bits_32_forwards s)) ""))))
@@ -2788,10 +1964,6 @@ def assembly_forwards (arg_ : instruction) : SailM String := do
 
 def assembly_forwards_matches (arg_ : instruction) : Bool :=
   match arg_ with
-  | .ZICBOP (cbop, rs1, offset) => true
-  | .NTL op => true
-  | .C_NTL op => true
-  | .PAUSE () => true
   | .LPAD lpl => true
   | .UTYPE (imm, rd, op) => true
   | .JAL (imm, rd) => true
@@ -2825,9 +1997,6 @@ def assembly_forwards_matches (arg_ : instruction) : Bool :=
   | .MULW (rs2, rs1, rd) => true
   | .DIVW (rs2, rs1, rd, is_unsigned) => true
   | .REMW (rs2, rs1, rd, is_unsigned) => true
-  | .SLLIUW (shamt, rs1, rd) => true
-  | .ZBA_RTYPEUW (rs2, rs1, rd, shamt) => true
-  | .ZBA_RTYPE (rs2, rs1, rd, shamt) => true
   | .RORIW (shamt, rs1, rd) => true
   | .RORI (shamt, rs1, rd) => true
   | .ZBB_RTYPEW (rs2, rs1, rd, op) => true
@@ -2841,11 +2010,6 @@ def assembly_forwards_matches (arg_ : instruction) : Bool :=
   | .CLZW (rs1, rd) => true
   | .CTZ (rs1, rd) => true
   | .CTZW (rs1, rd) => true
-  | .CLMUL (rs2, rs1, rd) => true
-  | .CLMULH (rs2, rs1, rd) => true
-  | .CLMULR (rs2, rs1, rd) => true
-  | .ZBS_IOP (shamt, rs1, rd, op) => true
-  | .ZBS_RTYPE (rs2, rs1, rd, op) => true
   | .C_NOP 0b000000 => true
   | .C_NOP imm =>
     (if ((imm != (zeros (n := 6))) : Bool)
@@ -2917,85 +2081,8 @@ def assembly_forwards_matches (arg_ : instruction) : Bool :=
     (if ((bne rs2 zreg) : Bool)
     then true
     else false)
-  | .C_LBU (uimm, rdc, rsc1) => true
-  | .C_LHU (uimm, rdc, rsc1) => true
-  | .C_LH (uimm, rdc, rsc1) => true
-  | .C_SB (uimm, rsc1, rsc2) => true
-  | .C_SH (uimm, rsc1, rsc2) => true
-  | .C_ZEXT_B rsdc => true
-  | .C_SEXT_B rsdc => true
-  | .C_ZEXT_H rsdc => true
-  | .C_SEXT_H rsdc => true
-  | .C_ZEXT_W rsdc => true
-  | .C_NOT rsdc => true
-  | .C_MUL (rsdc, rsc2) => true
-  | .SHA256SIG0 (rs1, rd) => true
-  | .SHA256SIG1 (rs1, rd) => true
-  | .SHA256SUM0 (rs1, rd) => true
-  | .SHA256SUM1 (rs1, rd) => true
-  | .AES32ESMI (bs, rs2, rs1, rd) => true
-  | .AES32ESI (bs, rs2, rs1, rd) => true
-  | .AES32DSMI (bs, rs2, rs1, rd) => true
-  | .AES32DSI (bs, rs2, rs1, rd) => true
-  | .SHA512SIG0L (rs2, rs1, rd) => true
-  | .SHA512SIG0H (rs2, rs1, rd) => true
-  | .SHA512SIG1L (rs2, rs1, rd) => true
-  | .SHA512SIG1H (rs2, rs1, rd) => true
-  | .SHA512SUM0R (rs2, rs1, rd) => true
-  | .SHA512SUM1R (rs2, rs1, rd) => true
-  | .AES64KS1I (rnum, rs1, rd) => true
-  | .AES64KS2 (rs2, rs1, rd) => true
-  | .AES64IM (rs1, rd) => true
-  | .AES64ESM (rs2, rs1, rd) => true
-  | .AES64ES (rs2, rs1, rd) => true
-  | .AES64DSM (rs2, rs1, rd) => true
-  | .AES64DS (rs2, rs1, rd) => true
-  | .SHA512SIG0 (rs1, rd) => true
-  | .SHA512SIG1 (rs1, rd) => true
-  | .SHA512SUM0 (rs1, rd) => true
-  | .SHA512SUM1 (rs1, rd) => true
-  | .SM3P0 (rs1, rd) => true
-  | .SM3P1 (rs1, rd) => true
-  | .SM4ED (bs, rs2, rs1, rd) => true
-  | .SM4KS (bs, rs2, rs1, rd) => true
-  | .ZBKB_RTYPE (rs2, rs1, rd, op) => true
-  | .ZBKB_PACKW (rs2, rs1, rd) => true
-  | .ZIP (rs1, rd) => true
-  | .UNZIP (rs1, rd) => true
-  | .BREV8 (rs1, rd) => true
-  | .XPERM8 (rs2, rs1, rd) => true
-  | .XPERM4 (rs2, rs1, rd) => true
   | .CSRImm (csr, imm, rd, op) => true
   | .CSRReg (csr, rs1, rd, op) => true
-  | .SINVAL_VMA (rs1, rs2) => true
-  | .SFENCE_W_INVAL () => true
-  | .SFENCE_INVAL_IR () => true
-  | .WRS .WRS_STO => true
-  | .WRS .WRS_NTO => true
-  | .SSPUSH rs2 => true
-  | .C_SSPUSH () => true
-  | .SSPOPCHK rs1 => true
-  | .C_SSPOPCHK () => true
-  | .SSRDP rd => true
-  | .SSAMOSWAP (aq, rl, rs2, rs1, width, rd) =>
-    (if (((width == 4) || (width == 8)) : Bool)
-    then true
-    else false)
-  | .ZICOND_RTYPE (rs2, rs1, rd, op) => true
-  | .ZICBOM (cbop, rs1) => true
-  | .BITYPE (imm, 0b00000, rs1, op) => true
-  | .BITYPE (imm, cimm, rs1, op) =>
-    (if ((cimm != 0b00000#5) : Bool)
-    then true
-    else false)
-  | .ZICBOZ rs1 => true
-  | .FENCEI (0x000, rs, rd) =>
-    (if (((rs == zreg) && (rd == zreg)) : Bool)
-    then true
-    else false)
-  | .ZIMOP_MOP_R (mop, rs1, rd) => true
-  | .ZIMOP_MOP_RR (mop, rs2, rs1, rd) => true
-  | .ZCMOP mop => true
   | .ILLEGAL s => true
   | .C_ILLEGAL s => true
   | _ => false
@@ -3039,11 +2126,6 @@ def encdec_amoop_forwards (arg_ : amoop) : (BitVec 5) :=
   | .AMOMAXU => 0b11100#5
   | .AMOCAS => 0b00101#5
 
-def encdec_biop_forwards (arg_ : biop) : (BitVec 3) :=
-  match arg_ with
-  | .BEQI => 0b010#3
-  | .BNEI => 0b011#3
-
 def encdec_bop_forwards (arg_ : bop) : (BitVec 3) :=
   match arg_ with
   | .BEQ => 0b000#3
@@ -3052,18 +2134,6 @@ def encdec_bop_forwards (arg_ : bop) : (BitVec 3) :=
   | .BGE => 0b101#3
   | .BLTU => 0b110#3
   | .BGEU => 0b111#3
-
-def encdec_cbop_forwards (arg_ : cbop_zicbom) : (BitVec 12) :=
-  match arg_ with
-  | .CBO_CLEAN => 0b000000000001#12
-  | .CBO_FLUSH => 0b000000000010#12
-  | .CBO_INVAL => 0b000000000000#12
-
-def encdec_cbop_zicbop_forwards (arg_ : cbop_zicbop) : (BitVec 5) :=
-  match arg_ with
-  | .PREFETCH_I => 0b00000#5
-  | .PREFETCH_R => 0b00001#5
-  | .PREFETCH_W => 0b00011#5
 
 def encdec_csrop_forwards (arg_ : csrop) : (BitVec 2) :=
   match arg_ with
@@ -3091,27 +2161,10 @@ def encdec_mul_op_forwards (arg_ : mul_op) : SailM (BitVec 3) := do
       sail_assert false "Pattern match failure at unknown location"
       throw Error.Exit)
 
-def encdec_ntl_forwards (arg_ : ntl_type) : (BitVec 5) :=
-  match arg_ with
-  | .NTL_P1 => 0b00010#5
-  | .NTL_PALL => 0b00011#5
-  | .NTL_S1 => 0b00100#5
-  | .NTL_ALL => 0b00101#5
-
 def encdec_uop_forwards (arg_ : uop) : (BitVec 7) :=
   match arg_ with
   | .LUI => 0b0110111#7
   | .AUIPC => 0b0010111#7
-
-def encdec_wrsop_forwards (arg_ : wrsop) : (BitVec 12) :=
-  match arg_ with
-  | .WRS_STO => 0b000000011101#12
-  | .WRS_NTO => 0b000000001101#12
-
-def encdec_zicondop_forwards (arg_ : zicondop) : (BitVec 3) :=
-  match arg_ with
-  | .CZERO_EQZ => 0b101#3
-  | .CZERO_NEZ => 0b111#3
 
 /-- Type quantifiers: width : Nat, List.elem width [1, 2, 4, 8] -/
 def lrsc_width_valid (width : Nat) : Bool :=
@@ -3120,9 +2173,15 @@ def lrsc_width_valid (width : Nat) : Bool :=
   | 8 => (xlen ≥b 64)
   | _ => false
 
-/-- Type quantifiers: k_ex255800_ : Bool, width : Nat, List.elem width [1, 2, 4, 8] -/
+/-- Type quantifiers: k_ex196149_ : Bool, width : Nat, List.elem width [1, 2, 4, 8] -/
 def valid_load_encdec (width : Nat) (is_unsigned : Bool) : Bool :=
   ((width <b xlen_bytes) || ((not is_unsigned) && (width ≤b xlen_bytes)))
+
+def virtual_memory_supported (_ : Unit) : SailM Bool := do
+  (currentlyEnabled Ext_Sv32) <||> (do
+    (currentlyEnabled Ext_Sv39) <||> (do
+      (currentlyEnabled Ext_Sv48) <||> (do
+        (currentlyEnabled Ext_Sv57))))
 
 /-- Type quantifiers: arg_ : Nat, List.elem arg_ [1, 2, 4, 8] -/
 def width_enc_forwards (arg_ : Nat) : (BitVec 2) :=
@@ -3141,48 +2200,8 @@ def width_enc_wide_forwards (arg_ : Nat) : (BitVec 3) :=
   | 8 => 0b011#3
   | _ => 0b100#3
 
-def zicfiss_xSSE (priv : Privilege) : SailM Bool := do
-  (currentlyEnabled Ext_S) <&&> (do
-    match priv with
-    | .Machine => (pure false)
-    | .Supervisor => (pure (bool_bit_backwards (_get_MEnvcfg_SSE (← readReg menvcfg))))
-    | .VirtualSupervisor =>
-      (internal_error "extensions/cfi/zicfiss_regs.sail" 27 "Hypervisor extension not supported")
-    | .User => (pure (bool_bit_backwards (_get_SEnvcfg_SSE (← (read_senvcfg ())))))
-    | .VirtualUser => (pure (bool_bit_backwards (_get_SEnvcfg_SSE (← (read_senvcfg ()))))))
-
 noncomputable def encdec_forwards (arg_ : instruction) : SailM (BitVec 32) := do
   match arg_ with
-  | .ZICBOP (cbop, rs1, v__10) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zicbop)) && ((Sail.BitVec.extractLsb v__10 4 0) == (0b00000#5 : (BitVec 5)))) : Bool)
-      then
-        (let offset11_5 : (BitVec 7) := (Sail.BitVec.extractLsb v__10 11 5)
-        let offset11_5 : (BitVec 7) := (Sail.BitVec.extractLsb v__10 11 5)
-        (pure ((offset11_5 : (BitVec 7)) +++ ((encdec_cbop_zicbop_forwards cbop) +++ ((encdec_reg_forwards
-                  rs1) +++ (0b110#3 +++ (0b00000#5 +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .NTL op =>
-    (do
-      if ((← (currentlyEnabled Ext_Zihintntl)) : Bool)
-      then
-        (pure (0b0000000#7 +++ ((encdec_ntl_forwards op) +++ (0b00000#5 +++ (0b000#3 +++ (0b00000#5 +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .PAUSE () =>
-    (do
-      if ((← (currentlyEnabled Ext_Zihintpause)) : Bool)
-      then
-        (pure (0b0000#4 +++ (0b0001#4 +++ (0b0000#4 +++ (0b00000#5 +++ (0b000#3 +++ (0b00000#5 +++ 0b0001111#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
   | .LPAD lpl =>
     (do
       if ((← (currentlyEnabled Ext_Zicfilp)) : Bool)
@@ -3193,12 +2212,12 @@ noncomputable def encdec_forwards (arg_ : instruction) : SailM (BitVec 32) := do
           throw Error.Exit))
   | .UTYPE (imm, rd, op) =>
     (pure ((imm : (BitVec 20)) +++ ((encdec_reg_forwards rd) +++ (encdec_uop_forwards op))))
-  | .JAL (v__12, rd) =>
+  | .JAL (v__10, rd) =>
     (do
-      if (((Sail.BitVec.extractLsb v__12 0 0) == (0#1 : (BitVec 1))) : Bool)
+      if (((Sail.BitVec.extractLsb v__10 0 0) == (0#1 : (BitVec 1))) : Bool)
       then
-        (let imm := (Sail.BitVec.extractLsb v__12 20 1)
-        let imm := (Sail.BitVec.extractLsb v__12 20 1)
+        (let imm := (Sail.BitVec.extractLsb v__10 20 1)
+        let imm := (Sail.BitVec.extractLsb v__10 20 1)
         (pure ((Sail.BitVec.extractLsb imm 19 19) +++ ((Sail.BitVec.extractLsb imm 9 0) +++ ((Sail.BitVec.extractLsb
                   imm 10 10) +++ ((Sail.BitVec.extractLsb imm 18 11) +++ ((encdec_reg_forwards rd) +++ 0b1101111#7)))))))
       else
@@ -3208,12 +2227,12 @@ noncomputable def encdec_forwards (arg_ : instruction) : SailM (BitVec 32) := do
   | .JALR (imm, rs1, rd) =>
     (pure ((imm : (BitVec 12)) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
                 rd) +++ 0b1100111#7)))))
-  | .BTYPE (v__14, rs2, rs1, op) =>
+  | .BTYPE (v__12, rs2, rs1, op) =>
     (do
-      if (((Sail.BitVec.extractLsb v__14 0 0) == (0#1 : (BitVec 1))) : Bool)
+      if (((Sail.BitVec.extractLsb v__12 0 0) == (0#1 : (BitVec 1))) : Bool)
       then
-        (let imm := (Sail.BitVec.extractLsb v__14 12 1)
-        let imm := (Sail.BitVec.extractLsb v__14 12 1)
+        (let imm := (Sail.BitVec.extractLsb v__12 12 1)
+        let imm := (Sail.BitVec.extractLsb v__12 12 1)
         (pure ((Sail.BitVec.extractLsb imm 11 11) +++ ((Sail.BitVec.extractLsb imm 9 4) +++ ((encdec_reg_forwards
                   rs2) +++ ((encdec_reg_forwards rs1) +++ ((encdec_bop_forwards op) +++ ((Sail.BitVec.extractLsb
                         imm 3 0) +++ ((Sail.BitVec.extractLsb imm 10 10) +++ 0b1100011#7)))))))))
@@ -3420,43 +2439,6 @@ noncomputable def encdec_forwards (arg_ : instruction) : SailM (BitVec 32) := do
       then
         (pure (0b0000001#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b11#2 +++ ((bool_bit_forwards
                       is_unsigned) +++ ((encdec_reg_forwards rd) +++ 0b0111011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SLLIUW (shamt, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zba)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b000010#6 +++ ((shamt : (BitVec 6)) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0011011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBA_RTYPEUW (rs2, rs1, rd, b__0) =>
-    (do
-      if ((((← (currentlyEnabled Ext_Zba)) && (xlen == 64)) && (b__0 == (0b00#2 : (BitVec 2)))) : Bool)
-      then
-        (pure (0b0000100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b00#2 +++ (0#1 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0111011#7)))))))
-      else
-        (do
-          if (((← (currentlyEnabled Ext_Zba)) && (xlen == 64)) : Bool)
-          then
-            (pure (0b0010000#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ ((b__0 : (BitVec 2)) +++ (0#1 +++ ((encdec_reg_forwards
-                            rd) +++ 0b0111011#7)))))))
-          else
-            (do
-              sail_assert false "Pattern match failure at unknown location"
-              throw Error.Exit)))
-  | .ZBA_RTYPE (rs2, rs1, rd, shamt) =>
-    (do
-      if ((←((pure (shamt != 0b00#2)) <&&> (do
-           (currentlyEnabled Ext_Zba)))) : Bool)
-      then
-        (pure (0b0010000#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ ((shamt : (BitVec 2)) +++ (0#1 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
       else
         (do
           sail_assert false "Pattern match failure at unknown location"
@@ -3724,490 +2706,6 @@ noncomputable def encdec_forwards (arg_ : instruction) : SailM (BitVec 32) := do
         (do
           sail_assert false "Pattern match failure at unknown location"
           throw Error.Exit))
-  | .CLMUL (rs2, rs1, rd) =>
-    (do
-      if ((←((currentlyEnabled Ext_Zbc) <||> (do
-           (currentlyEnabled Ext_Zbkc)))) : Bool)
-      then
-        (pure (0b0000101#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .CLMULH (rs2, rs1, rd) =>
-    (do
-      if ((←((currentlyEnabled Ext_Zbc) <||> (do
-           (currentlyEnabled Ext_Zbkc)))) : Bool)
-      then
-        (pure (0b0000101#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b011#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .CLMULR (rs2, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbc)) : Bool)
-      then
-        (pure (0b0000101#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b010#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_IOP (shamt, rs1, rd, .BCLRI) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbs)) && ((xlen == 64) || ((BitVec.access shamt 5) == 0#1))) : Bool)
-      then
-        (pure (0b010010#6 +++ ((shamt : (BitVec 6)) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0010011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_IOP (shamt, rs1, rd, .BEXTI) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbs)) && ((xlen == 64) || ((BitVec.access shamt 5) == 0#1))) : Bool)
-      then
-        (pure (0b010010#6 +++ ((shamt : (BitVec 6)) +++ ((encdec_reg_forwards rs1) +++ (0b101#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0010011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_IOP (shamt, rs1, rd, .BINVI) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbs)) && ((xlen == 64) || ((BitVec.access shamt 5) == 0#1))) : Bool)
-      then
-        (pure (0b011010#6 +++ ((shamt : (BitVec 6)) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0010011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_IOP (shamt, rs1, rd, .BSETI) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbs)) && ((xlen == 64) || ((BitVec.access shamt 5) == 0#1))) : Bool)
-      then
-        (pure (0b001010#6 +++ ((shamt : (BitVec 6)) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0010011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_RTYPE (rs2, rs1, rd, .BCLR) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbs)) : Bool)
-      then
-        (pure (0b0100100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_RTYPE (rs2, rs1, rd, .BEXT) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbs)) : Bool)
-      then
-        (pure (0b0100100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b101#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_RTYPE (rs2, rs1, rd, .BINV) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbs)) : Bool)
-      then
-        (pure (0b0110100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBS_RTYPE (rs2, rs1, rd, .BSET) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbs)) : Bool)
-      then
-        (pure (0b0010100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA256SUM0 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zknh)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00000#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA256SUM1 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zknh)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00001#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA256SIG0 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zknh)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00010#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA256SIG1 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zknh)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00011#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES32ESMI (bs, rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zkne)) && (xlen == 32)) : Bool)
-      then
-        (pure ((bs : (BitVec 2)) +++ (0b10011#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards
-                    rs1) +++ (0b000#3 +++ ((encdec_reg_forwards rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES32ESI (bs, rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zkne)) && (xlen == 32)) : Bool)
-      then
-        (pure ((bs : (BitVec 2)) +++ (0b10001#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards
-                    rs1) +++ (0b000#3 +++ ((encdec_reg_forwards rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES32DSMI (bs, rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknd)) && (xlen == 32)) : Bool)
-      then
-        (pure ((bs : (BitVec 2)) +++ (0b10111#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards
-                    rs1) +++ (0b000#3 +++ ((encdec_reg_forwards rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES32DSI (bs, rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknd)) && (xlen == 32)) : Bool)
-      then
-        (pure ((bs : (BitVec 2)) +++ (0b10101#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards
-                    rs1) +++ (0b000#3 +++ ((encdec_reg_forwards rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SUM0R (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b01000#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SUM1R (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b01001#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SIG0L (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b01010#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SIG0H (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b01110#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SIG1L (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b01011#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SIG1H (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b01111#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64KS1I (rnum, rs1, rd) =>
-    (do
-      if (((←((currentlyEnabled Ext_Zkne) <||> (do
-             (currentlyEnabled Ext_Zknd)))) && ((xlen == 64) && (zopz0zI_u rnum 0xB#4))) : Bool)
-      then
-        (pure (0b00#2 +++ (0b11000#5 +++ (1#1 +++ ((rnum : (BitVec 4)) +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                          rd) +++ 0b0010011#7))))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64IM (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknd)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b11000#5 +++ (0b00000#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64KS2 (rs2, rs1, rd) =>
-    (do
-      if (((←((currentlyEnabled Ext_Zkne) <||> (do
-             (currentlyEnabled Ext_Zknd)))) && (xlen == 64)) : Bool)
-      then
-        (pure (0b01#2 +++ (0b11111#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64ESM (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zkne)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b11011#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64ES (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zkne)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b11001#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64DSM (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknd)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b11111#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .AES64DS (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknd)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b11101#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SUM0 (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00100#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SUM1 (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00101#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SIG0 (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00110#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SHA512SIG1 (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zknh)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b00111#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SM3P0 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zksh)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b01000#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SM3P1 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zksh)) : Bool)
-      then
-        (pure (0b00#2 +++ (0b01000#5 +++ (0b01001#5 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                        rd) +++ 0b0010011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SM4ED (bs, rs2, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zksed)) : Bool)
-      then
-        (pure ((bs : (BitVec 2)) +++ (0b11000#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards
-                    rs1) +++ (0b000#3 +++ ((encdec_reg_forwards rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SM4KS (bs, rs2, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zksed)) : Bool)
-      then
-        (pure ((bs : (BitVec 2)) +++ (0b11010#5 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards
-                    rs1) +++ (0b000#3 +++ ((encdec_reg_forwards rd) +++ 0b0110011#7)))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBKB_RTYPE (rs2, rs1, rd, .PACK) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbkb)) : Bool)
-      then
-        (pure (0b0000100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b100#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBKB_RTYPE (rs2, rs1, rd, .PACKH) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbkb)) : Bool)
-      then
-        (pure (0b0000100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b111#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZBKB_PACKW (rs2, rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbkb)) && (xlen == 64)) : Bool)
-      then
-        (pure (0b0000100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b100#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0111011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZIP (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbkb)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b000010001111#12 +++ ((encdec_reg_forwards rs1) +++ (0b001#3 +++ ((encdec_reg_forwards
-                    rd) +++ 0b0010011#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .UNZIP (rs1, rd) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zbkb)) && (xlen == 32)) : Bool)
-      then
-        (pure (0b000010001111#12 +++ ((encdec_reg_forwards rs1) +++ (0b101#3 +++ ((encdec_reg_forwards
-                    rd) +++ 0b0010011#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .BREV8 (rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbkb)) : Bool)
-      then
-        (pure (0b011010000111#12 +++ ((encdec_reg_forwards rs1) +++ (0b101#3 +++ ((encdec_reg_forwards
-                    rd) +++ 0b0010011#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .XPERM8 (rs2, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbkx)) : Bool)
-      then
-        (pure (0b0010100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b100#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .XPERM4 (rs2, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zbkx)) : Bool)
-      then
-        (pure (0b0010100#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b010#3 +++ ((encdec_reg_forwards
-                      rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
   | .CSRReg (csr, rs1, rd, op) =>
     (do
       if ((← (currentlyEnabled Ext_Zicsr)) : Bool)
@@ -4224,158 +2722,6 @@ noncomputable def encdec_forwards (arg_ : instruction) : SailM (BitVec 32) := do
       then
         (pure ((csr : (BitVec 12)) +++ ((imm : (BitVec 5)) +++ (1#1 +++ ((encdec_csrop_forwards op) +++ ((encdec_reg_forwards
                       rd) +++ 0b1110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SINVAL_VMA (rs1, rs2) =>
-    (do
-      if ((← (currentlyEnabled Ext_Svinval)) : Bool)
-      then
-        (pure (0b0001011#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ (0b000#3 +++ (0b00000#5 +++ 0b1110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SFENCE_W_INVAL () =>
-    (do
-      if ((← (currentlyEnabled Ext_Svinval)) : Bool)
-      then
-        (pure (0b0001100#7 +++ (0b00000#5 +++ (0b00000#5 +++ (0b000#3 +++ (0b00000#5 +++ 0b1110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SFENCE_INVAL_IR () =>
-    (do
-      if ((← (currentlyEnabled Ext_Svinval)) : Bool)
-      then
-        (pure (0b0001100#7 +++ (0b00001#5 +++ (0b00000#5 +++ (0b000#3 +++ (0b00000#5 +++ 0b1110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .WRS op =>
-    (do
-      if ((← (currentlyEnabled Ext_Zawrs)) : Bool)
-      then
-        (pure ((encdec_wrsop_forwards op) +++ (0b00000#5 +++ (0b000#3 +++ (0b00000#5 +++ 0b1110011#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SSPUSH rs2 =>
-    (do
-      if ((←((pure ((rs2 == ra) || (rs2 == t0))) <&&> (do
-           (currentlyEnabled Ext_Zicfiss) <&&> (do
-             (zicfiss_xSSE (← readReg cur_privilege)))))) : Bool)
-      then
-        (pure (0b1100111#7 +++ ((encdec_reg_forwards rs2) +++ (0b00000#5 +++ (0b100#3 +++ (0b00000#5 +++ 0b1110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SSPOPCHK rs1 =>
-    (do
-      if ((←((pure ((rs1 == ra) || (rs1 == t0))) <&&> (do
-           (currentlyEnabled Ext_Zicfiss) <&&> (do
-             (zicfiss_xSSE (← readReg cur_privilege)))))) : Bool)
-      then
-        (pure (0b110011011100#12 +++ ((encdec_reg_forwards rs1) +++ (0b100#3 +++ (0b00000#5 +++ 0b1110011#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SSRDP rd =>
-    (do
-      if ((←((currentlyEnabled Ext_Zicfiss) <&&> (do
-           (zicfiss_xSSE (← readReg cur_privilege))))) : Bool)
-      then
-        (pure (0b110011011100#12 +++ (0b00000#5 +++ (0b100#3 +++ ((encdec_reg_forwards rd) +++ 0b1110011#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .SSAMOSWAP (aq, rl, rs2, rs1, width, rd) =>
-    (do
-      if ((←((pure ((width == 4) || ((xlen == 64) && (width == 8)))) <&&> (do
-           (currentlyEnabled Ext_Zicfiss)))) : Bool)
-      then
-        (pure (0b01001#5 +++ ((bool_bit_forwards aq) +++ ((bool_bit_forwards rl) +++ ((encdec_reg_forwards
-                    rs2) +++ ((encdec_reg_forwards rs1) +++ (0#1 +++ ((width_enc_forwards width) +++ ((encdec_reg_forwards
-                            rd) +++ 0b0101111#7)))))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZICOND_RTYPE (rs2, rs1, rd, op) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zicond)) : Bool)
-      then
-        (pure (0b0000111#7 +++ ((encdec_reg_forwards rs2) +++ ((encdec_reg_forwards rs1) +++ ((encdec_zicondop_forwards
-                    op) +++ ((encdec_reg_forwards rd) +++ 0b0110011#7))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZICBOM (cbop, rs1) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zicbom)) : Bool)
-      then
-        (pure ((encdec_cbop_forwards cbop) +++ ((encdec_reg_forwards rs1) +++ (0b010#3 +++ (0b00000#5 +++ 0b0001111#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .BITYPE (v__16, cimm, rs1, op) =>
-    (do
-      if (((← (currentlyEnabled Ext_Zibi)) && ((Sail.BitVec.extractLsb v__16 0 0) == (0#1 : (BitVec 1)))) : Bool)
-      then
-        (let imm := (Sail.BitVec.extractLsb v__16 12 1)
-        let imm := (Sail.BitVec.extractLsb v__16 12 1)
-        (pure ((Sail.BitVec.extractLsb imm 11 11) +++ ((Sail.BitVec.extractLsb imm 9 4) +++ ((cimm : (BitVec 5)) +++ ((encdec_reg_forwards
-                    rs1) +++ ((encdec_biop_forwards op) +++ ((Sail.BitVec.extractLsb imm 3 0) +++ ((Sail.BitVec.extractLsb
-                          imm 10 10) +++ 0b1100011#7)))))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZICBOZ rs1 =>
-    (do
-      if ((← (currentlyEnabled Ext_Zicboz)) : Bool)
-      then
-        (pure (0b000000000100#12 +++ ((encdec_reg_forwards rs1) +++ (0b010#3 +++ (0b00000#5 +++ 0b0001111#7)))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .FENCEI (imm, rs, rd) =>
-    (pure ((imm : (BitVec 12)) +++ ((encdec_reg_forwards rs) +++ (0b001#3 +++ ((encdec_reg_forwards
-                rd) +++ 0b0001111#7)))))
-  | .ZIMOP_MOP_R (v__18, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zimop)) : Bool)
-      then
-        (let mop_30 : (BitVec 1) := (Sail.BitVec.extractLsb v__18 4 4)
-        let mop_30 : (BitVec 1) := (Sail.BitVec.extractLsb v__18 4 4)
-        let mop_27_26 : (BitVec 2) := (Sail.BitVec.extractLsb v__18 3 2)
-        let mop_21_20 : (BitVec 2) := (Sail.BitVec.extractLsb v__18 1 0)
-        (pure (1#1 +++ ((mop_30 : (BitVec 1)) +++ (0b00#2 +++ ((mop_27_26 : (BitVec 2)) +++ (0b0111#4 +++ ((mop_21_20 : (BitVec 2)) +++ ((encdec_reg_forwards
-                          rs1) +++ (0b100#3 +++ ((encdec_reg_forwards rd) +++ 0b1110011#7)))))))))))
-      else
-        (do
-          sail_assert false "Pattern match failure at unknown location"
-          throw Error.Exit))
-  | .ZIMOP_MOP_RR (v__19, rs2, rs1, rd) =>
-    (do
-      if ((← (currentlyEnabled Ext_Zimop)) : Bool)
-      then
-        (let mop_30 : (BitVec 1) := (Sail.BitVec.extractLsb v__19 2 2)
-        let mop_30 : (BitVec 1) := (Sail.BitVec.extractLsb v__19 2 2)
-        let mop_27_26 : (BitVec 2) := (Sail.BitVec.extractLsb v__19 1 0)
-        (pure (1#1 +++ ((mop_30 : (BitVec 1)) +++ (0b00#2 +++ ((mop_27_26 : (BitVec 2)) +++ (1#1 +++ ((encdec_reg_forwards
-                        rs2) +++ ((encdec_reg_forwards rs1) +++ (0b100#3 +++ ((encdec_reg_forwards
-                              rd) +++ 0b1110011#7)))))))))))
       else
         (do
           sail_assert false "Pattern match failure at unknown location"

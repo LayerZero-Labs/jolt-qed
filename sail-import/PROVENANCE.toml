@@ -14,8 +14,30 @@ project_file_sha256 = "818fc3305955e3664b7a642d1899004ebb7960f54021db79538a68173
 # Handwritten support adapted to the namespaced Lean backend and Lean 4.35, as
 # upstream did in riscv/sail-riscv#1776, #1876 (open the model namespace) and
 # #1667 (`toCtorIdx` -> `ctorIdx`). Apply before generating.
-patches = ["sail-import/patches/sail-riscv-lean-handwritten.patch"]
-patch_sha256 = ["095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767"]
+# Then the Jolt hart patch (docs/riscv-alignment.md):
+#  - LR/SC reservations as model registers (model/sys/sys_reservation.sail)
+#    instead of uninterpreted platform functions, with the options
+#    platform.reservation.{require_exact_reservation_addr, invalidate_on_xret}
+#    of upstream sail-riscv and a new require_width_within (an SC must be no
+#    wider than its LR); MRET and SRET cancel the reservation when
+#    invalidate_on_xret is set; cancelling clears the address and width too,
+#    so "no reservation" has one representation;
+#  - the mstatus.FS legal-values policy base.mstatus.fs_legal_states, backported
+#    from upstream sail-riscv 81184531;
+#  - mstatus.MPP resets to M on a hart without U-mode (it reset to 0, an
+#    unsupported mode);
+#  - the configuration check of memory regions passes its Ziccamoa and Ziccamoc
+#    flags in the right order (upstream has since rewritten it);
+#  - RiscvExtras.lean: no HTIF console, no experimental extensions; the
+#    reservation axioms are gone.
+patches = [
+  "sail-import/patches/sail-riscv-lean-handwritten.patch",
+  "sail-import/patches/sail-riscv-jolt-hart.patch",
+]
+patch_sha256 = [
+  "095a3d4b82574d45735622339bcf6674e0d58c8975c04634c983876ec8d3b767",
+  "705ddf4527ee5c500bb42aecef9ee58069be4b43cebd25c1a9b77b3cef7da485",
+]
 
 [compiler]
 repository = "https://github.com/rems-project/sail"
@@ -35,41 +57,54 @@ commit = "1e5b216bf881ef08da160db63b44ecda430802d6"
 # Upstream config/config.json.in instantiated for RV64D, VLEN 256, ELEN 64.
 upstream = "sail-import/rv64d_v256_e64.json"
 upstream_sha256 = "a390a2f46fc02cf666bc9d0b8b0d7223444c1b5b473de406a8784548b191f753"
-# Used for generation. Differs from upstream in exactly three values, each read
-# once by the model:
-#   memory.misaligned.supported = false  -> plat_enable_misaligned_access
-#   extensions.Zicfilp.supported = false -> hartSupports Ext_Zicfilp
-#   extensions.Zicfiss.supported = false -> hartSupports Ext_Zicfiss
-# These replace the three hand edits previously made to the generated files.
-# With the previous compiler (eff56f4) and --all-modules this config reproduces
-# the previous checked-in LeanRV64D exactly, except for the hand-edit comments.
+# Used for generation: Jolt's hart, RV64IMAC with Zca and Zicsr, M-mode only,
+# no PMP, no virtual memory, no floating point, CLINT + I/O + RAM regions, and
+# exact-address, width-contained LR/SC. Its header comment and
+# docs/riscv-alignment.md give the reasons.
 used = "sail-import/rv64d_jolt.json"
-used_sha256 = "2bd0c9f7d2b5bf25103a512ae37d48713d45d2b27282f599eda8fd48385ac12f"
+used_sha256 = "a60717fcf321459be8736a5e5f481dac2eed9ce864ff2d0e4253f1ad0a0b3992"
 
 [modules]
-# Lean 4.35 compiles inductive types eagerly and rejects one with more than 244
-# constructors carrying data; the full instruction union has 353. The vector and
-# F/D instruction modules (and the modules that require them) are left out,
-# leaving 159 constructors. No hand-written proof refers to a dropped
-# constructor, and the proofs do not use the Sail decoder.
-excluded_roots = ["V_instructions", "FD_instructions"]
-dropped_leaves = [
-  "FD_instructions", "V_instructions", "Zfbfmin", "Zvabd_insts", "Zvbb", "Zvbc",
-  "Zvfbfmin", "Zvfbfwma", "Zvkg", "Zvkned", "Zvknhab", "Zvksed", "Zvksh",
-  "bfloat16_core",
-]
+# The selection is the modules Jolt's hart can reach, and nothing else:
+# - the Sail infrastructure: prelude, core, sys, exceptions, pmp, main, postlude;
+# - the instructions Jolt's decoder accepts: I, M, A (Zaamo and Zalrsc), Zca and
+#   Zicsr, plus Zbb for ANDN, which Jolt's expansions use;
+# - the modules those require in model/riscv.sail_project: B_types, V_core,
+#   FD_core, Smcntrpmf, Stateen_csrs, Stateen_regs, Zicbom_types, Zicbop_types,
+#   Zicfilp_regs, Zicfilp_insts and CFI_types.
+# Every other module is for an extension that rv64d_jolt.json turns off and that
+# Jolt never runs, so translating it would only add trusted code. Sail's decoder
+# (`ext_decode`, `ext_decode_compressed`) therefore covers only the selected
+# instructions; the bytecode proofs compare Jolt's decoder with it on every word
+# Jolt accepts.
+# The dropped modules also hold the `currentlyEnabled` clauses of their
+# extensions. For B, H, Sscofpmf, Ssqosid, Zfhmin, Zicbom, Zicboz, Zicntr and Zkr,
+# which the kept code still names, `currentlyEnabled` now fails a Sail assertion
+# where the full model returns false. The kept code asks about them only in
+# S-mode, after decoding a Zbb instruction, and when accessing mseccfg, menvcfg,
+# mip, mstateen0, the Smcntrpmf CSRs or hstateen. Jolt's hart never enters S-mode
+# and Jolt rejects those encodings and CSRs.
 selected = [
-  "A_types", "B_types", "CFI_types", "FD_core", "H", "I_insts", "I_types",
-  "K_core", "M_insts", "M_types", "Smcntrpmf", "Sscofpmf", "Ssqosid", "Sstc",
-  "Stateen_csrs", "Stateen_regs", "Svinval", "V_core", "V_types", "Zaamo",
-  "Zalrsc", "Zawrs_insts", "Zawrs_types", "Zba", "Zbb", "Zbc", "Zbkb", "Zbkx",
-  "Zbs", "Zca", "Zcb", "Zcmop", "Zibi_insts", "Zibi_types", "Zicbom_insts",
-  "Zicbom_types", "Zicbop_insts", "Zicbop_types", "Zicboz", "Zicfilp_insts",
-  "Zicfilp_regs", "Zicfiss_insts", "Zicfiss_regs", "Zicntr", "Zicond_insts",
-  "Zicond_types", "Zicsr_insts", "Zicsr_types", "Zifencei", "Zihintntl_insts",
-  "Zihintntl_types", "Zihintpause", "Zihpm", "Zimop", "Zkn", "Zkr", "Zks",
-  "Zvabd_types", "Zvk_core", "core", "exceptions", "main", "pmp", "postlude",
-  "prelude", "rmem", "sys", "unit_tests",
+  "A_types", "B_types", "CFI_types", "core", "exceptions", "FD_core", "I_insts",
+  "I_types", "M_insts", "M_types", "main", "pmp", "postlude", "prelude",
+  "Smcntrpmf", "Stateen_csrs", "Stateen_regs", "sys", "V_core", "Zaamo",
+  "Zalrsc", "Zbb", "Zca", "Zicbom_types", "Zicbop_types", "Zicfilp_insts",
+  "Zicfilp_regs", "Zicsr_insts", "Zicsr_types",
+]
+# Every other module and module group in model/riscv.sail_project.
+not_selected = [
+  "A", "B", "B_insts", "bfloat16", "bfloat16_core", "C", "CFI", "extensions",
+  "FD", "FD_instructions", "H", "I", "K", "K_core", "M", "mops", "rmem",
+  "Sscofpmf", "Ssqosid", "Sstc", "Stateen", "Svinval", "unit_tests", "V",
+  "V_instructions", "V_types", "vector_crypto", "Zawrs", "Zawrs_insts",
+  "Zawrs_types", "Zba", "Zbc", "Zbkb", "Zbkx", "Zbs", "Zcb", "Zcmop", "Zfbfmin",
+  "Zibi", "Zibi_insts", "Zibi_types", "Zicbom", "Zicbom_insts", "Zicbop",
+  "Zicbop_insts", "Zicboz", "Zicfilp", "Zicfiss", "Zicfiss_insts",
+  "Zicfiss_regs", "Zicntr", "Zicond", "Zicond_insts", "Zicond_types", "Zicsr",
+  "Zifencei", "Zihintntl", "Zihintntl_insts", "Zihintntl_types", "Zihintpause",
+  "Zihpm", "Zimop", "Zkn", "Zkr", "Zks", "Zvabd", "Zvabd_insts", "Zvabd_types",
+  "Zvbb", "Zvbc", "Zvfbfmin", "Zvfbfwma", "Zvk_core", "Zvkg", "Zvkned",
+  "Zvknhab", "Zvksed", "Zvksh",
 ]
 
 [postprocess]
@@ -84,4 +119,4 @@ rewritten_files = ["LeanRV64D/RvfiDii.lean"]
 [output]
 # sha256 over the sorted list of `shasum -a 256` lines for LeanRV64D/**/*.lean
 # followed by LeanRV64D.lean.
-tree_sha256 = "c6604faeb18f73209dee64f558c3e135d00db99eb4370b8a6cab8649fcda6b62"
+tree_sha256 = "601f607593c4022575c6dbc6fc4ee5dd9ade0c38964df8864ba2a4c8803c5794"

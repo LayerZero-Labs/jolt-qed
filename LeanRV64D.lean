@@ -6,8 +6,6 @@ import LeanRV64D.Extensions
 import LeanRV64D.Types
 import LeanRV64D.Main
 
-set_option maxHeartbeats 1_000_000_000
-set_option maxRecDepth 1_000_000
 set_option linter.unusedVariables false
 set_option match.ignoreUnusedAlts true
 
@@ -21,21 +19,11 @@ open ConcurrencyInterfaceV1
 
 namespace Functions
 
-open zvk_vsm4r_funct6
-open zvk_vsha2_funct6
-open zvk_vaesem_funct6
-open zvk_vaesef_funct6
-open zvk_vaesdm_funct6
-open zvk_vaesdf_funct6
-open zvabd_vwabda_func6
-open zvabd_vabd_func6
-open zicondop
 open xRET_type
 open wxfunct6
 open wvxfunct6
 open wvvfunct6
 open wvfunct6
-open wrsop
 open write_kind
 open wmvxfunct6
 open wmvvfunct6
@@ -71,7 +59,6 @@ open uop
 open stateen_bit
 open sopw
 open sop
-open seed_opst
 open rounding_mode
 open ropw
 open rop
@@ -90,7 +77,6 @@ open nxsfunct6
 open nxfunct6
 open nvsfunct6
 open nvfunct6
-open ntl_type
 open nisfunct6
 open nifunct6
 open mvxmafunct6
@@ -153,11 +139,9 @@ open exception
 open ctl_result
 open csrop
 open cregidx
-open checked_cbop
 open cfregidx
 open cbop_zicbop
 open cbop_zicbom
-open cbie
 open cacheop
 open bropw_zbb
 open brop_zbs
@@ -166,7 +150,6 @@ open brop_zbb
 open breakpoint_cause
 open bop
 open biop_zbs
-open biop
 open barrier_kind
 open amoop
 open agtype
@@ -198,6 +181,7 @@ open FeatureEnabledResult
 open FcsrRmReservedBehavior
 open Ext_DataAddr_Check
 open ExtStatus
+open ExtContextPolicy
 open ExecutionResult
 open ExceptionType
 open CSRAccessType
@@ -212,14 +196,18 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg fp_rounding_global fp_rounding_default
   writeReg misa (_update_Misa_MXL (Mk_Misa (zeros (n := 64))) (architecture_bits_forwards RV64))
   writeReg mstatus (let mxl := (architecture_bits_forwards RV64)
-  (_update_Mstatus_UXL
-    (_update_Mstatus_SXL (Mk_Mstatus (zeros (n := 64)))
-      (if (((xlen != 32) && (hartSupports Ext_S)) : Bool)
+  (_update_Mstatus_MPP
+    (_update_Mstatus_UXL
+      (_update_Mstatus_SXL (Mk_Mstatus (zeros (n := 64)))
+        (if (((xlen != 32) && (hartSupports Ext_S)) : Bool)
+        then mxl
+        else (zeros (n := 2))))
+      (if (((xlen != 32) && (hartSupports Ext_U)) : Bool)
       then mxl
       else (zeros (n := 2))))
-    (if (((xlen != 32) && (hartSupports Ext_U)) : Bool)
-    then mxl
-    else (zeros (n := 2)))))
+    (if ((hartSupports Ext_U) : Bool)
+    then (privLevel_to_bits User)
+    else (privLevel_to_bits Machine))))
   writeReg hstateen0 (Mk_Hstateen0 (zeros (n := 64)))
   writeReg hstateen1 (Mk_Hstateen1 (zeros (n := 64)))
   writeReg hstateen2 (Mk_Hstateen2 (zeros (n := 64)))
@@ -240,6 +228,9 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg marchid (← (to_bits_checked (l := 64) (0 : Int)))
   writeReg mhartid (← (to_bits_checked (l := 64) (0 : Int)))
   writeReg mconfigptr (zeros (n := 64))
+  writeReg reservation_valid false
+  writeReg reservation_addr (zeros (n := 64))
+  writeReg reservation_width 0
   writeReg pc_reset_address (zeros (n := 64))
   writeReg htif_tohost_base none
   writeReg htif_tohost (zeros (n := 64))
@@ -247,54 +238,38 @@ def sail_model_init (x_0 : Unit) : SailM Unit := do
   writeReg htif_exit_code (zeros (n := 64))
   writeReg htif_cmd_write (zeros (n := 1))
   writeReg htif_payload_writes (zeros (n := 4))
-  writeReg pma_regions [{ base := 0b0000000000000000000000000000000000000000000000000001000000000000#64
-                          size := 0b0000000000000000000000000000000000000000000000000001000000000000#64
-                          attributes := { cacheable := true
-                                          coherent := false
+  writeReg pma_regions [{ base := 0b0000000000000000000000000000000001000000000000000000000000000000#64
+                          size := 0b0000000000000000000000000000000001000000000000000000000000000000#64
+                          attributes := { cacheable := false
+                                          coherent := true
                                           executable := false
                                           readable := true
-                                          writable := false
+                                          writable := true
                                           read_idempotent := true
                                           write_idempotent := true
-                                          misaligned_fault := NoFault
-                                          atomic_support := AMONone
+                                          misaligned_fault := AlignmentFault
+                                          atomic_support := AMOArithmetic
                                           reservability := RsrvNone
                                           supports_cbo_zero := false
                                           supports_pte_read := false
                                           supports_pte_write := false }
-                          include_in_device_tree := false }, { base := 0b0000000000000000000000000000000000000010000000000000000000000000#64
-                                                               size := 0b0000000000000000000000000000000000000010000000000000000000000000#64
-                                                               attributes := { cacheable := false
+                          include_in_device_tree := false }, { base := 0b0000000000000000000000000000000010000000000000000000000000000000#64
+                                                               size := 0b1111111111111111111111111111111110000000000000000000000000000000#64
+                                                               attributes := { cacheable := true
                                                                                coherent := true
-                                                                               executable := false
+                                                                               executable := true
                                                                                readable := true
                                                                                writable := true
-                                                                               read_idempotent := false
-                                                                               write_idempotent := false
-                                                                               misaligned_fault := AlignmentFault
-                                                                               atomic_support := AMONone
-                                                                               reservability := RsrvNone
+                                                                               read_idempotent := true
+                                                                               write_idempotent := true
+                                                                               misaligned_fault := NoFault
+                                                                               atomic_support := AMOArithmetic
+                                                                               reservability := RsrvEventual
                                                                                supports_cbo_zero := false
                                                                                supports_pte_read := false
                                                                                supports_pte_write := false }
-                                                               include_in_device_tree := false }, { base := 0b0000000000000000000000000000000010000000000000000000000000000000#64
-                                                                                                    size := 0b0000000000000000000000000000000010000000000000000000000000000000#64
-                                                                                                    attributes := { cacheable := true
-                                                                                                                    coherent := true
-                                                                                                                    executable := true
-                                                                                                                    readable := true
-                                                                                                                    writable := true
-                                                                                                                    read_idempotent := true
-                                                                                                                    write_idempotent := true
-                                                                                                                    misaligned_fault := NoFault
-                                                                                                                    atomic_support := AMOCASQ
-                                                                                                                    reservability := RsrvEventual
-                                                                                                                    supports_cbo_zero := true
-                                                                                                                    supports_pte_read := true
-                                                                                                                    supports_pte_write := true }
-                                                                                                    include_in_device_tree := true }]
+                                                               include_in_device_tree := true }]
   writeReg tlb (vectorInit none)
-  writeReg ssp (zeros (n := 64))
   writeReg hart_state (HART_ACTIVE ())
   (pure (initialize_registers ()))
 
