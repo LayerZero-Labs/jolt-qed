@@ -21,7 +21,11 @@ name: jolt-main-drift
 #      change in a file no comment cites still shows;
 #   3. reads the state of each upstream issue the registry names;
 #   4. creates or updates one open issue titled "Drift against Jolt main"
-#      (label `jolt-drift`) with the report from scripts/jolt-drift-report.py.
+#      (label `jolt-drift`) with the report from scripts/jolt-drift-report.py;
+#   5. uploads the full report, the lists of changed files, the Jolt diff, the
+#      generator's log and the diff of the regenerated data as the artifact
+#      `drift-evidence`. The issue body has a size limit, so the report shortens
+#      long lists and diffs and points to this artifact for the rest.
 #
 # Drift is information: a regenerated file that differs, an equivalence proof
 # that no longer builds, or a changed anchor never fails the job. A monitoring
@@ -90,9 +94,11 @@ jobs:
           fresh="$RUNNER_TEMP/generated"
           rm -rf "$fresh"
           mkdir -p "$fresh"
+          mkdir -p "$RUNNER_TEMP/drift-evidence"
           LEAN_ROOT="$fresh" JOLT_DIR="$GITHUB_WORKSPACE/jolt-main" \
-            scripts/expansion-parity/run-constraint-gen.sh "$RUNNER_TEMP/constraint-gen"
-          echo "status=$?" >> "$GITHUB_OUTPUT"
+            scripts/expansion-parity/run-constraint-gen.sh "$RUNNER_TEMP/constraint-gen" 2>&1 \
+            | tee "$RUNNER_TEMP/drift-evidence/generator.log"
+          echo "status=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
           out="$fresh/JoltConstraints/ConstraintGen/Generated"
           present=0
           for file in R1CS Relations KindTables; do
@@ -168,7 +174,8 @@ jobs:
               --generated-stat "$RUNNER_TEMP/generated.stat" \
               --generated-diff "$RUNNER_TEMP/generated.diff" \
               --equiv-status "$EQUIV_STATUS" \
-              --upstream --run-url "$RUN_URL" > "$RUNNER_TEMP/report.md" || status=$?
+              --upstream --run-url "$RUN_URL" --evidence-dir "$RUNNER_TEMP/drift-evidence" \
+              > "$RUNNER_TEMP/report.md" || status=$?
           if [ "$status" -ne 0 ] && [ "$status" -ne 3 ]; then
             {
               echo "**Monitoring failed in this run.** The report script failed; see [the run]($RUN_URL)."
@@ -181,6 +188,17 @@ jobs:
             echo "::error::the report lists a monitoring failure"
             exit 1
           fi
+      # The report's shortened lists and diffs point to this artifact.
+      - name: Upload the full evidence
+        id: evidence
+        if: ${{ always() && steps.self.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: drift-evidence
+          path: ${{ runner.temp }}/drift-evidence
+          if-no-files-found: error
+          retention-days: 90
       - name: Create or update the drift issue
         id: issue
         if: ${{ always() && steps.self.outcome == 'success' }}
@@ -230,6 +248,7 @@ jobs:
             generate=${{ steps.generate.outcome }}
             toolchain=${{ steps.toolchain.outcome }}
             report=${{ steps.report.outcome }}
+            evidence=${{ steps.evidence.outcome }}
             issue=${{ steps.issue.outcome }}
             fallback=${{ steps.fallback.outcome }}
         run: |

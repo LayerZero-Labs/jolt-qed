@@ -94,5 +94,33 @@ class UnclassifiedFiles(unittest.TestCase):
         self.assertIn("5 unclassified and 3 other", section)
 
 
+class Evidence(unittest.TestCase):
+    def test_cut_parts_are_kept_in_the_evidence_directory(self):
+        line = "+" + "x" * 99 + "\n"
+        diff = "".join(f"{i:06d}{line}" for i in range(400))  # longer than MAX_DIFF
+        self.assertGreater(len(diff), drift.MAX_DIFF)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = pathlib.Path(tmp)
+            (tmp / "generated.diff").write_text(diff)
+            (tmp / "generated.stat").write_text(" R1CS.lean | 400 +\n")
+            result = subprocess.run(
+                ["python3", str(SCRIPTS / "jolt-drift-report.py"), "--generation-status", "0",
+                 "--generated", "yes", "--generated-diff", str(tmp / "generated.diff"),
+                 "--generated-stat", str(tmp / "generated.stat"), "--evidence-dir",
+                 str(tmp / "evidence"), "--run-url", "https://example.invalid/run"],
+                capture_output=True, text=True)
+            # No --jolt-dir: the report is written and says that monitoring failed.
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("`drift-evidence` artifact](https://example.invalid/run#artifacts)",
+                          result.stdout)
+            self.assertIn("full diff in `generated.diff`", result.stdout)
+            self.assertNotIn("000399", result.stdout)
+            evidence = tmp / "evidence"
+            self.assertEqual((evidence / "generated.diff").read_text(), diff)
+            report = (evidence / "report.md").read_text()
+            self.assertIn("**Monitoring failed in this run.**", report)
+            self.assertEqual(result.stdout, report)
+
+
 if __name__ == "__main__":
     unittest.main()
