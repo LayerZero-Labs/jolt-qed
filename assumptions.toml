@@ -140,7 +140,7 @@ the `akita` feature. It pads traces to at least 256 cycles (MIN_PADDED_TRACE_LEN
 an Akita build pads to 4096 and always uses log_k_chunk = 4 in one_hot_config. The field \
 inequalities and the constraint algebra cover Akita's field; trace sizing, one-hot chunking \
 and acceptance are Dory-specific. Follow-up: parameterize ProverConfig and the witness \
-construction by protocol mode."""
+construction by protocol mode; LayerZero-Labs/jolt-qed#76 records the design."""
 upstream = ""
 bug_report = ""
 
@@ -156,7 +156,7 @@ anchors = [
   "crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs (try_from)",
   "crates/jolt-dory/src/scheme.rs (verify)",
 ]
-no_witness_reason = """Scope boundary, not a premise: the model checks the one-hot opening against the setup that Jolt's automatic constructor picks (from_shared, setup_total_vars). from_shared_parts accepts any Dory setup, and JoltVerifierPreprocessing::new never compares its size with that default. The verifier's chunk checks (JoltFormulaDimensions::try_from) require only that the committed width divides the virtual width and that the virtual width divides 128, so a committed width of 128 passes. Example: logT = 8, both widths 128, and a setup with max_log_n = 136 pass every verifier check, while JoltField only gives 2^128 - 2^64 < char, which does not bound 2^128 by the characteristic. The soundness theorems therefore cover verifiers built with the default setup. Closing this needs a Jolt-side bound on the committed chunk width or the setup size."""
+no_witness_reason = """Scope boundary, not a premise: the model checks the one-hot opening against the setup that Jolt's automatic constructor picks (from_shared, setup_total_vars). from_shared_parts accepts any Dory setup, and JoltVerifierPreprocessing::new never compares its size with that default. The verifier's chunk checks (JoltFormulaDimensions::try_from) require only that the committed width divides the virtual width and that the virtual width divides 128, so a committed width of 128 passes. Example: logT = 8, both widths 128, and a setup with max_log_n = 136 pass every verifier check, while JoltField only gives 2^128 - 2^64 < char, which does not bound 2^128 by the characteristic. The soundness theorems therefore cover verifiers built with the default setup. Closing this needs no Jolt change: only width 128 is unsafe, Dory accepts it only with max_log_n >= 136, and an instance parameter for the setup size with the condition setupLogN <= 135 excludes it. LayerZero-Labs/jolt-qed#76 records the design."""
 upstream = ""
 bug_report = ""
 
