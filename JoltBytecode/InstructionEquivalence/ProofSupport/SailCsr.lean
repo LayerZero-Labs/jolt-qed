@@ -1,4 +1,4 @@
-import JoltBytecode.InstructionEquivalence.ProofSupport.SailMret
+import JoltBytecode.InstructionEquivalence.ProofSupport.SailTrap
 import JoltBytecode.InstructionEquivalence.ProofSupport.RegisterAccess
 
 /-!

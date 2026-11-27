@@ -331,6 +331,19 @@ structure MretProgramEqSailAssumptions (js : SailJoltState) : Type where
   mstatus_legal : Assumptions.MstatusVRegLegal js
   mepc_legal : Assumptions.MepcVRegLegal js
 
+/-- Public assumptions for ECALL equivalence.
+
+Jolt's ECALL rows read PC (AUIPC) and nextPC (JALR's link value).
+Sail's `execute_ECALL` reads the privilege and PC; its trap entry reads `medeleg`
+and the projected `mstatus` and `mtvec`. -/
+structure EcallProgramEqSailAssumptions (js : SailJoltState) : Type where
+  cur_privilege_machine : Assumptions.CurPrivilegeMachine js.sail
+  pc_readable : Assumptions.SailRegReadable Register.PC js.sail
+  nextPC_readable : Assumptions.SailRegReadable Register.nextPC js.sail
+  medeleg_readable : Assumptions.SailRegReadable Register.medeleg js.sail
+  mstatus_legal : Assumptions.MstatusVRegLegal js
+  mtvec_legal : Assumptions.MtvecVRegLegal js
+
 /-- Public assumptions for CSRRW equivalence over the supported System CSR
 whitelist.
 

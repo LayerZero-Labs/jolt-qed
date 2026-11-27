@@ -145,6 +145,19 @@ theorem extDHashMap_insert_comm_of_ne {α : Type} [BEq α] [Hashable α]
 def setNextPCState (s : SailState) (target : BitVec 64) : SailState :=
   { s with regs := s.regs.insert Register.nextPC target }
 
+/-- A zero-offset JALR clears bit zero of its target; for example, 17 becomes 16.
+Used by MRET (jump to mepc) and ECALL (jump to mtvec).
+Based on Quang Dao's version in PR #73. -/
+theorem jalr_zero_target (v : BitVec 64) :
+    jolt_jalr_target64 v 0#64 = v &&& ~~~(1#64) := by
+  simp only [jolt_jalr_target64, JoltISA.addWide_low, BitVec.add_zero]
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  by_cases hz : i = 0
+  · subst i
+    simp [Sail.BitVec.update, Sail.BitVec.updateSubrange']
+  · simp [Sail.BitVec.update, Sail.BitVec.updateSubrange', hi, Bool.and_comm]
+
 /-- Projecting after a Sail `nextPC` write is the same as writing `nextPC`
 after projecting Jolt's virtual CSR registers. -/
 theorem systemProject_setNextPCState

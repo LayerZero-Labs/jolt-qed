@@ -1,6 +1,6 @@
 import JoltBytecode.Bundles
 import JoltBytecode.InstructionEquivalence.Instructions.System.Common
-import JoltBytecode.InstructionEquivalence.ProofSupport.SailMret
+import JoltBytecode.InstructionEquivalence.ProofSupport.SailTrap
 import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltBytecode.JoltISA.ExpansionsAutomated
 import JoltBytecode.JoltISA.Semantics
@@ -69,26 +69,13 @@ theorem mstatus_mpp_machine (raw : BitVec 64) :
   simp only [BitVec.getLsbD_and, BitVec.getLsbD_or]
   cases raw.getLsbD i <;> cases (0x1800#64).getLsbD i <;> rfl
 
-/-- A zero-offset JALR clears bit zero of its target; for example, 17 becomes 16.
-Based on Quang Dao's version in PR #73. -/
-theorem jalr_zero_target (v : BitVec 64) :
-    jolt_jalr_target64 v 0#64 = v &&& ~~~(1#64) := by
-  simp only [jolt_jalr_target64, JoltISA.addWide_low, BitVec.add_zero]
-  apply BitVec.eq_of_getLsbD_eq
-  intro i hi
-  by_cases hz : i = 0
-  · subst i
-    simp [Sail.BitVec.update, Sail.BitVec.updateSubrange']
-  · simp [Sail.BitVec.update, Sail.BitVec.updateSubrange', hi, Bool.and_comm]
-
 /-- MRET equivalence statement.
 
 Generated Sail's `execute_MRET` performs the trap-return postlude internally by
 calling `exception_handler` for `CTL_MRET` and then `set_next_pc`. -/
 def mretProgramEqSailStatement
     (js : SailJoltState) (_h : MretProgramEqSailAssumptions js) : Prop :=
-  systemProjectResult
-      ((JoltISA.execProgram JoltISA.mretProgramAuto).run js) =
+  systemProjectResult ((JoltISA.execProgram JoltISA.mretProgramAuto).run js) =
     (execute_MRET ()).run (systemProject js)
 
 theorem mretProgram_eq_sail_projected

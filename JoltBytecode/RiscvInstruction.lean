@@ -59,6 +59,7 @@ import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sb_main
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sh_main
 import JoltBytecode.InstructionEquivalence.Instructions.StoreFamily.Sw_main
 import JoltBytecode.InstructionEquivalence.Instructions.System.Mret
+import JoltBytecode.InstructionEquivalence.Instructions.System.Ecall
 import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrw
 import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrs
 import JoltBytecode.InstructionEquivalence.Instructions.System.Csrrc
@@ -445,6 +446,8 @@ def equivAssumptions : (instr : RiscvInstruction) → SailJoltState → Type
       System.CsrImmSystemAssumptions js csr
   | .MRET, js =>
       System.MretProgramEqSailAssumptions js
+  | .ECALL, js =>
+      System.EcallProgramEqSailAssumptions js
   | .LR_W _rd rs1 _aq _rl, js =>
       ReservationReadEqAssumptions false rs1 js
   | .LR_D _rd rs1 _aq _rl, js =>
@@ -536,7 +539,7 @@ def equivalenceStatement :
     | .FENCE =>
       Natives.fenceInstrEqSailStatement js _h
     | .ECALL =>
-      False -- WARNING: unwired instruction equivalence
+      System.ecallProgramEqSailStatement js _h
     | .EBREAK =>
       False -- WARNING: unwired instruction equivalence
     | .LWU rd rs1 imm =>
@@ -842,9 +845,8 @@ theorem equivalenceStatement_holds :
   -- See: https://randomwalks.xyz/blog/csrrw-bug/#mret-issue
   | .MRET, js, h =>
       System.mretProgram_eq_sail_projected js h
-  -- Sail side just returns Trap (cannot be proven)
-  | .ECALL, _js, _h => by
-      sorry
+  | .ECALL, js, h =>
+      System.ecallProgram_eq_sail_projected js h
   | .EBREAK, _js, _h => by
       sorry
    --- Cannot be proven :-( due to opaque axioms for 
