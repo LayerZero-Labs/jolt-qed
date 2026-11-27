@@ -3,10 +3,7 @@ Execution and program-layout facts derived from the honest trace's certificates.
 These facts are not assumptions on the general trace in `trace.lean`.
 The facts about what `expand` emits come from `expansion_facts.lean`.
 -/
-import JoltConstraints.theorems.ProgramLayout
 import JoltConstraints.theorems.execution_facts
-import JoltConstraints.theorems.layout_facts
-import JoltConstraints.translation.register_encoding
 import JoltConstraints.theorems.nextpc_frame
 import JoltConstraints.theorems.expansion_facts
 import JoltConstraints.theorems.Soundness.Layer7.AdjacentRows
@@ -21,7 +18,7 @@ def sourceLength (bytecode : Array JoltInstructionRow) (i : Fin bytecode.size) :
 
 -- Move the PC to the start of row i's source instruction, as Rust's tick does: PC is
 -- the instruction's address and nextPC is its length further on.
--- See : jolt/tracer/src/emulator/cpu.rs:657-679 (tick_operate)
+-- See : jolt/tracer/src/emulator/cpu.rs:717-739 (tick_operate)
 noncomputable def prepareSource (bytecode : Array JoltInstructionRow) (i : Fin bytecode.size)
     (state : SailJoltState) : SailJoltState :=
   let address := bytecode[i].address
@@ -55,32 +52,19 @@ theorem HonestTrace.initialRegistersZero {joltInstance : JoltInstance SourceInst
   initial_state_sourceValue joltInstance privateInputs trace.initialState trace.initialized src
 
 -- The instance's initial state has PC at the program's entry address.
--- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
+-- See : jolt/tracer/src/lib.rs:372-397 (create_emulator)
 theorem initial_state_pc {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) (initialState : SailJoltState)
     (built : joltInstance.initial_state privateInputs = some initialState) :
     initialState.sail.regs.get? Register.PC = some joltInstance.program.entry_address := by
-  unfold JoltInstance.initial_state at built
-  rw [bind_some_iff] at built
-  obtain ⟨layout, _, built⟩ := built
-  dsimp only at built
-  -- create_emulator's three size checks
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  split at built
-  · cases built
-  rw [bind_some_iff] at built
-  obtain ⟨_, _, built⟩ := built
-  -- the state init_state builds
-  cases built
-  rw [init_state_register]
-  rfl
+  obtain ⟨layout, _, _, _, _, initialized⟩ := initial_state_build
+    joltInstance privateInputs initialState built
+  obtain ⟨_, _, shape⟩ := JoltConstraints.initialState_shape _ _ _ _ _ _ initialized
+  rw [shape]
+  exact init_state_register joltInstance.program.entry_address
+    (initialRam layout joltInstance.program.memory_init)
+    { panic := false, memory_layout := layout }
+    { bytes := privateInputs.advice_tape, readPosition := 0 } {} Register.PC
 
 -- The trace starts at an instruction's first row, at the address PC holds initially.
 theorem HonestTrace.startsAtEntry {joltInstance : JoltInstance SourceInstruction}
@@ -130,8 +114,7 @@ theorem HonestTrace.linkedState {joltInstance : JoltInstance SourceInstruction}
     exact startState
 
 -- Which row comes next: the next row of the same instruction, or the first row
--- at nextPC. A JALR self-jump may continue when it does not repeat on re-run.
--- See : a16z/jolt PR #2109, merge commit 0249591a.
+-- at nextPC.
 theorem HonestTrace.successor {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (i : Nat) (currentExists : i < trace.rows.size) (nextExists : i + 1 < trace.rows.size) :

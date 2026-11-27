@@ -1,29 +1,32 @@
 # Jolt constraints
 
-Source: the base RV64 relations at [the Rust pin `c97e9300`](https://github.com/a16z/jolt/blob/c97e93004fbf804409f0374fe8457c8f1562ce71/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs). GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
-On 2026-10-29 all 62 equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the previous pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
+Source: the base RV64 relations at [the Rust pin `ff6fc6568`](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs), the merge of a16z/jolt#2509. GitHub links are documentation pointers; reviews of current behavior must scan the local Jolt checkout.
+On 2026-10-29 all 62 base equations, the per-instruction flag tables and the 55 lookup tables were rechecked against Jolt's base verifier at the previous pin `5def437f` and match (`reports/2026-10-29-soundness-statement-audit.md`).
 
 Steps 1 to 5 of the migration to `c6703570` were reviewed and committed in #34.
 Step 2 repairs target `c6703570`; see [the completeness migration report](../../reports/2026-11-03-constraints-migration-completeness.md).
 `lake build JoltConstraints.theorems.Completeness` and the assembled `theorems.Completeness.completeness` module both pass after the approved `WordEntry` repair.
 Step 5 restates `JoltInstance.completeness` for the honest witness at the sizes Jolt's prover picks; see [the Step 5 report](../../reports/2026-11-03-completeness-jolt-prover.md).
 At those sizes the verifier's RAM bounds are proved.
-The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) made in Jolt at the pin `c97e9300`, and `HonestTrace.prover_config_holds_highest_slot` is proved.
+The RAM sizes follow the fix that #1951 item 4 proposes, which [a16z/jolt#2250](https://github.com/a16z/jolt/pull/2250) made in Jolt at the earlier pin `c97e9300`, and `HonestTrace.prover_config_holds_highest_slot` is proved.
 Step 4 migrated the soundness proof; `JoltInstance.soundness` is proved with no `sorry`.
 A `DONE` label records the individual theorem's proof status, not completion of the [migration outline](#migration-outline).
 
 A checked box means the stated honest-witness theorem is proved in Lean without `sorryAx` under its stated premises.
 The labels are `DONE:` for a checked proof, `TODO:` for unfinished proof or correspondence work, and `FIXME:` for a confirmed issue.
-The original 62 targets were checked by source inspection and `#print axioms`.
+The original 62 base targets were checked by source inspection and `#print axioms`.
 The review rechecked the assembled theorem's axioms against the target and confirmed its recorded `sorryAx` dependency.
-The current checklist has 57 checked targets and five `FIXME:` targets.
+The current checklist has 63 targets, all checked, including Akita's (63) added on 2026-11-10; the last three, (01), (08) and (11), were checked on 2026-11-25 with a fresh `#print axioms JoltInstance.completeness`.
+The `ff6fc6568` re-pin retired (22), (57) and (62) and added (64), (65) and (66); the numbers of retired targets are not reused.
 
 Each checklist item links to its constraint definition and matching completeness
-module. [AllConstraints](../translation/Constraints/All.lean) bundles the 62 relations, and
+module. [AllConstraints](../translation/Constraints/All.lean) bundles the 63 relations, and
 [honestWitness_constraintEquations](../theorems/Completeness/All.lean) assembles their proofs
 under the stated conditions.
 
-The `FIXME:` targets are (01), (08) and (11), blocked by the address-wrap issue [a16z/jolt#1949](https://github.com/a16z/jolt/issues/1949); (37), blocked by the [termination-word RAM history bug](../../bug-report/ram-val-termination/README.md); and (38), blocked by [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1.
+The address-wrap issue [a16z/jolt#1949](https://github.com/a16z/jolt/issues/1949) used to block (01), (08) and (11); since 2026-11-25 all three are proved, because no honest memory row wraps its address.
+At `ff6fc6568` Jolt has no termination word, and the re-pin proved (37) and (38) without changing their statements.
+The checked boxes for (37), (38), (64), (65) and (66) rested on the successful build and a source search that found `sorry` only in the modules for (01), (08) and (11), not on a fresh `#print axioms`.
 Constraint (16)'s theorem assumes the trace's last row is a jump, which Jolt's prover requires; without it, a [taken self-branch](../../bug-report/self-branch.md) as the last row is a counterexample.
 Its checked box rests on a source search for `sorry`, not a fresh `#print axioms`.
 Constraint (39), including the complete AddressOffset dispatch, now builds against the target and its fresh axiom check contains no `sorryAx`.
@@ -38,22 +41,21 @@ Lean's program-row validity certificate from `SourceInstruction.expand`. Constra
 has a proved honest-witness theorem for padded traces; its proof has no
 `sorryAx` dependency. Some other targets need additional program/trace
 validity conditions.
-The completeness theorem for constraint (22) explicitly requires at least one padding cycle, as Rust's
-trace-length calculation guarantees. The completeness theorem for (58) requires
+The completeness theorem for constraint (64) takes the padded trace length that Jolt's prover picks
+(`WitnessParams.ProverPaddedFor`); the halt may fill the final witness row. The completeness theorem for (58) requires
 at least one RAM chunk. The register targets (34)–(36) and (42) require zero
-initial registers. Constraint (26) requires the initial device to satisfy
-`JoltDevice.AdviceBelowInput`: both advice buffers end at or below
-`input_start`, which is a whole number of words above the lowest RAM address.
-`initial_state_advice_below_input` (`theorems/layout_facts.lean`) proves this for the starting device that `JoltInstance.initial_state` builds.
+initial registers. Constraint (26) needs no advice premise: its public array
+holds only input and output words.
 
 Equations (43)–(47) were rechecked against public Rust pin `8bbb2357`. Their honest-witness targets now require the exact Rust bytecode domain, including the leading no-op and power-of-two padding.
 
 The remaining equations (23)–(26), (37)–(38), (40)–(41), (48)–(53), and (59)
 were also checked against public Rust pin `8bbb2357`.
-This checklist covers the base RV64 relations; optional `akita` relations,
-including its extra instruction-address canonicality condition, are outside it.
-The final-RAM completeness target (38) is blocked by
-[a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1. Constraint (53) takes the public entry slot
+This checklist covers the base RV64 relations and the `akita` build's
+instruction-address canonicality condition (63). The `akita` build's other
+changes (fused increments, digit-zero hamming weights, advice openings) only
+re-encode or add constraints, so the model does not need them for soundness.
+Constraint (53) takes the public entry slot
 explicitly and requires the trace to start there. Constraint (50) selects the
 destination recorded in the final bytecode row, including x0. The
 [`JoltTraceRow` load-capture condition](../translation/trace.lean) separately requires a load's
@@ -68,7 +70,8 @@ certify every current completeness statement.
 
 ## Migration outline
 
-This outline covers the move from the pin `5def437f` to the migration target `c6703570`.
+This outline is historical: it covers the move from the pin `5def437f` to the migration target `c6703570`.
+The `ff6fc6568` re-pin later removed the `TracerAddressChecks` premise of item 10 and every other temporary restriction.
 All steps are committed and `lake build JoltConstraints` passes.
 The target's facts below were read from `git show c6703570:<path>` in the local Jolt checkout, which is `origin/main` of the fork `abiswas3/jolt`.
 
@@ -86,7 +89,7 @@ Current definition state after Step 1:
    The target and Lean type both have seven instruction flags.
 2. **RAM-address equation, Jolt R1CS row 0, Lean (01) — definition implemented and built.**
    Renamed the definition and its `translation/Constraints/All.lean` field to `ramAddrEqRs1PlusImmMinusLookupIfLoadStore`, with the matching module name.
-   The matching completeness theorem, module, import and assembly field now use the new name; its existing #1949 gap remains.
+   The matching completeness theorem, module, import and assembly field now use the new name; its #1949 gap was proved on 2026-11-25.
    Its target right side is `Rs1Value + Imm - LookupOutput`, from the row's comment in `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`.
 3. **Right-input routing, (33) and (11) — definitions and proofs migrated.**
    Add the summand `RightOperandIsRdWriteValue * RdWriteValue` to (33), as in `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`.
@@ -124,7 +127,7 @@ Current definition state after Step 1:
    Replaced `opcodeFlag_load_requiresLD` and `opcodeFlag_store_requiresSD` with `opcodeFlag_load_cases` and `opcodeFlag_store_cases`, covering floor constructors with unchanged hypotheses.
    Both load proofs use `MemoryValueFacts`; the store proof uses `opcodeFlag_store_cases`.
    Step 4 migrated the soundness callers; see [model_review.md](model_review.md#classifier-call-sites).
-10. **Tracer address checks: approved temporary premise, added in the migration.**
+10. **Tracer address checks: approved temporary premise, added in the migration and removed at the `ff6fc6568` re-pin.**
     Ari approved on 2026-11-02 extending `TracerAddressChecks` to floor-row accesses as a temporary premise, added only to fit the new ISA; temporary premises are removed eventually, so that fit is acceptable.
     `theorems/Soundness/Layer5/MemoryAccessRestriction.lean` now checks LD, SD and the floor loads and stores.
     The predicate for a floor row follows `tracer/src/instruction/floor_access.rs` (`addresses`, lines 59–75 at `c6703570`).
@@ -138,7 +141,7 @@ Current definition state after Step 1:
     Keep the main statements, `InLanguage`, the assumptions and the restrictions fixed; repair their dependencies after the definitions are audited.
     Preserve the four existing completeness obligations (01), (37), (38) and the RAM-bounds theorem.
     Step 5 proved the RAM-bounds theorem at Jolt's sizes (`HonestTrace.witness_params_ram_bounds`) and added the known-false #1951 item 4 lemma `HonestTrace.prover_config_holds_highest_slot`, as Ari decided on 2026-11-03.
-    Ari approved the additional #1949 wrap lemmas for (08) and (11) on 2026-11-03; each is now restricted to a matching row of an honest trace.
+    Ari approved the additional #1949 wrap lemmas for (08) and (11) on 2026-11-03; each is restricted to a matching row of an honest trace, and both were proved on 2026-11-25.
     The old arbitrary-bitvector admissions were deleted, and the field equalities are proved from the approved row bounds.
     No other new `sorry` was needed in Step 2.
     Reuse the frame, layout, row-composition and splice lemmas, then rebuild both libraries before declaring the migration complete.
@@ -186,21 +189,21 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## SpartanOuter — stage 1
 
-- [ ] (01) FIXME: [RAM address for loads and stores](../translation/Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean) · [completeness](../theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean)
+- [x] (01) DONE: [RAM address for loads and stores](../translation/Constraints/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean) · [completeness](../theorems/Completeness/RamAddrEqRs1PlusImmMinusLookupIfLoadStore.lean)
 - [x] (02) DONE: [Zero RAM address for other instructions](../translation/Constraints/RamAddrEqZeroIfNotLoadStore.lean) · [completeness](../theorems/Completeness/RamAddrEqZeroIfNotLoadStore.lean)
 - [x] (03) DONE: [Loads preserve RAM](../translation/Constraints/RamReadEqRamWriteIfLoad.lean) · [completeness](../theorems/Completeness/RamReadEqRamWriteIfLoad.lean)
 - [x] (04) DONE: [Loads copy RAM to the destination](../translation/Constraints/RamReadEqRdWriteIfLoad.lean) · [completeness](../theorems/Completeness/RamReadEqRdWriteIfLoad.lean)
 - [x] (05) DONE: [Stores copy the second source to RAM](../translation/Constraints/Rs2EqRamWriteIfStore.lean) · [completeness](../theorems/Completeness/Rs2EqRamWriteIfStore.lean)
 - [x] (06) DONE: [Zero left lookup operand for add/subtract/multiply](../translation/Constraints/LeftLookupZeroIfAddSubMul.lean) · [completeness](../theorems/Completeness/LeftLookupZeroIfAddSubMul.lean)
 - [x] (07) DONE: [Left lookup operand for other modes](../translation/Constraints/LeftLookupEqLeftInputOtherwise.lean) · [completeness](../theorems/Completeness/LeftLookupEqLeftInputOtherwise.lean)
-- [ ] (08) FIXME: [Addition lookup operand](../translation/Constraints/RightLookupAdd.lean) · [completeness](../theorems/Completeness/RightLookupAdd.lean)
+- [x] (08) DONE: [Addition lookup operand](../translation/Constraints/RightLookupAdd.lean) · [completeness](../theorems/Completeness/RightLookupAdd.lean)
 - [x] (09) DONE: [Subtraction lookup operand](../translation/Constraints/RightLookupSub.lean) · [completeness](../theorems/Completeness/RightLookupSub.lean)
 - [x] (10) DONE: [Multiplication lookup operand](../translation/Constraints/RightLookupEqProductIfMul.lean) · [completeness](../theorems/Completeness/RightLookupEqProductIfMul.lean)
-- [ ] (11) FIXME: [Right lookup operand for other modes](../translation/Constraints/RightLookupEqRightInputOtherwise.lean) · [completeness](../theorems/Completeness/RightLookupEqRightInputOtherwise.lean)
+- [x] (11) DONE: [Right lookup operand for other modes](../translation/Constraints/RightLookupEqRightInputOtherwise.lean) · [completeness](../theorems/Completeness/RightLookupEqRightInputOtherwise.lean)
 - [x] (12) DONE: [Assertion lookup output](../translation/Constraints/AssertLookupOne.lean) · [completeness](../theorems/Completeness/AssertLookupOne.lean)
 - [x] (13) DONE: [Write lookup output to the destination](../translation/Constraints/RdWriteEqLookupIfWriteLookupToRd.lean) · [completeness](../theorems/Completeness/RdWriteEqLookupIfWriteLookupToRd.lean)
 - [x] (14) DONE: [Jump return address](../translation/Constraints/RdWriteEqPCPlusConstIfJump.lean) · [completeness](../theorems/Completeness/RdWriteEqPCPlusConstIfJump.lean)
-- [x] (15) DONE: [Next address after a jump](../translation/Constraints/NextUnexpandedPCEqLookupIfShouldJump.lean) · [completeness](../theorems/Completeness/NextUnexpandedPCEqLookupIfShouldJump.lean)
+- [x] (15) DONE: [Next address after a jump](../translation/Constraints/NextUnexpandedPCEqLookupIfJump.lean) · [completeness](../theorems/Completeness/NextUnexpandedPCEqLookupIfJump.lean)
 - [x] (16) DONE: [Next address after a taken branch](../translation/Constraints/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean) · [completeness](../theorems/Completeness/NextUnexpandedPCEqPCPlusImmIfShouldBranch.lean)
 - [x] (17) DONE: [Next address for other rows](../translation/Constraints/NextUnexpandedPCUpdateOtherwise.lean) · [completeness](../theorems/Completeness/NextUnexpandedPCUpdateOtherwise.lean)
 - [x] (18) DONE: [Next expanded PC within a virtual sequence](../translation/Constraints/NextPCEqPCPlusOneIfInline.lean) · [completeness](../theorems/Completeness/NextPCEqPCPlusOneIfInline.lean)
@@ -244,7 +247,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 (14) Jump · (RdWriteValue − UnexpandedPC − 4 + 2·IsCompressed) = 0
 
-(15) ShouldJump · (NextUnexpandedPC − LookupOutput) = 0
+(15) Jump · (NextUnexpandedPC − LookupOutput) = 0
 
 (16) ShouldBranch · (NextUnexpandedPC − UnexpandedPC − Imm) = 0
 
@@ -257,13 +260,19 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 (19) (NextIsVirtual − NextIsFirstInSequence) · (1 − DoNotUpdateUnexpandedPC) = 0
 ```
 
+At `ff6fc6568` (15) is guarded by `Jump` instead of `ShouldJump`, which Jolt removed ([Rust](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs#L361-L367)).
+A halt is a jump, so (15) also sets the next unexpanded PC of a halt row to its lookup output.
+
 ## SpartanProductVirtualization — stage 2
 
 - [x] (20) DONE: [Product of instruction inputs](../translation/Constraints/ProductEqLeftInputMulRightInput.lean) · [completeness](../theorems/Completeness/ProductEqLeftInputMulRightInput.lean)
 - [x] (21) DONE: [ShouldBranch product](../translation/Constraints/ShouldBranchEqLookupOutputMulBranch.lean) · [completeness](../theorems/Completeness/ShouldBranchEqLookupOutputMulBranch.lean)
-- [x] (22) DONE: [ShouldJump product](../translation/Constraints/ShouldJumpEqJumpMulNotNextIsNoop.lean) · [completeness](../theorems/Completeness/ShouldJumpEqJumpMulNotNextIsNoop.lean)
+- [x] (64) DONE: [Halt end rule](../translation/Constraints/HaltEndRule.lean) · [completeness](../theorems/Completeness/HaltEndRule.lean)
 
-[Rust: the three product rows](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs#L367); [sumcheck](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
+[Rust: the three product rows](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs#L430-L457); [halt-lane coefficients](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/spartan.rs#L194-L223) (`PRODUCT_HALT_LANE_LEFT_FACTOR`, `PRODUCT_HALT_LANE_OUTPUT`); [sumcheck](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/spartan/product_remainder.rs).
+
+`Π` is the public panic claim: 1 when the claim is "panicked" and 0 otherwise.
+`Halt` and `HaltPanic` are the circuit flags of the two halt instructions: `jolt.success` sets `Halt`, and EBREAK's `Panic` row sets both.
 
 ∀ t ∈ T:
 
@@ -272,15 +281,23 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 (21) ShouldBranch(t) = LookupOutput(t) · Branch(t)
 
-(22) ShouldJump(t) = Jump(t) · (1 − NextIsNoop(t))
+(64) 2 · (NextIsNoop(t) − IsNoop(t)) = (2 − Π) · Halt(t) + HaltPanic(t)
 ```
+
+At `ff6fc6568` (64) replaces the retired `ShouldJump` product (22), `ShouldJump(t) = Jump(t) · (1 − NextIsNoop(t))`.
+With Boolean flags and a field characteristic above 5, (64) lets the witness enter padding only after a halt of the claimed kind, and forbids a halt row that is followed by a real row.
 
 ## RamReadWriteChecking — stage 2
 
 - [x] (23) DONE: [RAM read-value selection](../translation/Constraints/RamReadValueEqRamRead.lean) · [completeness](../theorems/Completeness/RamReadValueEqRamRead.lean)
 - [x] (24) DONE: [RAM write-value selection](../translation/Constraints/RamWriteValueEqRamReadWrite.lean) · [completeness](../theorems/Completeness/RamWriteValueEqRamReadWrite.lean)
+- [x] (65) DONE: [No increment on write-protected words](../translation/Constraints/RamWriteProtected.lean) · [completeness](../theorems/Completeness/RamWriteProtected.lean)
+- [x] (66) DONE: [RAM access count](../translation/Constraints/RamAccessCount.lean) · [completeness](../theorems/Completeness/RamAccessCount.lean)
 
-[Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L89).
+[Rust: the four claims](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/ram/read_write_checking.rs#L73-L107); [mask C](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-program/src/preprocess/ram.rs#L126-L199) (`write_protected_word_intervals`).
+
+`C(a)` is the public write-protection mask, `ramWriteProtectedMask` in Lean.
+It is 1 when word `a` lies in the code region that Jolt's `code_region` computes from the bytecode, or overlaps the input, trusted advice, untrusted advice or stack-canary byte range; it is 0 otherwise.
 
 ∀ t ∈ T:
 
@@ -288,7 +305,14 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 (23) RamReadValue(t) = Σ_{a ∈ M} RamRa(a,t) · RamVal(a,t)
 
 (24) RamWriteValue(t) = Σ_{a ∈ M} RamRa(a,t) · (RamVal(a,t) + RamInc(t))
+
+(65) 0 = Σ_{a ∈ M} C(a) · RamRa(a,t) · RamInc(t)
+
+(66) Load(t) + Store(t) = Σ_{a ∈ M} RamRa(a,t)
 ```
+
+Constraints (65) and (66) are new at `ff6fc6568` (a16z/jolt#2408).
+(66) is Jolt's only RAM one-hotness check; it replaces the retired RAM Hamming constraints (57) and (62).
 
 ## RamRafEvaluation — stage 2
 
@@ -307,9 +331,11 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 - [x] (26) DONE: [Public RAM output](../translation/Constraints/RamOutputEqPublicIo.lean) · [completeness](../theorems/Completeness/RamOutputEqPublicIo.lean)
 
-[Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs#L115); [public arrays](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-program/src/preprocess/public_io.rs#L20).
+[Rust: constraint](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/relations/ram/output_check.rs); [public arrays](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-program/src/preprocess/public_io.rs#L23-L70).
 
-`IoMask(a) = [io_mask_start ≤ a < io_mask_end]`. `ValIo` contains the public input/output words, the panic word, and termination word 1 when not panicking; other entries are zero, exactly as in `PublicIoMemory::new`.
+`IoMask(a) = [io_mask_start ≤ a < io_mask_end]`, where `io_mask_start` and `io_mask_end` are the remapped words of `input_start` and `output_end`.
+`ValIo` contains the packed public input and output words; other entries are zero, exactly as in `PublicIoMemory::new`.
+At `ff6fc6568` Jolt has no panic or termination word.
 
 ```text
 (26) ∀ a ∈ M:
@@ -385,8 +411,10 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 
 ## RamValCheck — stage 4
 
-- [ ] (37) FIXME: [RAM value from preceding increments](../translation/Constraints/RamValEqInitialPlusPrefixRamInc.lean) · [completeness](../theorems/Completeness/RamValEqInitialPlusPrefixRamInc.lean) — [Rust-accepted termination-word counterexample](../../bug-report/ram-val-termination/README.md)
-- [ ] (38) FIXME: [Final RAM value from all increments](../translation/Constraints/RamValFinalEqInitialPlusRamInc.lean) · [completeness](../theorems/Completeness/RamValFinalEqInitialPlusRamInc.lean) — [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1: a run that never stores to the termination word
+- [x] (37) DONE: [RAM value from preceding increments](../translation/Constraints/RamValEqInitialPlusPrefixRamInc.lean) · [completeness](../theorems/Completeness/RamValEqInitialPlusPrefixRamInc.lean)
+- [x] (38) DONE: [Final RAM value from all increments](../translation/Constraints/RamValFinalEqInitialPlusRamInc.lean) · [completeness](../theorems/Completeness/RamValFinalEqInitialPlusRamInc.lean)
+
+Before the `ff6fc6568` re-pin, (37) and (38) were `FIXME:` targets: the [termination-word RAM history bug](../../bug-report/ram-val-termination/README.md) and [a16z/jolt#1951](https://github.com/a16z/jolt/issues/1951) item 1 (a run that never stores to the termination word) blocked them.
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/val_check.rs#L135); [initial public RAM](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-program/src/preprocess/ram.rs#L134).
 
@@ -405,6 +433,7 @@ Flag names mean the corresponding Rust `OpFlags(CircuitFlags::…)` or `Instruct
 - [x] (39) DONE: [Lookup output from the selected table](../translation/Constraints/LookupOutputEqInstructionReadRaf.lean) · [completeness](../theorems/Completeness/LookupOutputEqInstructionReadRaf.lean)
 - [x] (40) DONE: [Left lookup operand reconstruction](../translation/Constraints/LeftLookupOperandEqInstructionRaf.lean) · [completeness](../theorems/Completeness/LeftLookupOperandEqInstructionRaf.lean)
 - [x] (41) DONE: [Right lookup operand reconstruction](../translation/Constraints/RightLookupOperandEqInstructionRaf.lean) · [completeness](../theorems/Completeness/RightLookupOperandEqInstructionRaf.lean)
+- [x] (63) DONE: [Canonical instruction address, Akita build only](../translation/Constraints/InstructionAddressCanonical.lean) · [completeness](../theorems/Completeness/InstructionAddressCanonical.lean)
 
 [Rust: constraint](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs#L90); [operand coefficients](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L180).
 
@@ -436,6 +465,20 @@ LookupRa(x,t) = ∏_{j=0}^{J−1} InstructionRa_j(v_j(x),t)
        Σ_{x ∈ X} LookupRa(x,t)
          · ((1 − InstructionRafFlag(t)) · Right(x) + InstructionRafFlag(t) · x)
 ```
+
+Constraint (63) is checked only when `ringChar F < 2^128`, matching Jolt, whose
+`akita` feature selects both the field `p = 2^128 - 1780711455` and this check
+([Rust: flag](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs); [verifier term](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-verifier/src/stages/stage5/instruction_read_raf.rs#L167-L180)).
+With `U(x) = 1` when the upper 64 bits of `x` are all ones and `U(x) = 0` otherwise:
+
+```text
+(63) InstructionRafFlag(t) · Σ_{x ∈ X} LookupRa(x,t) · U(x) = 0
+```
+
+Without (63), a field with `p < 2^128` lets (41) hold for an address `x ≥ p`
+that aliases `x − p`. With it, a selected identity-RAF address is below
+`2^128 − 2^64`, which is below the characteristic whenever `JoltField F` holds.
+Every index the honest prover forms with identity RAF is below that bound.
 
 ## RegistersValEvaluation — stage 5
 
@@ -484,7 +527,7 @@ TableFlag_B(q,k)      = [decoded row's lookup_table() = Some(q)]
 RafFlag_B(k)          = [!decoded row's circuit_flags().is_interleaved_operands()]
 ```
 
-Here `f` ranges over all 14 `CircuitFlags`, `g` over all 6 `InstructionFlags`, `r ∈ R`, and `q ∈ Q`. Missing register/table operands give zero indicators.
+Here `f` ranges over all 16 `CircuitFlags`, `g` over all 7 `InstructionFlags`, `r ∈ R`, and `q ∈ Q`. Missing register/table operands give zero indicators.
 
 ∀ t ∈ T (and all f, g, r, q of the indicated types):
 
@@ -535,17 +578,6 @@ For the program's `entry_bytecode_index = e`:
 (56) RamRaChunk_d(u,t) · (RamRaChunk_d(u,t) − 1) = 0
 ```
 
-## RamHammingBooleanity — stage 6b
-
-- [x] (57) DONE: [RAM hamming-weight booleanity](../translation/Constraints/RamHammingWeightBooleanity.lean) · [completeness](../theorems/Completeness/RamHammingWeightBooleanity.lean)
-
-[Rust](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/ram/hamming_booleanity.rs#L85).
-
-```text
-(57) ∀ t ∈ T:
-       RamHammingWeight(t) · (RamHammingWeight(t) − 1) = 0
-```
-
 ## RamRaVirtualization — stage 6b
 
 - [x] (58) DONE: [RAM address selector from chunks](../translation/Constraints/RamRaEqChunkProduct.lean) · [completeness](../theorems/Completeness/RamRaEqChunkProduct.lean)
@@ -575,7 +607,6 @@ Here `digit_h(v)` splits the `nb`-bit virtual chunk into its `n` small chunks.
 
 - [x] (60) DONE: [Instruction chunk hamming weights](../translation/Constraints/InstructionRaChunkHammingWeight.lean) · [completeness](../theorems/Completeness/InstructionRaChunkHammingWeight.lean)
 - [x] (61) DONE: [Bytecode chunk hamming weights](../translation/Constraints/BytecodeRaChunkHammingWeight.lean) · [completeness](../theorems/Completeness/BytecodeRaChunkHammingWeight.lean)
-- [x] (62) DONE: [RAM chunk hamming weights](../translation/Constraints/RamRaChunkHammingWeight.lean) · [completeness](../theorems/Completeness/RamRaChunkHammingWeight.lean)
 
 [Rust: prescribed weights](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/geometry/claim_reductions/hamming_weight.rs#L82); [sumcheck](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-claims/src/protocols/jolt/relations/claim_reductions/hamming_weight.rs#L102).
 
@@ -585,6 +616,6 @@ Here `digit_h(v)` splits the `nb`-bit virtual chunk into its `n` small chunks.
 (60) Σ_{u ∈ U} InstructionRaChunk_d(u,t) = 1
 
 (61) Σ_{u ∈ U} BytecodeRaChunk_d(u,t) = 1
-
-(62) Σ_{u ∈ U} RamRaChunk_d(u,t) = RamHammingWeight(t)
 ```
+
+At `ff6fc6568` Jolt no longer checks RAM chunk Hamming weights; (66) replaces the retired (57) and (62).

@@ -2,6 +2,7 @@ import JoltConstraints.theorems.Completeness.AssertLookupOne
 import JoltConstraints.theorems.Completeness.BytecodeRaAtEntryEqOne
 import JoltConstraints.theorems.Completeness.BytecodeRaChunkBooleanity
 import JoltConstraints.theorems.Completeness.BytecodeRaChunkHammingWeight
+import JoltConstraints.theorems.Completeness.HaltEndRule
 import JoltConstraints.theorems.Completeness.ImmEqBytecodeRead
 import JoltConstraints.theorems.Completeness.InstructionFlagsEqBytecodeRead
 import JoltConstraints.theorems.Completeness.InstructionRaChunkBooleanity
@@ -20,7 +21,7 @@ import JoltConstraints.theorems.Completeness.NextIsNoopEqShift
 import JoltConstraints.theorems.Completeness.NextIsVirtualEqShift
 import JoltConstraints.theorems.Completeness.NextPCEqPCPlusOneIfInline
 import JoltConstraints.theorems.Completeness.NextPCEqShift
-import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqLookupIfShouldJump
+import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqLookupIfJump
 import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqPCPlusImmIfShouldBranch
 import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqShift
 import JoltConstraints.theorems.Completeness.NextUnexpandedPCUpdateOtherwise
@@ -29,11 +30,11 @@ import JoltConstraints.theorems.Completeness.PCEqBytecodeRead
 import JoltConstraints.theorems.Completeness.ProductEqLeftInputMulRightInput
 import JoltConstraints.theorems.Completeness.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
 import JoltConstraints.theorems.Completeness.RamAddrEqZeroIfNotLoadStore
+import JoltConstraints.theorems.Completeness.RamWriteProtected
+import JoltConstraints.theorems.Completeness.RamAccessCount
 import JoltConstraints.theorems.Completeness.RamAddressEqRamRaf
-import JoltConstraints.theorems.Completeness.RamHammingWeightBooleanity
 import JoltConstraints.theorems.Completeness.RamOutputEqPublicIo
 import JoltConstraints.theorems.Completeness.RamRaChunkBooleanity
-import JoltConstraints.theorems.Completeness.RamRaChunkHammingWeight
 import JoltConstraints.theorems.Completeness.RamRaEqChunkProduct
 import JoltConstraints.theorems.Completeness.RamReadEqRamWriteIfLoad
 import JoltConstraints.theorems.Completeness.RamReadEqRdWriteIfLoad
@@ -51,6 +52,7 @@ import JoltConstraints.theorems.Completeness.RightLookupAdd
 import JoltConstraints.theorems.Completeness.RightLookupEqProductIfMul
 import JoltConstraints.theorems.Completeness.RightLookupEqRightInputOtherwise
 import JoltConstraints.theorems.Completeness.RightLookupOperandEqInstructionRaf
+import JoltConstraints.theorems.Completeness.InstructionAddressCanonical
 import JoltConstraints.theorems.Completeness.RightLookupSub
 import JoltConstraints.theorems.Completeness.Rs1RaEqBytecodeRead
 import JoltConstraints.theorems.Completeness.Rs1ValueEqRegistersRead
@@ -58,7 +60,6 @@ import JoltConstraints.theorems.Completeness.Rs2EqRamWriteIfStore
 import JoltConstraints.theorems.Completeness.Rs2RaEqBytecodeRead
 import JoltConstraints.theorems.Completeness.Rs2ValueEqRegistersRead
 import JoltConstraints.theorems.Completeness.ShouldBranchEqLookupOutputMulBranch
-import JoltConstraints.theorems.Completeness.ShouldJumpEqJumpMulNotNextIsNoop
 import JoltConstraints.theorems.Completeness.UnexpandedPCEqBytecodeRead
 
 open LeanRV64D

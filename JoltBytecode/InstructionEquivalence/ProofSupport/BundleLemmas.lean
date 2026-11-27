@@ -194,6 +194,15 @@ theorem readReg_eq_of_get? (r : Register) (s : SailState) (rval : RegisterType r
   simp only [bind, EStateM.bind, pure, EStateM.pure,
              MonadStateOf.get, EStateM.get, getThe, get, h]
 
+/-- Reading an absent register fails; for example, a state without `PC` cannot fetch.
+From Quang Dao's `Step/Lift.lean` in PR #73. -/
+theorem readReg_eq_of_get?_none (r : Register) (s : SailState)
+    (h : s.regs.get? r = none) :
+    (LeanRV64D.readReg r : SailM (RegisterType r)) s = .error .Unreachable s := by
+  unfold LeanRV64D.readReg Sail.ConcurrencyInterfaceV1.PreSail.readReg
+  simp only [bind, EStateM.bind, MonadStateOf.get, EStateM.get, getThe, get, h]
+  rfl
+
 /-- Under Jolt's M-mode/MPRV=0 execution assumptions, a normal data-load
     address translation is the bare identity translation. -/
 theorem translateAddr_load_data_of_machine_mprv_zero

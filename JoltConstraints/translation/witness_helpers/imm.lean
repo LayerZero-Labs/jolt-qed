@@ -1,5 +1,5 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.metadata
+import JoltConstraints.translation.trace
 
 open LeanRV64D
 
@@ -7,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [Imm](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:146).
+-- Rust: `crates/jolt-witness/src/witnesses/operands.rs` (`Imm`).
 -- Encode the complete normalized immediate as a signed field value, regardless
 -- of whether execution or the lookup query uses it. Padding contributes zero.
 noncomputable def Imm {F : Type} [Field F] (p : WitnessParams)

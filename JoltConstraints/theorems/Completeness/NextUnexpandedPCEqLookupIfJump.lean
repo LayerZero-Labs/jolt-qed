@@ -1,11 +1,8 @@
-import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
-import JoltConstraints.translation.Constraints.NextUnexpandedPCEqLookupIfShouldJump
-import JoltConstraints.translation.witness
+import JoltConstraints.translation.Constraints.NextUnexpandedPCEqLookupIfJump
 import JoltConstraints.translation.honest_witness
-import JoltConstraints.theorems.execution_conditions
-import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
 
 open LeanRV64D
 
@@ -94,10 +91,11 @@ private theorem jalr_target (dst : JoltISA.Dst) (base : JoltISA.Src)
       simpa [afterPC, target] using hpres
 
 private theorem jump_opcode_cases (instruction : JoltISA.Instr)
-    (hjump : JoltMetadata.opcodeFlag instruction .Jump = true) :
+    (hjump : JoltMetadata.opcodeFlag instruction .Jump = true)
+    (notHalt : instruction.haltKind?.isSome = false) :
     (∃ dst imm, instruction = .JAL dst imm) ∨
       (∃ dst base imm, instruction = .JALR dst base imm) := by
-  cases instruction <;> simp_all [JoltMetadata.opcodeFlag]
+  cases instruction <;> simp_all [JoltMetadata.opcodeFlag, JoltISA.Instr.haltKind?]
 
 private theorem withRuntimeAdvice_jump (instruction : JoltISA.Instr)
     (advice : instruction.RuntimeAdvice)
@@ -106,7 +104,7 @@ private theorem withRuntimeAdvice_jump (instruction : JoltISA.Instr)
   cases instruction <;> simp_all [JoltMetadata.opcodeFlag, JoltISA.Instr.withRuntimeAdvice]
 
 private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (n : Nat) (hn : n < trace.rows.size)
+    (n : Nat) (hn : n < trace.rows.size) (hn1 : n + 1 < trace.rows.size)
     (hjump : JoltMetadata.circuitFlag
       trace.bytecode[trace.rows[n].rowIndex] .Jump = true) :
     trace.rows[n].postState.sail.regs.get? Register.nextPC =
@@ -122,7 +120,11 @@ private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} 
   change row.preState.sail.regs.get? Register.nextPC = some _ at hnext
   have hop : JoltMetadata.opcodeFlag bc.instruction .Jump = true := by
     simpa only [JoltMetadata.circuitFlag] using hjump
-  rcases jump_opcode_cases bc.instruction hop with
+  have notHalt : bc.instruction.haltKind?.isSome = false := by
+    have noHalt := trace.runs_until_stop n _ _ (Array.getElem?_eq_getElem hn)
+      (Array.getElem?_eq_getElem hn1)
+    exact Bool.eq_false_iff.mpr noHalt
+  rcases jump_opcode_cases bc.instruction hop notHalt with
     ⟨dst, imm, hinst⟩ | ⟨dst, base, imm, hinst⟩
   · have hexec := row.executes
     change JoltISA.execInstr (bc.instruction.withRuntimeAdvice row.runtimeAdvice)
@@ -146,7 +148,7 @@ private theorem jump_row_target {joltInstance : JoltInstance SourceInstruction} 
       using htarget
 
 private theorem jump_row_ends_source {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
-    (n : Nat) (hn : n < trace.rows.size)
+    (n : Nat) (hn : n < trace.rows.size) (hn1 : n + 1 < trace.rows.size)
     (hjump : JoltMetadata.circuitFlag
       trace.bytecode[trace.rows[n].rowIndex] .Jump = true) :
     trace.bytecode[trace.rows[n].rowIndex].continues = false := by
@@ -156,7 +158,11 @@ private theorem jump_row_ends_source {joltInstance : JoltInstance SourceInstruct
   change bc.continues = false
   have hop : JoltMetadata.opcodeFlag bc.instruction .Jump = true := by
     simpa only [JoltMetadata.circuitFlag] using hjump
-  rcases jump_opcode_cases bc.instruction hop with
+  have notHalt : bc.instruction.haltKind?.isSome = false := by
+    have noHalt := trace.runs_until_stop n _ _ (Array.getElem?_eq_getElem hn)
+      (Array.getElem?_eq_getElem hn1)
+    exact Bool.eq_false_iff.mpr noHalt
+  rcases jump_opcode_cases bc.instruction hop notHalt with
     ⟨dst, imm, hinst⟩ | ⟨dst, base, imm, hinst⟩
   · have h := (trace.rowValid row.rowIndex).jumpAtSourceEnd
     change (match bc.instruction with
@@ -177,35 +183,43 @@ private theorem jump_next_row_address {joltInstance : JoltInstance SourceInstruc
       trace.bytecode[trace.rows[n].rowIndex] .Jump = true) :
     trace.bytecode[trace.rows[n + 1].rowIndex].address =
       TraceWitness.rowLookupOutput trace.rows[n] := by
-  have hend := jump_row_ends_source trace n hn hjump
-  have htarget := jump_row_target trace n hn hjump
+  have hend := jump_row_ends_source trace n hn hn1 hjump
+  have htarget := jump_row_target trace n hn hn1 hjump
   have hsucc := trace.successor n hn hn1
   simp only [hend, Bool.false_eq_true, ↓reduceIte] at hsucc
   obtain ⟨haddr, _⟩ := hsucc
   rw [htarget] at haddr
   exact Option.some.inj haddr.symm
 
-/-- Completeness target for a complete Rust trace, with its mandatory padding.
-There is no jump-only or nonwrapping-arithmetic assumption. -/
-theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
+private theorem halt_lookup_zero {bytecode : Array JoltInstructionRow}
+    (row : TraceRow bytecode) (halt : row.Halts) :
+    TraceWitness.rowLookupOutput row = 0 := by
+  unfold TraceRow.Halts JoltISA.Instr.haltKind? at halt
+  split at halt <;> simp_all [TraceWitness.rowLookupOutput]
+
+/-- Every honest jump selects its lookup output as the successor's source address.
+For example, the last success or panic row selects zero, the padded/end successor.
+Jolt at `ff6fc6568`: `rv64_trace_constraints`, row 14. -/
+theorem honestWitness_nextUnexpandedPCEqLookupIfJump
     {F : Type} [Field F] (params : WitnessParams)
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
+    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
+    (trace : HonestTrace joltInstance privateInputs)
     (_ramFits : params.RamFits trace)
     (tracePadded : params.ProverPaddedFor trace.rows.size)
     (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size) :
-    nextUnexpandedPCEqLookupIfShouldJump
+    nextUnexpandedPCEqLookupIfJump
       (HonestTrace.honestWitness (F := F) params trace) := by
   intro t
-  change TraceWitness.ShouldJump params trace t *
+  change TraceWitness.OpFlags params trace .Jump t *
     (TraceWitness.NextUnexpandedPC params trace t -
       TraceWitness.LookupOutput params trace t) = 0
   by_cases hreal : t.val < trace.rows.size
-  · have hnextWitness : t.val + 1 < params.traceLength := by
-      have hpad := tracePadded.2
-      omega
-    by_cases hnextReal : t.val + 1 < trace.rows.size
-    · by_cases hjump : JoltMetadata.circuitFlag
-        trace.bytecode[trace.rows[t.val].rowIndex] .Jump = true
+  · by_cases hnextReal : t.val + 1 < trace.rows.size
+    · have hnextWitness : t.val + 1 < params.traceLength := by
+        have fits := tracePadded.traceFits
+        omega
+      by_cases hjump : JoltMetadata.circuitFlag
+          trace.bytecode[trace.rows[t.val].rowIndex] .Jump = true
       · have haddr := jump_next_row_address trace t.val hreal hnextReal hjump
         have hvalues : TraceWitness.NextUnexpandedPC (F := F) params trace t =
             TraceWitness.LookupOutput (F := F) params trace t := by
@@ -215,24 +229,26 @@ theorem honestWitness_nextUnexpandedPCEqLookupIfShouldJump
           exact congrArg (fun address : BitVec 64 => (address.toNat : F)) haddr
         rw [hvalues]
         simp
-      · have hflag : TraceWitness.OpFlags params trace .Jump t = (0 : F) := by
-          have hfalse : JoltMetadata.circuitFlag
-              trace.bytecode[trace.rows[t.val].rowIndex] .Jump = false := by
-            cases h : JoltMetadata.circuitFlag
-              trace.bytecode[trace.rows[t.val].rowIndex] .Jump <;> simp_all
+      · have hfalse := Bool.eq_false_iff.mpr hjump
+        have hflag : TraceWitness.OpFlags params trace .Jump t = (0 : F) := by
           simp only [TraceWitness.OpFlags, dite_eq_left hreal]
           change (if JoltMetadata.circuitFlag
-              trace.bytecode[trace.rows[t.val].rowIndex] .Jump
-            then (1 : F) else 0) = 0
+            trace.bytecode[trace.rows[t.val].rowIndex] .Jump then (1 : F) else 0) = 0
           rw [hfalse]
           rfl
-        simp [TraceWitness.ShouldJump, hflag]
-    · have hnoop : TraceWitness.InstructionFlags params trace .IsNoop
-          ⟨t.val + 1, hnextWitness⟩ = (1 : F) := by
-        simp [TraceWitness.InstructionFlags, hnextReal]
-      simp [TraceWitness.ShouldJump, hnextWitness, hnoop]
+        rw [hflag, zero_mul]
+    · have lastAt : trace.rows.back? = some (trace.rows[t.val]'hreal) := by
+        rw [Array.back?_eq_getElem?, show trace.rows.size - 1 = t.val by omega,
+          Array.getElem?_eq_getElem hreal]
+      have lookup := halt_lookup_zero _ (trace.stops _ lastAt)
+      have output : TraceWitness.LookupOutput (F := F) params trace t = 0 := by
+        simp [TraceWitness.LookupOutput, hreal, lookup]
+      have next : TraceWitness.NextUnexpandedPC (F := F) params trace t = 0 := by
+        unfold TraceWitness.NextUnexpandedPC
+        split <;> simp [TraceWitness.UnexpandedPC, hnextReal]
+      rw [output, next, sub_self, mul_zero]
   · have hflag : TraceWitness.OpFlags params trace .Jump t = (0 : F) := by
       simp [TraceWitness.OpFlags, hreal]
-    simp [TraceWitness.ShouldJump, hflag]
+    rw [hflag, zero_mul]
 
 end JoltConstraints

@@ -5,7 +5,7 @@ open LeanRV64D
 
 set_option autoImplicit false
 
--- Rust: [remapped_ram_address](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/ram.rs:260).
+-- Rust: `crates/jolt-witness/src/backend/trace/ram.rs` (`remapped_ram_address`).
 -- Every nonzero RAM access must remap successfully and fit the chosen witness
 -- domain. This includes device I/O. Rust treats raw address zero as no access;
 -- a nonzero address below the layout's lowest address is an error, not padding.
@@ -70,11 +70,11 @@ theorem MemoryLayout.get_lowest_address_toNat (layout : MemoryLayout) :
   unfold MemoryLayout.get_lowest_address
   split <;> omega
 
-/-- When Jolt's prover accepts the honest trace (`proverAccepts`), its RAM size
+/-- When the prover's sizing succeeds on the honest trace (`proverAccepts`), its RAM size
 `config.ram_K` is a power of two.
 For example, a run touching word 1000 gets `ram_K = 1024 = 2^10`.
 See jolt/crates/jolt-prover/src/config.rs (`ProverConfig::derive_from_dimensions`,
-`ProverConfig::from_padded_dimensions`) at c97e9300. -/
+`ProverConfig::from_padded_dimensions`) at ff6fc6568. -/
 theorem HonestTrace.prover_config_ram_K_pow {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config) :
@@ -136,7 +136,7 @@ theorem HonestTrace.witness_params_ram_fits {joltInstance : JoltInstance SourceI
 /-- Jolt's witness sizes use the chunk widths Jolt's prover picks
 (`WitnessParams.ProverChunkConfig`): 4 and 16 bits below `2^25` cycles, else 8 and 32.
 For example, a run padded to `2^9` cycles uses widths 4 and 16.
-See jolt/crates/jolt-prover/src/config.rs (`one_hot_config`) at c6703570. -/
+See jolt/crates/jolt-prover/src/config.rs (`one_hot_config`) at ff6fc6568. -/
 theorem HonestTrace.witness_params_chunk_config
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs) (config : ProverConfig)
@@ -148,40 +148,9 @@ theorem HonestTrace.witness_params_chunk_config
   · exact Or.inl ⟨small, ite_eq_left small, ite_eq_left small⟩
   · exact Or.inr ⟨by omega, ite_eq_right small, ite_eq_right small⟩
 
--- For n ≥ 1, the smallest power of two that holds n + 1 is the one just above n.
-theorem clog_succ_eq_log2_succ (n : Nat) (positive : 1 ≤ n) :
-    Nat.clog 2 (n + 1) = Nat.log2 n + 1 := by
-  have below := (Nat.lt_log2_self (n := n))
-  have above := Nat.log2_self_le (n := n) (by omega)
-  apply Nat.le_antisymm
-  · exact (Nat.clog_le_iff_le_pow (by decide : 1 < 2)).mpr (by omega)
-  · by_contra tooSmall
-    have fits := (Nat.clog_le_iff_le_pow (by decide : 1 < 2)
-      (x := n + 1) (y := Nat.log2 n)).mp (by omega)
-    omega
-
 -- Rust's padded length is the witness's prover length with Rust's 256-cycle floor.
 theorem padded_trace_length_eq_prover (rows : Nat) :
-    padded_trace_length rows = WitnessParams.proverTraceLength 8 rows := by
-  unfold padded_trace_length WitnessParams.proverTraceLength
-  have below := (Nat.lt_log2_self (n := rows))
-  split
-  · -- a short run: the power of two above it is at most 256
-    rename_i short
-    have small : 2 ^ (Nat.log2 rows + 1) ≤ 2 ^ 8 := by
-      apply Nat.pow_le_pow_right (by decide)
-      by_cases zero : rows = 0
-      · subst zero
-        decide
-      · have := (Nat.log2_lt zero (k := 8)).mpr (by omega)
-        omega
-    have floor : (2 : Nat) ^ 8 = 256 := rfl
-    omega
-  · -- a longer run: the power of two that holds rows + 1 is the one above rows
-    rename_i long
-    rw [clog_succ_eq_log2_succ rows (by omega)]
-    have floor : (2 : Nat) ^ 8 = 256 := rfl
-    omega
+    padded_trace_length rows = WitnessParams.proverTraceLength 8 rows := rfl
 
 /-- The witness length at Jolt's sizes, `2 ^ logT`, is the run's padded length
 `padded_trace_length trace.rows.size`.

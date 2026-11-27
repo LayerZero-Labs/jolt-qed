@@ -1,6 +1,6 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
-import JoltConstraints.translation.witness_helpers
+import JoltBytecode.MathlibTactics
+import LeanRV64D.Defs
 
 open LeanRV64D
 
@@ -12,7 +12,7 @@ namespace JoltConstraints
 the right instruction input sums the flag-selected Rs2Value, Imm and RdWriteValue.
 For example, ShiftData selects Rs2Value plus Imm, while LD selects RdWriteValue.
 Jolt's verifier: `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`
-(`InputVirtualization::unbatched_relation`) at `c6703570`. -/
+(`InputVirtualization::unbatched_relation`) at `ff6fc6568`. -/
 def rightInstructionInputEqSelection {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ t : Fin params.traceLength,

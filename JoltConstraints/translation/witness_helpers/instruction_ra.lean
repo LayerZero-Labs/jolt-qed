@@ -8,7 +8,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [oracle_table InstructionRa](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/oracle.rs).
+-- Rust: `crates/jolt-witness/src/backend/trace/oracle.rs` (`oracle_table`, the `InstructionRa` case).
 -- The same lookup address as InstructionRaChunk, split into wider virtual
 -- chunks. "Virtual" refers to a witness family, not to virtual ISA instructions.
 noncomputable def InstructionRa {F : Type} [Field F] (p : WitnessParams)

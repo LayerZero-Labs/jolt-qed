@@ -3,9 +3,7 @@ Facts about the honest trace as a whole: how its rows sit in the program's bytec
 Each one is proved from honest_trace.lean and the program facts.
 -/
 import JoltConstraints.theorems.program_facts
-import JoltConstraints.translation.honest_trace
 import JoltConstraints.theorems.execution_facts
-import JoltConstraints.theorems.layout_facts
 
 open LeanRV64D
 
@@ -13,7 +11,7 @@ set_option autoImplicit false
 
 -- The trace starts at the slot Rust's get_first_pc picks for the entry address: one
 -- past the first row's position, since the NoOp takes slot 0.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:246-254 (get_first_pc)
 theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
@@ -63,7 +61,7 @@ theorem HonestTrace.starts_at_entry {joltInstance : JoltInstance SourceInstructi
 
 -- In an honest trace, every LD reads from a whole number of 64-bit units above the
 -- lowest address, as Rust's witness needs to place it in its RAM table.
--- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:260 (remapped_ram_address)
+-- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:222 (remapped_ram_address)
 theorem HonestTrace.load_offset_aligned {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (row : HonestTraceRow trace.bytecode) (faultClass : JoltISA.LoadFaultClass)
@@ -78,7 +76,7 @@ theorem HonestTrace.load_offset_aligned {joltInstance : JoltInstance SourceInstr
 
 -- In an honest trace, every SD writes to a whole number of 64-bit units above the
 -- lowest address, as Rust's witness needs to place it in its RAM table.
--- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:260 (remapped_ram_address)
+-- See : jolt/crates/jolt-witness/src/backend/trace/ram.rs:222 (remapped_ram_address)
 theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (row : HonestTraceRow trace.bytecode) (base value : JoltISA.Src) (imm : BitVec 64)
@@ -90,19 +88,17 @@ theorem HonestTrace.store_offset_aligned {joltInstance : JoltInstance SourceInst
     trace.initialState trace.initialized
   omega
 
--- Rust's padded length is a power of two, at least 256, and larger than the run, so
--- the witness always ends with at least one padding row.
--- See : jolt/crates/jolt-prover/src/config.rs:63-70 at 5def437f (successful padding)
+-- Jolt rounds the real row count up, with no extra trailing row required.
+-- Jolt at ff6fc6568: crates/jolt-prover/src/config.rs (padded_trace_length).
 theorem padded_trace_length_spec (rows : Nat) :
-    rows < padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
+    rows ≤ padded_trace_length rows ∧ 256 ≤ padded_trace_length rows ∧
     ∃ log, padded_trace_length rows = 2 ^ log := by
   unfold padded_trace_length
-  split
-  · -- a short run pads to 256 = 2^8
-    exact ⟨by omega, Nat.le_refl _, 8, rfl⟩
-  · -- a longer run pads to the power of two that holds it plus one
-    have holds := Nat.le_pow_clog (by decide : 1 < 2) (rows + 1)
-    exact ⟨by omega, by omega, _, rfl⟩
+  refine ⟨(Nat.le_pow_clog (by decide : 1 < 2) rows).trans (Nat.le_max_right _ _),
+    Nat.le_max_left _ _, ?_⟩
+  by_cases small : 2 ^ Nat.clog 2 rows ≤ 256
+  · exact ⟨8, max_eq_left small⟩
+  · exact ⟨Nat.clog 2 rows, max_eq_right (by omega)⟩
 
 -- A guard that passes had a true condition.
 theorem guard_some {condition : Prop} [Decidable condition] {passed : Unit}

@@ -7,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [RegistersVal materialization](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
+-- Rust: [RegistersVal materialization](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/backend/trace/registers.rs#L4-L68).
 -- The witness register array starts at zero, including virtual registers. Each
 -- column records its contents BEFORE that cycle's encoded destination write.
 -- Apply only preceding writes; padding retains the last accumulated value.

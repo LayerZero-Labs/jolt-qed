@@ -84,7 +84,7 @@ noncomputable def xorTableEntry {F : Type} [Field F]
 
 Here aᵢ = address[2i+1] and bᵢ = address[2i], counting from the least
 significant bit. In particular, result bit zero uses the right operand's bit 63.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-lookup-tables/src/tables/virtual_xor_rotl1.rs -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-lookup-tables/src/tables/virtual_xor_rotl1.rs -/
 noncomputable def virtualXorRotL1TableEntry {F : Type} [Field F]
     (address : Fin (2 ^ 128)) : F :=
   ∑ i : Fin 64,
@@ -169,7 +169,7 @@ noncomputable def rangeCheckAlignedTableEntry {F : Type} [Field F]
 The 128-bit lookup `address` is masked with `8 - width`; widths 1, 2 and 4
 give masks 7, 6 and 4, so width 2 at address 11 gives 2.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/address_offset.rs`
-(`AddressOffsetTable::materialize_entry`) at `c6703570`. -/
+(`AddressOffsetTable::materialize_entry`) at `ff6fc6568`. -/
 noncomputable def addressOffsetTableEntry {F : Type} [Field F]
     (width : Nat) (address : Fin (2 ^ 128)) : F :=
   ((BitVec.ofFin address &&& BitVec.ofNat 128 (8 - width)).toNat : F)
@@ -557,7 +557,7 @@ noncomputable def pextSignedTableEntry {F : Type} [Field F]
 field value at the 128-bit Boolean address `x`.
 For example, `AddressOffsetW` at address 12 gives 4.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs` (`LookupTableKind`)
-and `tables/address_offset.rs` (`materialize_entry`) at `c6703570`. -/
+and `tables/address_offset.rs` (`materialize_entry`) at `ff6fc6568`. -/
 noncomputable def lookupTableEntry {F : Type} [Field F]
     (table : LookupTableKind) (address : Fin (2 ^ 128)) : F :=
   match table with

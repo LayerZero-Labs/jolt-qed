@@ -1,7 +1,5 @@
-import JoltConstraints.theorems.Soundness.Layer3.Layout
-import JoltConstraints.theorems.Soundness.Layer3.Address
-import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
-import JoltConstraints.theorems.Soundness.Layer4.Table
+import JoltConstraints.translation.Constraints.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
+import Mathlib.Algebra.CharP.Basic
 
 open LeanRV64D
 
@@ -63,7 +61,7 @@ variable {params : WitnessParams} {witness : WitnessType F params}
 /-- For an active memory cycle, constraint (01) subtracts the lookup offset
 from the integer base value plus signed immediate, without assuming no wrap.
 For example, a halfword row at effective address 10 subtracts offset 2.
-See Jolt's verifier at c6703570, `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
+See Jolt's verifier at ff6fc6568, `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
 (`rv64_eq_constraint_rows`, row 0). -/
 theorem ramAddress_eq_sum (constraint : ramAddrEqRs1PlusImmMinusLookupIfLoadStore witness)
     (t : Fin params.traceLength)

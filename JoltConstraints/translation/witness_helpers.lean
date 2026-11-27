@@ -17,7 +17,6 @@ import JoltConstraints.translation.witness_helpers.next_is_virtual
 import JoltConstraints.translation.witness_helpers.next_is_first_in_sequence
 import JoltConstraints.translation.witness_helpers.next_is_noop
 import JoltConstraints.translation.witness_helpers.ram_address
-import JoltConstraints.translation.witness_helpers.ram_hamming_weight
 import JoltConstraints.translation.witness_helpers.ram_write_value
 import JoltConstraints.translation.witness_helpers.rd_inc
 
@@ -37,7 +36,6 @@ import JoltConstraints.translation.witness_helpers.left_lookup_operand
 import JoltConstraints.translation.witness_helpers.right_lookup_operand
 import JoltConstraints.translation.witness_helpers.lookup_output
 import JoltConstraints.translation.witness_helpers.product
-import JoltConstraints.translation.witness_helpers.should_jump
 
 import JoltConstraints.translation.witness_helpers.registers_val
 import JoltConstraints.translation.witness_helpers.ram_val_final

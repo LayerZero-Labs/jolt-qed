@@ -1,7 +1,6 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
-import JoltConstraints.translation.witness_helpers
+import JoltBytecode.MathlibTactics
+import LeanRV64D.Defs
 
 open LeanRV64D
 
@@ -20,7 +19,7 @@ def ramAddressChunk (params : WitnessParams) (address : Fin params.ramSize)
 
 /-- Constraint (58) in `constraints.md` (stage 6b):
 the full RAM address selector is the product of its selected address chunks.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs#L163-L172 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/ram.rs#L163-L172 -/
 def ramRaEqChunkProduct {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ (address : Fin params.ramSize) (t : Fin params.traceLength),

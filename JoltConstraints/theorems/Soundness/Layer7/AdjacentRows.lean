@@ -5,8 +5,8 @@ open LeanRV64D
 /-! Transport local instruction-pair facts through materialization and concatenation.
 No expansion checker is imported: its list property is a parameter.
 Jolt's materializer stamps each sequence before concatenating the program rows;
-see `jolt/crates/jolt-program/src/expand/materialize.rs:71-101,150-175` and
-`jolt/crates/jolt-program/src/expand/mod.rs:281-307` at 8bbb2357. -/
+see `jolt/crates/jolt-program/src/expand/materialize.rs:75-105,170-206` and
+`jolt/crates/jolt-program/src/expand/mod.rs:286-312` at ff6fc6568. -/
 
 set_option autoImplicit false
 

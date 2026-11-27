@@ -3,9 +3,9 @@ Instruction temporaries used by Rust's built-in expansions are registers 40–47
 The reserved virtual registers 32–39 carry machine state, including the LR/SC
 reservations at 32 and 33, and are deliberately excluded here.
 See : jolt/crates/jolt-program/src/expand/allocator.rs:1-15, 115-139, 184-199
-      (8bbb2357)
+      (ff6fc6568)
 -/
-import JoltConstraints.translation.expansions
+import JoltConstraints.translation.expansion_helpers
 
 open LeanRV64D
 
@@ -20,8 +20,9 @@ A destination counts only when it is also a source; for example, a floor
 load reads `[base]`, and a floor store reads `[base, value]`.
 Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
 (`RegisterStateLoad`) and `virtual_store_{b,h,w}.rs` (`RegisterStateS`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 def readSources : Instr → List Src
+  | .JoltSuccess _ src _ | .JoltPanic _ src _
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _
   | .XORI _ src _ | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _
   | .VirtualMULI _ src _ | .VirtualMULIW _ src _

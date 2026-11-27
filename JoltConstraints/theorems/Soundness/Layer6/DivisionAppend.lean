@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer6.DivisionPrograms
-import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
-import JoltConstraints.theorems.Soundness.Layer7.TerminationStore
+import JoltConstraints.theorems.Soundness.Layer5.TapePrefix
 
 open LeanRV64D
 
@@ -811,19 +810,6 @@ private theorem DivisionArithmeticRow.ramAddress_zero
     | none => 0) = 0
   rw [noRam]
 
-private theorem DivisionArithmeticRow.notStoresTerminationAt
-    {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (trace : UntrustedAnswerRun joltInstance privateInputs)
-    (step : Fin trace.rows.size)
-    (arithmetic : DivisionArithmeticRow
-      trace.bytecode[trace.rows[step].rowIndex].instruction) :
-    ¬ trace.StoresTerminationAt step := by
-  intro stored
-  obtain ⟨width, base, value, imm, ⟨fault, same⟩, _⟩ :=
-    (storeTouches_iff _ _).mp ((storesTerminationAt_iff trace step).mp stored)
-  rw [same] at arithmetic
-  cases width <;> exact arithmetic
-
 private theorem division_replay_finalRamWord
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (candidate replay : UntrustedAnswerRun joltInstance privateInputs)
@@ -1108,9 +1094,7 @@ private theorem RunExtends.prefix_observations
         TraceWitness.Rs2Value (F := F) params replay.toTrace t ∧
       TraceWitness.RamAddress (F := F) params candidate.toTrace t =
         TraceWitness.RamAddress (F := F) params replay.toTrace t ∧
-      (candidate.rows[t.val].StableStall ↔ replay.rows[t.val].StableStall) ∧
-      (candidate.StoresTerminationAt ⟨t.val, candidateInside⟩ ↔
-        replay.StoresTerminationAt ⟨t.val, replayInside⟩) := by
+      (candidate.rows[t.val].Halts ↔ replay.rows[t.val].Halts) := by
   have rowEq := RunExtends.prefix_row_heq run candidate replay candidateExtends
     replayExtends t.val old candidateInside replayInside
   obtain ⟨candidateEq, _⟩ := candidateExtends
@@ -1122,11 +1106,6 @@ private theorem RunExtends.prefix_observations
   subst candidateEq
   subst replayEq
   have sameRow : candidateRows[t.val] = replayRows[t.val] := eq_of_heq rowEq
-  have sameAt :
-      candidateRows[(⟨t.val, candidateInside⟩ : Fin candidateRows.size)] =
-        replayRows[(⟨t.val, replayInside⟩ : Fin replayRows.size)] := by
-    change candidateRows[t.val] = replayRows[t.val]
-    exact sameRow
   constructor
   · simp only [TraceWitness.PC, TraceWitness.bytecodePc,
       dite_eq_left candidateInside, dite_eq_left replayInside, sameRow]
@@ -1139,9 +1118,7 @@ private theorem RunExtends.prefix_observations
   constructor
   · simp only [TraceWitness.RamAddress, dite_eq_left candidateInside,
       dite_eq_left replayInside, sameRow]
-  constructor
-  · simp only [TraceRow.StableStall, sameRow]
-  · simp only [UntrustedAnswerRun.StoresTerminationAt, sameAt]
+  simp only [TraceRow.Halts, sameRow]
 
 private theorem division_source_is_compressed_eq
     {a b : Array JoltInstructionRow} (same : a = b)
@@ -1750,31 +1727,21 @@ private theorem division_replay_complete_transfer
         }
         cutRam := by
           constructor
-          · intro bound address outside
+          · intro bound address
             have candidateBound : candidate.rows.size < params.traceLength := by
               rw [equalSize]
               exact bound
-            have candidateOutside : address.val ≠
-                (candidate.initialState.jolt_device.memory_layout.termination.toNat -
-                  JoltConstraints.ramLowestAddress candidate.initialState.jolt_device.memory_layout) / 8 := by
-              rw [initialEq]
-              exact outside
-            have value := complete.represents.cutRam.1 candidateBound address candidateOutside
+            have value := complete.represents.cutRam.1 candidateBound address
             have indexEq :
                 (⟨candidate.rows.size, candidateBound⟩ : Fin params.traceLength) =
                   ⟨replay.rows.size, bound⟩ := Fin.ext equalSize
             rw [indexEq] at value
             exact value.trans (by rw [finalRam])
-          · intro full address outside
+          · intro full address
             have candidateFull : candidate.rows.size = params.traceLength := by
               rw [equalSize]
               exact full
-            have candidateOutside : address.val ≠
-                (candidate.initialState.jolt_device.memory_layout.termination.toNat -
-                  JoltConstraints.ramLowestAddress candidate.initialState.jolt_device.memory_layout) / 8 := by
-              rw [initialEq]
-              exact outside
-            have value := complete.represents.cutRam.2 candidateFull address candidateOutside
+            have value := complete.represents.cutRam.2 candidateFull address
             exact value.trans (by rw [finalRam])
       }
     real := by
@@ -1803,7 +1770,7 @@ private theorem division_replay_complete_transfer
         let t : Fin params.traceLength := ⟨i, indexBound⟩
         have stableEq := (RunExtends.prefix_observations (F := F) params run
           candidate replay candidateExtends replayed.extendsRun t old
-          candidateInside replayInside).2.2.2.2.1
+          candidateInside replayInside).2.2.2.2
         have currentEq : current = replay.rows[i] :=
           (Array.getElem?_eq_some_iff.mp currentAt).2.symm
         intro stable
@@ -1821,57 +1788,12 @@ private theorem division_replay_complete_transfer
           context.expands state.starts run.rows.size replayed.ordered
           offset proper current atBlock
         intro stable
-        exact remaining stable.1
-    terminationWord := by
-      intro bound noReplayStore address atTermination
-      have candidateBound : candidate.rows.size < params.traceLength := by
-        rw [equalSize]
-        exact bound
-      have noCandidateStore : ¬ ∃ i : Fin candidate.rows.size,
-          candidate.StoresTerminationAt i := by
-        rintro ⟨i, stored⟩
-        have replayInside : i.val < replay.rows.size := by
-          rw [← equalSize]
-          exact i.isLt
-        by_cases old : i.val < run.rows.size
-        · have tBound : i.val < params.traceLength := by
-            have rowsBound := complete.represents.rowsBound
-            omega
-          let t : Fin params.traceLength := ⟨i.val, tBound⟩
-          have storeEq := (RunExtends.prefix_observations (F := F) params
-            run candidate replay candidateExtends replayed.extendsRun t old
-            i.isLt replayInside).2.2.2.2.2
-          have replayStore : replay.StoresTerminationAt ⟨i.val, replayInside⟩ :=
-            storeEq.mp stored
-          exact noReplayStore ⟨⟨i.val, replayInside⟩, replayStore⟩
-        · let offset := i.val - run.rows.size
-          have offsetInside : offset < expansionRowCount context.bytecode first := by
-            dsimp [offset]
-            omega
-          have position : run.rows.size + offset = i.val := by dsimp [offset]; omega
-          obtain ⟨row, rowAt, rowIndex⟩ := candidateOrdered offset offsetInside
-          have rowAtI : candidate.rows[i.val]? = some row := by
-            simpa only [position] using! rowAt
-          have rowEq : candidate.rows[i] = row :=
-            Option.some.inj ((Array.getElem?_eq_getElem i.isLt).symm.trans rowAtI)
-          have arithmetic := division_block_arithmetic candidate first context.expands
-            count kind rd rs1 rs2 shape i offset offsetInside
-            (by rw [rowEq]; exact rowIndex)
-          exact (DivisionArithmeticRow.notStoresTerminationAt candidate i arithmetic) stored
-      have initialEq : candidate.initialState = replay.initialState :=
-        Option.some.inj (candidate.initialized.symm.trans replay.initialized)
-      have candidateAtTermination : address.val =
-          (candidate.initialState.jolt_device.memory_layout.termination.toNat -
-            JoltConstraints.ramLowestAddress candidate.initialState.jolt_device.memory_layout) / 8 := by
-        rw [initialEq]
-        exact atTermination
-      have value := complete.terminationWord candidateBound noCandidateStore
-        address candidateAtTermination
-      have indexEq :
-          (⟨candidate.rows.size, candidateBound⟩ : Fin params.traceLength) =
-            ⟨replay.rows.size, bound⟩ := Fin.ext equalSize
-      rw [indexEq] at value
-      exact value
+        apply remaining
+        have bytecodeEq : replay.bytecode = context.bytecode :=
+          Option.some.inj (replay.expands.symm.trans context.expands)
+        apply JoltConstraints.Soundness.ConstraintContext.halt_terminal context _ _ stable
+        rw [← bytecodeEq]
+        exact Array.getElem_mem current.rowIndex.isLt
     starts := state.starts
     done_le := Nat.le_refl _
     retained := by rw [replayed.size]; omega

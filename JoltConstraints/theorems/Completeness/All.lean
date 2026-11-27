@@ -1,8 +1,64 @@
-import JoltConstraints.translation.Constraints.All
-import JoltConstraints.theorems.Completeness
-import JoltConstraints.theorems.Completeness.Helpers.VerifierSizes
-import JoltConstraints.theorems.prover_config_facts
-import JoltConstraints.theorems.advice_below_input
+import JoltConstraints.theorems.Completeness.AssertLookupOne
+import JoltConstraints.theorems.Completeness.BytecodeRaAtEntryEqOne
+import JoltConstraints.theorems.Completeness.BytecodeRaChunkBooleanity
+import JoltConstraints.theorems.Completeness.BytecodeRaChunkHammingWeight
+import JoltConstraints.theorems.Completeness.HaltEndRule
+import JoltConstraints.theorems.Completeness.ImmEqBytecodeRead
+import JoltConstraints.theorems.Completeness.InstructionAddressCanonical
+import JoltConstraints.theorems.Completeness.InstructionFlagsEqBytecodeRead
+import JoltConstraints.theorems.Completeness.InstructionRaChunkBooleanity
+import JoltConstraints.theorems.Completeness.InstructionRaChunkHammingWeight
+import JoltConstraints.theorems.Completeness.InstructionRaEqChunkProduct
+import JoltConstraints.theorems.Completeness.InstructionRafFlagEqBytecodeRead
+import JoltConstraints.theorems.Completeness.LeftInstructionInputEqSelection
+import JoltConstraints.theorems.Completeness.LeftLookupEqLeftInputOtherwise
+import JoltConstraints.theorems.Completeness.LeftLookupOperandEqInstructionRaf
+import JoltConstraints.theorems.Completeness.LeftLookupZeroIfAddSubMul
+import JoltConstraints.theorems.Completeness.LookupOutputEqInstructionReadRaf
+import JoltConstraints.theorems.Completeness.LookupTableFlagEqBytecodeRead
+import JoltConstraints.theorems.Completeness.MustStartSequenceFromBeginning
+import JoltConstraints.theorems.Completeness.NextIsFirstInSequenceEqShift
+import JoltConstraints.theorems.Completeness.NextIsNoopEqShift
+import JoltConstraints.theorems.Completeness.NextIsVirtualEqShift
+import JoltConstraints.theorems.Completeness.NextPCEqPCPlusOneIfInline
+import JoltConstraints.theorems.Completeness.NextPCEqShift
+import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqLookupIfJump
+import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqPCPlusImmIfShouldBranch
+import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqShift
+import JoltConstraints.theorems.Completeness.OpFlagsEqBytecodeRead
+import JoltConstraints.theorems.Completeness.PCEqBytecodeRead
+import JoltConstraints.theorems.Completeness.ProductEqLeftInputMulRightInput
+import JoltConstraints.theorems.Completeness.RamAccessCount
+import JoltConstraints.theorems.Completeness.RamAddrEqRs1PlusImmMinusLookupIfLoadStore
+import JoltConstraints.theorems.Completeness.RamAddrEqZeroIfNotLoadStore
+import JoltConstraints.theorems.Completeness.RamAddressEqRamRaf
+import JoltConstraints.theorems.Completeness.RamOutputEqPublicIo
+import JoltConstraints.theorems.Completeness.RamRaChunkBooleanity
+import JoltConstraints.theorems.Completeness.RamRaEqChunkProduct
+import JoltConstraints.theorems.Completeness.RamReadEqRamWriteIfLoad
+import JoltConstraints.theorems.Completeness.RamReadEqRdWriteIfLoad
+import JoltConstraints.theorems.Completeness.RamReadValueEqRamRead
+import JoltConstraints.theorems.Completeness.RamValEqInitialPlusPrefixRamInc
+import JoltConstraints.theorems.Completeness.RamValFinalEqInitialPlusRamInc
+import JoltConstraints.theorems.Completeness.RamWriteProtected
+import JoltConstraints.theorems.Completeness.RamWriteValueEqRamReadWrite
+import JoltConstraints.theorems.Completeness.RdWaEqBytecodeRead
+import JoltConstraints.theorems.Completeness.RdWriteEqLookupIfWriteLookupToRd
+import JoltConstraints.theorems.Completeness.RdWriteEqPCPlusConstIfJump
+import JoltConstraints.theorems.Completeness.RdWriteValueEqRegistersReadWrite
+import JoltConstraints.theorems.Completeness.RegistersValEqPrefixRdInc
+import JoltConstraints.theorems.Completeness.RightInstructionInputEqSelection
+import JoltConstraints.theorems.Completeness.RightLookupEqProductIfMul
+import JoltConstraints.theorems.Completeness.RightLookupEqRightInputOtherwise
+import JoltConstraints.theorems.Completeness.RightLookupOperandEqInstructionRaf
+import JoltConstraints.theorems.Completeness.RightLookupSub
+import JoltConstraints.theorems.Completeness.Rs1RaEqBytecodeRead
+import JoltConstraints.theorems.Completeness.Rs1ValueEqRegistersRead
+import JoltConstraints.theorems.Completeness.Rs2EqRamWriteIfStore
+import JoltConstraints.theorems.Completeness.Rs2RaEqBytecodeRead
+import JoltConstraints.theorems.Completeness.Rs2ValueEqRegistersRead
+import JoltConstraints.theorems.Completeness.ShouldBranchEqLookupOutputMulBranch
+import JoltConstraints.theorems.Completeness.UnexpandedPCEqBytecodeRead
 
 open LeanRV64D
 
@@ -10,11 +66,11 @@ set_option autoImplicit false
 
 namespace JoltConstraints
 
-/-- Assemble the 62 honest-witness equations, for example the RAM-address
+/-- Assemble the 63 honest-witness equations, for example the RAM-address
 equation (01) and operand selection (33), under their existing trace premises.
 The bundle inherits the gaps listed in `model_review.md`, "Proofs owed".
 Jolt's verifier: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
-(`rv64_trace_constraints`) at `c6703570`. -/
+(`rv64_trace_constraints`) at `ff6fc6568`. -/
 theorem honestWitness_constraintEquations
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
@@ -25,7 +81,6 @@ theorem honestWitness_constraintEquations
     (startsAtEntry : TraceWitness.bytecodePc trace 0 = entry.val)
     (validAccesses : ramAccessesValid trace)
     (hAssertEqPasses : assertEqPasses trace)
-    (adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput)
     (initialRegistersZero : ∀ src : JoltISA.Src,
       JoltISA.sourceValue src trace.initialState = 0)
     (ramChunksPos : 0 < params.ramChunks)
@@ -35,7 +90,7 @@ theorem honestWitness_constraintEquations
     -- the chunk widths Jolt's prover picks; Jolt's sizes satisfy this
     (chunkConfig : params.ProverChunkConfig) :
     ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace)
-      (TraceWitness.finalTraceState trace).jolt_device entry
+      trace.publicIo entry
       (HonestTrace.honestWitness (F := F) params trace) := by
   have hlayout := (finalTraceState_ioSame trace).1
   refine {
@@ -54,22 +109,25 @@ theorem honestWitness_constraintEquations
     assertLookupOne := honestWitness_assertLookupOne params trace ramFits traceFits bytecodeDomain hAssertEqPasses
     rdWriteEqLookupIfWriteLookupToRd := honestWitness_rdWriteEqLookupIfWriteLookupToRd params trace ramFits traceFits bytecodeDomain
     rdWriteEqPCPlusConstIfJump := honestWitness_rdWriteEqPCPlusConstIfJump params trace ramFits traceFits bytecodeDomain noWrap
-    nextUnexpandedPCEqLookupIfShouldJump := honestWitness_nextUnexpandedPCEqLookupIfShouldJump params trace ramFits traceFits bytecodeDomain
+    nextUnexpandedPCEqLookupIfJump := honestWitness_nextUnexpandedPCEqLookupIfJump params trace ramFits traceFits bytecodeDomain
     nextUnexpandedPCEqPCPlusImmIfShouldBranch :=
       honestWitness_nextUnexpandedPCEqPCPlusImmIfShouldBranch
         params trace ramFits traceFits bytecodeDomain lastIsJump
     nextUnexpandedPCUpdateOtherwise := honestWitness_nextUnexpandedPCUpdateOtherwise params trace ramFits traceFits bytecodeDomain noWrap
     nextPCEqPCPlusOneIfInline := honestWitness_nextPCEqPCPlusOneIfInline params trace ramFits traceFits bytecodeDomain
     mustStartSequenceFromBeginning := honestWitness_mustStartSequenceFromBeginning params trace ramFits traceFits bytecodeDomain
+    haltEndRule := honestWitness_haltEndRule params trace traceFits
+    ramAccessCount := honestWitness_ramAccessCount params trace ramFits
+    ramWriteProtected := by simpa only [HonestTrace.publicIo, hlayout] using
+      honestWitness_ramWriteProtected (F := F) params trace ramFits validAccesses
     -- Stage 2: product and RAM relations
     productEqLeftInputMulRightInput := honestWitness_productEqLeftInputMulRightInput params trace ramFits traceFits bytecodeDomain
     shouldBranchEqLookupOutputMulBranch := honestWitness_shouldBranchEqLookupOutputMulBranch params trace ramFits traceFits bytecodeDomain
-    shouldJumpEqJumpMulNotNextIsNoop := honestWitness_shouldJumpEqJumpMulNotNextIsNoop params trace ramFits traceFits bytecodeDomain
     ramReadValueEqRamRead := honestWitness_ramReadValueEqRamRead params trace ramFits traceFits bytecodeDomain
     ramWriteValueEqRamReadWrite := honestWitness_ramWriteValueEqRamReadWrite params trace ramFits traceFits bytecodeDomain
-    ramAddressEqRamRaf := by simpa only [hlayout] using
+    ramAddressEqRamRaf := by simpa only [HonestTrace.publicIo, hlayout] using
       (honestWitness_ramAddressEqRamRaf params trace ramFits traceFits bytecodeDomain validAccesses)
-    ramOutputEqPublicIo := honestWitness_ramOutputEqPublicIo params trace ramFits traceFits bytecodeDomain adviceBelowInput
+    ramOutputEqPublicIo := honestWitness_ramOutputEqPublicIo params trace ramFits traceFits bytecodeDomain
     -- Stage 3: shifts and instruction inputs
     nextUnexpandedPCEqShift := honestWitness_nextUnexpandedPCEqShift params trace ramFits traceFits bytecodeDomain
     nextPCEqShift := honestWitness_nextPCEqShift params trace ramFits traceFits bytecodeDomain
@@ -88,6 +146,7 @@ theorem honestWitness_constraintEquations
     lookupOutputEqInstructionReadRaf := honestWitness_lookupOutputEqInstructionReadRaf params trace ramFits traceFits bytecodeDomain
     leftLookupOperandEqInstructionRaf := honestWitness_leftLookupOperandEqInstructionRaf params trace ramFits traceFits bytecodeDomain
     rightLookupOperandEqInstructionRaf := honestWitness_rightLookupOperandEqInstructionRaf params trace ramFits traceFits bytecodeDomain
+    instructionAddressCanonical := honestWitness_instructionAddressCanonical params trace ramFits traceFits bytecodeDomain
     registersValEqPrefixRdInc := honestWitness_registersValEqPrefixRdInc params trace ramFits traceFits bytecodeDomain initialRegistersZero
     -- Stage 6: bytecode and selector relations
     pcEqBytecodeRead := honestWitness_pcEqBytecodeRead params trace ramFits traceFits bytecodeDomain
@@ -104,32 +163,20 @@ theorem honestWitness_constraintEquations
     instructionRaChunkBooleanity := honestWitness_instructionRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
     bytecodeRaChunkBooleanity := honestWitness_bytecodeRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
     ramRaChunkBooleanity := honestWitness_ramRaChunkBooleanity params trace ramFits traceFits bytecodeDomain
-    ramHammingWeightBooleanity := honestWitness_ramHammingWeightBooleanity params trace ramFits traceFits bytecodeDomain
     ramRaEqChunkProduct := honestWitness_ramRaEqChunkProduct params trace ramFits traceFits bytecodeDomain ramChunksPos
     instructionRaEqChunkProduct := honestWitness_instructionRaEqChunkProduct params trace ramFits traceFits bytecodeDomain chunkConfig
     -- Stage 7: hamming weights
     instructionRaChunkHammingWeight := honestWitness_instructionRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
     bytecodeRaChunkHammingWeight := honestWitness_bytecodeRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
-    ramRaChunkHammingWeight := honestWitness_ramRaChunkHammingWeight params trace ramFits traceFits bytecodeDomain
   }
 
 end JoltConstraints
 
 open JoltConstraints
 
--- Both advice buffers of the starting device lie below the inputs, which start a whole
--- number of 64-bit words above the lowest address.
-theorem HonestTrace.advice_below_input {joltInstance : JoltInstance SourceInstruction}
-    {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs) :
-    trace.initialState.jolt_device.AdviceBelowInput := by
-  have below := initial_state_advice_below_input joltInstance privateInputs trace.initialState
-    trace.initialized
-  rw [MemoryLayout.get_lowest_address_toNat] at below
-  exact ⟨below.1, below.2.1, below.2.2⟩
-
 -- Rust's entry slot is where the witness starts: the first row's slot, or the NoOp's
 -- slot 0 when the trace is empty (the entry address is then 0).
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:246-254 (get_first_pc)
 theorem HonestTrace.entry_slot {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
@@ -157,11 +204,11 @@ theorem HonestTrace.final_state_eq {joltInstance : JoltInstance SourceInstructio
   · rw [Array.getElem?_eq_none (by omega)]
     rfl
 
-/-- Completeness at Jolt's sizes: when Jolt's prover accepts the honest trace with
-config `config` (`proverAccepts`), the honest witness at Jolt's witness sizes
-(`HonestTrace.witness_params`) satisfies every constraint, against Jolt's preprocessed
-bytecode `slots`, the verifier's entry slot `entry` and the public I/O `io` the verifier
-checks the proof against.
+/-- Completeness at Jolt's sizes: when the prover's sizing (`derive_from_dimensions`)
+succeeds on the honest trace with config `config` (`proverAccepts`), the honest witness
+at Jolt's witness sizes (`HonestTrace.witness_params`) satisfies every constraint,
+against Jolt's preprocessed bytecode `slots`, the verifier's entry slot `entry` and the
+public I/O `io` the verifier checks the proof against.
 It needs the existing premises below and inherits the gaps listed in `model_review.md`
 ("Proofs owed").
 For example, a 300-row run that touches RAM word 1000 is checked on a 512-cycle witness
@@ -170,8 +217,10 @@ theorem HonestTrace.allConstraints_prover_sizes
     {F : Type} [Field F]
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance privateInputs)
-    -- Jolt's prover accepts the run and picks these sizes
+    -- the prover's sizing (`derive_from_dimensions`) succeeds and picks these sizes
     (config : ProverConfig) (proverAccepts : trace.prover_config joltInstance = some config)
+    -- the default Dory setup exists: its `next_power_of_two` does not overflow
+    (setupSized : joltInstance.max_padded_trace_length.toNat ≤ 2 ^ 63)
     -- Jolt's preprocessed bytecode, and the entry slot its verifier uses
     (slots : Array BytecodeSlot) (preprocessed : preprocess trace.bytecode = some slots)
     (entry : Fin (2 ^ (trace.witness_params config proverAccepts).logBytecodeK))
@@ -180,14 +229,10 @@ theorem HonestTrace.allConstraints_prover_sizes
     (spoilAssertsPass : trace.SpoilAssertsPass)
     -- assumed: a legal ELF's PC does not wrap (a16z confirmed)
     (noWrap : joltInstance.program.NextPCNoWrap)
-    -- assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
-    -- never empty, so its memory image loads at least one byte. Jolt's prover does not
-    -- reject an empty ELF; only its verifier does (bug-report/verifier-ram-minimum).
-    (imageNonempty : joltInstance.program.ImageNonempty)
     -- the instance claims the outputs the run produced
     (claimsRunOutputs : trace.matches_outputs joltInstance)
     -- the public I/O the verifier checks the proof against
-    (io : JoltDevice) (publicIo : joltInstance.public_io = some io) :
+    (io : JoltPublicIo) (publicIo : joltInstance.public_io = some io) :
     AllConstraints joltInstance privateInputs
       (trace.honestWitness (F := F) (trace.witness_params config proverAccepts)) := by
   refine ⟨{
@@ -209,14 +254,16 @@ theorem HonestTrace.allConstraints_prover_sizes
       · rw [akita, WitnessParams.proverTraceLength]
         exact le_trans (by decide : 256 ≤ 2 ^ 12) (Nat.le_max_left _ _)
     bytecodeDomain := trace.witness_params_bytecode_domain config proverAccepts
-    ramSizeBounds := trace.witness_params_ram_bounds config proverAccepts imageNonempty
+    ramSizeBounds := trace.witness_params_ram_bounds config proverAccepts
     oneHotFitsSetup := by
       cases hasLayout : joltInstance.memory_layout with
       | none =>
         unfold JoltInstance.public_io at publicIo
         rw [hasLayout] at publicIo
         contradiction
-      | some layout => exact trace.witness_params_one_hot_fits_setup config proverAccepts layout hasLayout
+      | some layout =>
+        exact trace.witness_params_one_hot_fits_setup config proverAccepts layout hasLayout
+          setupSized
     entryIsRust := ⟨slots, preprocessed, entryIsRust⟩ }, ?_⟩
   change ConstraintEquations trace.bytecode (TraceWitness.initialRamWord trace) io entry
     (trace.honestWitness (F := F) (trace.witness_params config proverAccepts))
@@ -228,7 +275,6 @@ theorem HonestTrace.allConstraints_prover_sizes
     (trace.entry_slot slots preprocessed entry.val entryIsRust)
     trace.ram_accesses_valid
     (trace.assert_eq_passes spoilAssertsPass)
-    trace.advice_below_input
     trace.initialRegistersZero
     (trace.witness_params_ram_chunks_pos config proverAccepts)
     noWrap
@@ -243,40 +289,34 @@ theorem HonestTrace.allConstraints_prover_sizes
   rw [layoutBuilt] at isLayout
   cases isLayout
   cases publicIo
-  -- the run's final device has the same layout and inputs, and the claimed outputs and
-  -- panic flag
-  obtain ⟨sameLayout, _, _, sameInputs⟩ := finalTraceState_ioSame trace
-  have startInputs := initial_state_inputs joltInstance privateInputs trace.initialState
-    trace.initialized
+  have sameLayout := (finalTraceState_ioSame trace).1
   obtain ⟨sameOutputs, samePanic⟩ := claimsRunOutputs
   rw [trace.final_state_eq] at sameOutputs samePanic
-  -- the instance's inputs fit their region (validate_inputs)
   have valid := trace.valid_inputs
   unfold JoltInstance.validate_inputs at valid
   rw [layoutBuilt] at valid
   simp only [Bool.and_eq_true, decide_eq_true_eq] at valid
   unfold JoltInstance.memory_layout at layoutBuilt
-  refine { all with ramAddressEqRamRaf := ?_, ramOutputEqPublicIo := ?_ }
-  · -- the RAM-address constraint reads only the layout
-    simpa only [sameLayout] using all.ramAddressEqRamRaf
-  · -- constraint (26): the verifier's public words are the run's
-    intro address
+  refine { all with
+    haltEndRule := ?_
+    ramWriteProtected := ?_
+    ramAddressEqRamRaf := ?_
+    ramOutputEqPublicIo := ?_ }
+  · simpa only [HonestTrace.publicIo, samePanic] using all.haltEndRule
+  · simpa only [HonestTrace.publicIo, sameLayout] using all.ramWriteProtected
+  · simpa only [HonestTrace.publicIo, sameLayout] using all.ramAddressEqRamRaf
+  · intro address
     have runs := all.ramOutputEqPublicIo address
     have maskSame : ramPublicIoMask (F := F)
-        { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
-          outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
-          memory_layout := trace.initialState.jolt_device.memory_layout } address.val =
-        ramPublicIoMask (F := F) (TraceWitness.finalTraceState trace).jolt_device address.val := by
-      unfold ramPublicIoMask
-      rw [sameLayout]
+        { inputs := joltInstance.inputs, outputs := trimTrailingZeros joltInstance.outputs,
+          panic := joltInstance.panic, memory_layout := trace.initialState.jolt_device.memory_layout } address.val =
+        ramPublicIoMask (F := F) trace.publicIo address.val := by
+      simp only [ramPublicIoMask, HonestTrace.publicIo, sameLayout]
     have wordSame := ramPublicIoWord_trimmed
-      { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
-        outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
-        memory_layout := trace.initialState.jolt_device.memory_layout }
-      (TraceWitness.finalTraceState trace).jolt_device _
-      (by rw [sameLayout]; exact layoutBuilt)
-      (by rw [sameInputs, startInputs, sameLayout]; exact valid.1.2)
-      sameLayout.symm (by rw [sameInputs, startInputs]) samePanic.symm sameOutputs.symm
-      address.val
+      { inputs := joltInstance.inputs, outputs := trimTrailingZeros joltInstance.outputs,
+        panic := joltInstance.panic, memory_layout := trace.initialState.jolt_device.memory_layout }
+      trace.publicIo _ (by dsimp only [HonestTrace.publicIo]; rw [sameLayout]; exact layoutBuilt)
+      (by dsimp only [HonestTrace.publicIo]; rw [sameLayout]; exact valid.1.1.2)
+      (by dsimp only [HonestTrace.publicIo]; exact sameLayout.symm) rfl sameOutputs.symm address.val
     rw [maskSame, wordSame]
     exact runs

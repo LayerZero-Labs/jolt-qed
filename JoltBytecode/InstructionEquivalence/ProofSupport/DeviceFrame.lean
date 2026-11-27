@@ -96,6 +96,45 @@ theorem execProgram_setup (program : Program) :
     · exact ih
     · exact StatePreservation.pure_rule setup_refl _
 
+/-- Successful byte stores update memory rather than the device.
+For example, an output store keeps the layout.
+Based on Quang Dao's version in PR #73. -/
+theorem store_raw_same (s s' : SailJoltState) (ea : Nat) (value : BitVec 8)
+    (h : Mmu.store_raw? s ea value = some s') : Same s.jolt_device s'.jolt_device := by
+  exact InstructionFrame.storeRaw_rule
+    (relation := fun s t => Same s.jolt_device t.jolt_device)
+    (fun _ _ => ⟨rfl⟩) (fun _ _ _ _ _ => ⟨rfl⟩) s s' ea value h
+
+/-- Every successful row keeps every protected shared-memory byte and the MMU setup.
+For example, output writes can change memory, while input and advice bytes keep their values.
+Based on Quang Dao's version in PR #73. -/
+theorem execInstr_memory (instr : Instr) :
+    StatePreservation.Preserves Mmu.ProtectedMemory (execInstr instr) :=
+  InstructionFrame.execInstr_rule
+    { refl := Mmu.ProtectedMemory.refl
+      trans := fun _ _ _ h h' => h.trans h'
+      sail := fun _ _ hm => ⟨rfl, rfl, fun a _ => by rw [hm]⟩
+      vreg := fun _ _ _ => ⟨rfl, rfl, fun _ _ => rfl⟩
+      store := Mmu.store_doubleword_protected
+      halt := fun _ _ => ⟨rfl, rfl, fun _ _ => rfl⟩
+      append := fun _ _ => ⟨rfl, rfl, fun _ _ => rfl⟩ }
+    instr (fun _ _ _ _ _ _ _ => ⟨rfl, rfl, fun _ _ => rfl⟩)
+
+/-- Every successful expansion keeps the original protected bytes in shared memory.
+For example, an AMO can store the same code word but cannot change it.
+Based on Quang Dao's version in PR #73. -/
+theorem execProgram_memory (program : Program) :
+    StatePreservation.Preserves Mmu.ProtectedMemory (execProgram program) := by
+  induction program with
+  | done result => exact StatePreservation.pure_rule Mmu.ProtectedMemory.refl _
+  | instr instr rest ih =>
+    simp only [execProgram]
+    refine StatePreservation.bind_rule (fun _ _ _ h h' => h.trans h')
+      (execInstr_memory instr) (fun result => ?_)
+    split
+    · exact ih
+    · exact StatePreservation.pure_rule Mmu.ProtectedMemory.refl _
+
 /-- Every row preserves the device layout; for example, an output store. -/
 theorem execInstr_rule (instr : Instr) : Preserves (execInstr instr) :=
   fun _ _ _ h => ⟨(execInstr_setup instr _ _ _ h).1⟩

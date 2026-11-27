@@ -1,4 +1,3 @@
-import JoltConstraints.translation.metadata
 import JoltConstraints.translation.witness_helpers.rs2_value
 import JoltConstraints.translation.witness_helpers.imm
 import JoltConstraints.translation.witness_helpers.rd_write_value
@@ -14,7 +13,7 @@ values in the field; padding contributes zero.
 For example, ShiftData with rs2 = 10 and immediate -2 contributes 8,
 while LD contributes its captured destination value.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/shift_data_b.rs`
-and `instructions/riscv/ld.rs` (`to_instruction_inputs`) at `c6703570`. -/
+and `instructions/riscv/ld.rs` (`to_instruction_inputs`) at `ff6fc6568`. -/
 noncomputable def RightInstructionInput {F : Type} [Field F] (p : WitnessParams)
     (trace : Trace) : Fin p.traceLength → F :=
   fun t =>

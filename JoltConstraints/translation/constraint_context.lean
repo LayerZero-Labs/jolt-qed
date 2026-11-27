@@ -20,7 +20,7 @@ structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
     (privateInputs : JoltPrivateInputs) (params : WitnessParams) where
   bytecode : Array JoltInstructionRow
   initialRam : Nat → BitVec 64
-  io : JoltDevice
+  io : JoltPublicIo
   entry : Fin (2 ^ params.logBytecodeK)
   expands : expand_program joltInstance.program = some bytecode
   initialized : ∃ state, joltInstance.initial_state privateInputs = some state ∧
@@ -30,8 +30,8 @@ structure ConstraintContext (joltInstance : JoltInstance SourceInstruction)
   traceLengthBound : params.traceLength ≤ joltInstance.max_padded_trace_length.toNat
   -- Jolt's base verifier rejects a 128-cycle proof even if the instance maximum
   -- permits it; Akita's 4096-cycle floor is outside this model.
-  -- See jolt/crates/jolt-verifier/src/verifier.rs:976-991 and
-  -- jolt/crates/jolt-verifier/src/config.rs:109-120 at 5def437f.
+  -- See jolt/crates/jolt-verifier/src/verifier.rs:939-954 and
+  -- jolt/crates/jolt-verifier/src/config.rs:92-103 at ff6fc6568.
   traceLengthFloor : 256 ≤ params.traceLength
   bytecodeDomain : params.BytecodeDomainFor bytecode.size
   ramSizeBounds : joltInstance.ram_size_in_bounds params.ramSize = true

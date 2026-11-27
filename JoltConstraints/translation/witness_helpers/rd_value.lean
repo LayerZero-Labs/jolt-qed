@@ -12,13 +12,13 @@ Absent destinations contribute zero; a pre-state gives the old destination value
 For example, a floor load reads its destination from the post-state to obtain the loaded word.
 Jolt's tracer: `tracer/src/instruction/virtual_load_{b,h,w}.rs`
 (`RegisterStateLoad`), `virtual_store_{b,h,w}.rs` (`RegisterStateS`) and
-`format/format_shift_data.rs` (`FormatShiftData`) at `c6703570`. -/
+`format/format_shift_data.rs` (`FormatShiftData`) at `ff6fc6568`. -/
 noncomputable def rdValue {F : Type} [Field F]
     (instruction : JoltISA.Instr) (state : SailJoltState) : F :=
   let destinationValue (dst : JoltISA.Dst) : F :=
     ((capturedDestinationValue dst state).toNat : F)
   match instruction with
-  | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
+  | .JoltSuccess dst _ _ | .JoltPanic dst _ _ | .ADDI dst _ _ | .ADDIW dst _ _ | .ANDI dst _ _ | .ORI dst _ _ | .XORI dst _ _
   | .SLTI dst _ _ | .SLTIU dst _ _ | .LUI dst _ | .AUIPC dst _ | .JAL dst _ | .JALR dst _ _
   | .ADD dst _ _ | .ADDW dst _ _ | .SUB dst _ _ | .SUBW dst _ _ | .MUL dst _ _
   | .MULW dst _ _ | .MULHU dst _ _ | .ANDN dst _ _ | .VirtualMULI dst _ _

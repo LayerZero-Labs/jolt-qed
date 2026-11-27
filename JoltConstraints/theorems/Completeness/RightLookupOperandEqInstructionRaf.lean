@@ -13,7 +13,7 @@ open scoped BigOperators
 /-- A combined index selects all 128 bits; otherwise its even bits give the
 right operand, for example 2 from the interleaving of 1 and 2.
 Jolt's verifier: `crates/jolt-claims/src/protocols/jolt/relations/instruction/read_raf.rs`
-(`ReadRaf::output_expression`) at `c6703570`. -/
+(`ReadRaf::output_expression`) at `ff6fc6568`. -/
 private theorem rightLookupRaf_select {F : Type} [Field F]
     (combined : Bool) (index : BitVec 128) :
     (if combined then (index.toNat : F) else ((uninterleave index.toFin).2.toNat : F)) =
@@ -26,7 +26,7 @@ Uses the address-chunk selection and operand-encoding correspondence.
 For example, an addition row selects the full 128-bit index, while LD selects
 its even bits, which encode the captured destination.
 Jolt's prover: `crates/jolt-witness/src/witnesses/operands.rs`
-(`RightLookupOperand`) at `c6703570`. -/
+(`RightLookupOperand`) at `ff6fc6568`. -/
 theorem honestWitness_rightLookupOperandEqInstructionRaf
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

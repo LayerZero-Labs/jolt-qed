@@ -14,9 +14,11 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 -- Jolt's own source instructions: custom opcode 0x5B, decoded alongside RISC-V.
 -- Inline (opcodes 0x0B and 0x2B) is out of scope.
--- See : jolt/crates/jolt-program/src/image/decode.rs:71-72, 192-210 at 5def437f (decode_custom)
+-- See : jolt/crates/jolt-program/src/image/decode.rs:85-86, 192-210 at ff6fc6568 (decode_custom)
 --       jolt/tracer/src/instruction/format/ (operand formats)
 inductive JoltCustomInstruction where
+  /-- The custom success halt. -/
+  | JoltSuccess
   | AdviceLB (rd : regidx)                                -- FormatAdviceLoadI
   | AdviceLH (rd : regidx)
   | AdviceLW (rd : regidx)
@@ -26,7 +28,7 @@ inductive JoltCustomInstruction where
   /-- A successfully decoded host call, with no normalized operands.
   For example, nonzero encoded rs1 and immediate fields are ignored; nonzero rd
   is rejected before constructing this instruction.
-  See jolt/crates/jolt-program/src/image/decode.rs:204-209,335-339 at 5def437f. -/
+  See jolt/crates/jolt-program/src/image/decode.rs:224-232,360-364 at ff6fc6568. -/
   | VirtualHostIO
 
 -- An expandable instruction: one instruction of the guest program, RISC-V or one of
@@ -37,7 +39,7 @@ inductive SourceInstruction where
   | jolt (instruction : JoltCustomInstruction)
 
 -- What Rust's dispatch_source returns for one source instruction.
--- See : jolt/crates/jolt-program/src/expand/materialize.rs:71-101 (dispatch_source)
+-- See : jolt/crates/jolt-program/src/expand/materialize.rs:75-105 (dispatch_source)
 inductive ExpandedSource where
   -- A native row, or the no-op for rd = x0: one row, not stamped.
   | native (instruction : JoltISA.Instr)
@@ -52,7 +54,7 @@ def JoltISA.Program.instrs : JoltISA.Program → List JoltISA.Instr
 namespace ExpandedSource
 
 -- A native instruction: one row, after Rust's rd = x0 rewrite.
--- See : jolt/crates/jolt-program/src/expand/mod.rs:126-170
+-- See : jolt/crates/jolt-program/src/expand/mod.rs:127-171
 def ofNative (instruction : JoltISA.Instr) : ExpandedSource :=
   .native instruction.rewriteNative
 
@@ -63,7 +65,7 @@ def ofProgram (program : JoltISA.Program) : ExpandedSource :=
 
 -- A source-only instruction with no side effects (shifts, MULH, MULHSU, division).
 -- With rd = x0 Rust emits one unstamped no-op instead of the expansion.
--- See : jolt/crates/jolt-program/src/expand/mod.rs:126-170
+-- See : jolt/crates/jolt-program/src/expand/mod.rs:127-171
 def ofPureProgram (rd : regidx) (program : JoltISA.Program) : ExpandedSource :=
   if JoltISA.isX0 rd then .native JoltISA.Instr.canonicalNoOp else .sequence program.instrs
 

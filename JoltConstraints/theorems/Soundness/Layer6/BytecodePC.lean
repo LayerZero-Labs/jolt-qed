@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
 import JoltConstraints.theorems.trace_interface
+import JoltConstraints.theorems.Soundness.Layer1.Bytecode
 
 open LeanRV64D
 
@@ -214,7 +215,7 @@ padding. The padding row has unexpanded address zero, sets
 `DoNotUpdateUnexpandedPC`, and has neither jump nor branch flag. Constraint 17
 therefore keeps the next unexpanded address at zero; every real bytecode row
 has an address at or above `RAM_START_ADDRESS`.
-See : jolt/crates/jolt-riscv/src/instructions/mod.rs:534-537 at 8bbb2357. -/
+See : jolt/crates/jolt-riscv/src/instructions/mod.rs:553-556 at ff6fc6568. -/
 theorem padding_persists
     (t : Fin params.traceLength) (next : t.val + 1 < params.traceLength)
     (padding : witness.InstructionFlags .IsNoop t = 1) :
@@ -289,7 +290,7 @@ theorem padding_persists
 /-- If witness cycle `start` selects padding, every later cycle `cycle`
 selects padding too. For example, padding at cycle 3 includes cycle 5.
 The no-op transition is modeled after
-jolt/crates/jolt-riscv/src/instructions/mod.rs:534-537 at 8bbb2357. -/
+jolt/crates/jolt-riscv/src/instructions/mod.rs:553-556 at ff6fc6568. -/
 theorem padding_from
     (start cycle : Fin params.traceLength)
     (atStart : witness.InstructionFlags .IsNoop start = 1)

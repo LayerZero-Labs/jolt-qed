@@ -1,7 +1,7 @@
-import Mathlib.Algebra.Field.Defs
 import Mathlib.Data.Nat.GCD.Basic
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import JoltConstraints.translation.witness_helpers
+import JoltBytecode.MathlibTactics
+import JoltConstraints.translation.witness
+import LeanRV64D.Defs
 
 open LeanRV64D
 
@@ -43,7 +43,7 @@ def instructionVirtualAddressDigit (params : WitnessParams)
 
 /-- Constraint (59) in `constraints.md`: each virtual instruction selector is
 reconstructed from its consecutive small chunks.
-Rust: https://github.com/abiswas3/jolt/tree/main/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs#L402-L417 -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-claims/src/protocols/jolt/geometry/instruction.rs#L402-L417 -/
 def instructionRaEqChunkProduct {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) : Prop :=
   ∀ (chunk : Fin params.virtualInstructionChunks)

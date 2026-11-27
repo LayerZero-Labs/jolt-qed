@@ -28,7 +28,7 @@ open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV
 
 /-- Between two non-read states, the tape cursor is fixed and bytes may only be
 appended. For a tape `[0x2C]`, a host write of `0x01` gives `[0x2C, 0x01]`.
-See `jolt/tracer/src/emulator/cpu.rs:44-60` at 5def437f. -/
+See `jolt/tracer/src/emulator/cpu.rs:48-64` at ff6fc6568. -/
 private def TapeGrowth (a b : SailJoltState) : Prop :=
   a.adviceTape.readPosition = b.adviceTape.readPosition ∧
     ∃ suffix, b.adviceTape.bytes = a.adviceTape.bytes ++ suffix
@@ -49,9 +49,11 @@ private theorem execInstr_tapeGrowth (instr : Instr)
   apply InstructionFrame.execInstr_rule
     { refl := tapeGrowth_refl
       trans := tapeGrowth_trans
-      sail := fun _ _ => ⟨rfl, #[], by simp⟩
+      sail := fun _ _ _ => ⟨rfl, #[], by simp⟩
       vreg := fun _ _ _ => ⟨rfl, #[], by simp⟩
-      store := fun _ _ _ _ _ => ⟨rfl, #[], by simp⟩
+      store := store_doubleword_relation TapeGrowth tapeGrowth_refl tapeGrowth_trans
+        (fun _ _ => ⟨rfl, #[], by simp⟩)
+      halt := fun _ _ => ⟨rfl, #[], by simp [recordHalt]⟩
       append := fun _ bytes => ⟨rfl, bytes, rfl⟩ }
   intro dst width isLoad
   exact False.elim (notLoad dst width isLoad)
@@ -531,14 +533,21 @@ def ReplayStateAgreement (bytecode : Array JoltInstructionRow)
   ((¬ ∃ dst, NarrowAdvicePending bytecode rowIndex preState dst) →
     SameExceptTapeBytes original replay)
 
+private theorem SameExceptTapeBytes.observe_eq {α : Type}
+    (observe : SailJoltState → α)
+    (tape : ∀ state bytes, observe { state with adviceTape :=
+      { state.adviceTape with bytes := bytes } } = observe state)
+    {original replay : SailJoltState}
+    (same : SameExceptTapeBytes original replay) : observe original = observe replay := by
+  change { original with adviceTape :=
+    { original.adviceTape with bytes := replay.adviceTape.bytes } } = replay at same
+  exact (tape original replay.adviceTape.bytes).symm.trans (congrArg observe same)
+
 private theorem SameExceptTapeBytes.device_eq
     {original replay : SailJoltState}
     (same : SameExceptTapeBytes original replay) :
-    original.jolt_device = replay.jolt_device := by
-  change { original with adviceTape :=
-    { original.adviceTape with bytes := replay.adviceTape.bytes } } = replay at same
-  have h := congrArg SailJoltState.jolt_device same
-  exact h
+    original.jolt_device = replay.jolt_device :=
+  same.observe_eq SailJoltState.jolt_device (fun _ _ => rfl)
 
 private theorem SameExceptTapeBytes.sourceValue_eq
     {original replay : SailJoltState}
@@ -613,14 +622,6 @@ private theorem swap_write (dst : Dst) (value : BitVec 64) :
     simp only [writeDst, writeVReg]
     split <;> rfl
 
-private theorem swap_load (address : BitVec 64) :
-    SwapInvariant (Mmu.load address) := by
-  intro s b
-  have same : Mmu.load? (swapBytes s b) address.toNat = Mmu.load? s address.toNat := rfl
-  unfold Mmu.load
-  simp only [same]
-  cases Mmu.load? s address.toNat <;> rfl
-
 private theorem swap_load_doubleword (address : BitVec 64) :
     SwapInvariant (Mmu.load_doubleword address) := by
   intro s b
@@ -634,9 +635,9 @@ private theorem swap_load_doubleword (address : BitVec 64) :
 private theorem swap_store_raw (s : SailJoltState) (b : Array (BitVec 8))
     (ea : Nat) (v : BitVec 8) :
     Mmu.store_raw? (swapBytes s b) ea v =
-      (Mmu.store_raw? s ea v).map (swapBytes · b) := by
-  simp [Mmu.store_raw?, swapBytes]
-  split_ifs <;> simp_all; rfl
+      (Mmu.store_raw? s ea v).map (swapBytes · b) :=
+  store_raw_map (swapBytes · b) (fun _ => rfl) (fun _ => rfl)
+    (fun _ _ _ _ => rfl) (fun _ _ => rfl) s ea v
 
 private theorem swap_store_fold (b : Array (BitVec 8)) (ea : Nat)
     (value : BitVec 64) (l : List Nat) (start : Option SailJoltState) :
@@ -645,18 +646,9 @@ private theorem swap_store_fold (b : Array (BitVec 8)) (ea : Nat)
         (start.map (swapBytes · b)) =
     (l.foldl (fun current k => current.bind fun s =>
       Mmu.store_raw? s (ea + k) (value.extractLsb' (8 * k) 8)) start).map
-        (swapBytes · b) := by
-  induction l generalizing start with
-  | nil => rfl
-  | cons k rest ih =>
-    simp only [List.foldl_cons]
-    cases start with
-    | none => simpa using ih none
-    | some s =>
-      simp only [Option.map_some, Option.bind_some]
-      rw [swap_store_raw]
-      simpa only [Option.map_eq_map] using ih (Mmu.store_raw? s (ea + k)
-        (value.extractLsb' (8 * k) 8))
+        (swapBytes · b) :=
+  store_bytes_map (swapBytes · b) (fun _ _ _ => swap_store_raw _ b _ _)
+    ea value l start
 
 private theorem swap_store_doubleword (address value : BitVec 64) :
     SwapInvariant (Mmu.store_doubleword address value) := by
@@ -670,12 +662,19 @@ private theorem swap_store_doubleword (address value : BitVec 64) :
         Mmu.store_raw? state (address.toNat + k) (value.extractLsb' (8 * k) 8))
         (some s)).map (swapBytes · b) := by
     simpa using swap_store_fold b address.toNat value (List.range 8) (some s)
+  have protectionSame : Mmu.assert_write_protected_store (swapBytes s b) address.toNat value 8 =
+      Mmu.assert_write_protected_store s address.toNat value 8 := rfl
   unfold Mmu.store_doubleword
-  simp only [dev, stored]
+  simp only [dev, stored, protectionSame]
   split_ifs <;> simp [swapBytes, swapResult]
   cases (List.range 8).foldl (fun current k => current.bind fun state =>
     Mmu.store_raw? state (address.toNat + k) (value.extractLsb' (8 * k) 8))
     (some s) <;> rfl
+
+private theorem swap_recordHalt (kind : JoltHaltKind) :
+    SwapInvariant (modify (recordHalt kind)) := by
+  intro s bytes
+  rfl
 
 private theorem swap_execInstr_nonhost (instr : Instr)
     (notLoad : ∀ dst width, instr ≠ .VirtualAdviceLoad dst width)
@@ -684,26 +683,10 @@ private theorem swap_execInstr_nonhost (instr : Instr)
   cases instr
   case VirtualAdviceLoad dst width => exact False.elim (notLoad dst width rfl)
   case VirtualHostIO => exact False.elim (notHost rfl)
-  all_goals simp only [execInstr]
-  all_goals preservation_auto [swap_read _, swap_write _ _, swap_pure _,
+  all_goals simp only [execInstr, execHalt]
+  all_goals preservation_auto [swap_read _, swap_write _ _, swap_pure _, swap_recordHalt _,
     swap_throw _, swap_lift _, swap_load_doubleword _, swap_store_doubleword _ _]
     using swap_bind
-
-private theorem swap_readHostBytes
-    (overflow increment : Bool) {width : Nat}
-    (pointer : BitVec width) (count : Nat) (bytes : Array (BitVec 8)) :
-    SwapInvariant (readHostBytes Mmu.load overflow increment pointer count bytes) := by
-  induction count generalizing pointer bytes with
-  | zero => exact swap_pure _
-  | succ count ih =>
-    dsimp only [readHostBytes]
-    refine swap_bind (swap_load _) (fun result => ?_)
-    cases result with
-    | Err e => exact swap_pure _
-    | Ok byte =>
-      split_ifs
-      · exact swap_bind (swap_throw _) (fun _ => ih _ _)
-      · exact swap_bind (swap_pure _) (fun _ => ih _ _)
 
 /-- A successful action appends the same suffix after any replacement tape.
 For example, a host write of `[1]` extends replacement `[44]` to `[44, 1]`. -/
@@ -768,14 +751,10 @@ private theorem swapAppend_getHostIO {α : Type} (next : SailJoltState → JoltM
 
 private theorem swap_execHostIO : SwapAppend execHostIO := by
   unfold execHostIO execHostIOWith
-  refine swapAppend_getHostIO _ (by intro s b; rfl) (fun config => ?_)
+  refine swapAppend_getHostIO _ (by intro s b; rfl) (fun state => ?_)
   dsimp only
-  split
-  · exact swapInvariant_to_append (swap_pure _)
-  · preservation_auto [swapInvariant_to_append (swap_read _),
-      swapInvariant_to_append (swap_readHostBytes _ _ _ _ _),
-      swapInvariant_to_append (swap_pure _), swapInvariant_to_append (swap_throw _),
-      swapAppend_append _] using swapAppend_bind
+  preservation_auto [swapInvariant_to_append (swap_pure _), swapAppend_append _]
+    using swapAppend_bind
 
 private theorem swap_execInstr_nonload (instruction : Instr)
     (notLoad : ∀ dst width, instruction ≠ .VirtualAdviceLoad dst width) :
@@ -794,19 +773,57 @@ private theorem replaceDst_device_eq (dst : Dst) (state : SailJoltState)
       simp only [replaceDst, NativeDispatch.afterDst]
       split <;> rfl
 
+private theorem ReplayStateAgreement.observe_eq {α : Type}
+    (observe : SailJoltState → α)
+    (tape : ∀ state bytes, observe { state with adviceTape :=
+      { state.adviceTape with bytes := bytes } } = observe state)
+    (destination : ∀ dst state value, observe (replaceDst dst state value) = observe state)
+    {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
+    {preState : Bool} {original replay : SailJoltState}
+    (same : ReplayStateAgreement bytecode rowIndex preState original replay) :
+    observe original = observe replay := by
+  by_cases pending : ∃ dst, NarrowAdvicePending bytecode rowIndex preState dst
+  · obtain ⟨dst, occurs⟩ := pending
+    obtain ⟨value, sameDst⟩ := same.1 dst occurs
+    exact (destination dst original value).symm.trans (sameDst.observe_eq observe tape)
+  · exact (same.2 pending).observe_eq observe tape
+
 private theorem ReplayStateAgreement.device_eq
     {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
     {preState : Bool} {original replay : SailJoltState}
     (same : ReplayStateAgreement bytecode rowIndex preState original replay) :
-    original.jolt_device = replay.jolt_device := by
-  by_cases pending : ∃ dst, NarrowAdvicePending bytecode rowIndex preState dst
-  · obtain ⟨dst, occurs⟩ := pending
-    obtain ⟨value, sameDst⟩ := same.1 dst occurs
-    calc
-      original.jolt_device = (replaceDst dst original value).jolt_device :=
-        (replaceDst_device_eq dst original value).symm
-      _ = replay.jolt_device := sameDst.device_eq
-  · exact (same.2 pending).device_eq
+    original.jolt_device = replay.jolt_device :=
+  same.observe_eq SailJoltState.jolt_device (fun _ _ => rfl) replaceDst_device_eq
+
+private theorem replaceDst_halted_eq (dst : Dst) (state : SailJoltState)
+    (value : BitVec 64) :
+    (replaceDst dst state value).halted = state.halted := by
+  cases dst with
+  | vreg vr => rfl
+  | xreg rd =>
+      simp only [replaceDst, NativeDispatch.afterDst]
+      split <;> rfl
+
+/-- Replay agreement keeps the recorded halt; for example, both runs end at a panic. -/
+private theorem ReplayStateAgreement.halted_eq
+    {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
+    {preState : Bool} {original replay : SailJoltState}
+    (same : ReplayStateAgreement bytecode rowIndex preState original replay) :
+    original.halted = replay.halted :=
+  same.observe_eq SailJoltState.halted (fun _ _ => rfl) replaceDst_halted_eq
+
+private theorem ReplayStateAgreement.mem_eq
+    {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
+    {preState : Bool} {original replay : SailJoltState}
+    (same : ReplayStateAgreement bytecode rowIndex preState original replay) :
+    original.sail.mem = replay.sail.mem := by
+  apply same.observe_eq (fun state => state.sail.mem) (fun _ _ => rfl)
+  intro dst state value
+  cases dst with
+  | vreg vr => rfl
+  | xreg rd =>
+    simp only [replaceDst, NativeDispatch.afterDst]
+    split <;> rfl
 
 private theorem ReplayStateAgreement.pre_same_of_ne_muli
     {bytecode : Array JoltInstructionRow} {rowIndex : Nat}
@@ -852,14 +869,12 @@ structure RebuildAgreement
     original.bytecode[old.rowIndex].starts_source →
     SameExceptTapeBytes old.preState new.preState
 
-private theorem stableStall_iff_of_slot_nextPC
+private theorem halts_iff_of_slot
     {oldBytecode newBytecode : Array JoltInstructionRow}
     (old : TraceRow oldBytecode) (new : TraceRow newBytecode)
-    (slot : oldBytecode[old.rowIndex] = newBytecode[new.rowIndex])
-    (nextPC : old.postState.sail.regs.get? Register.nextPC =
-      new.postState.sail.regs.get? Register.nextPC) :
-    old.StableStall ↔ new.StableStall := by
-  simp only [TraceRow.StableStall, slot, nextPC]
+    (slot : oldBytecode[old.rowIndex] = newBytecode[new.rowIndex]) :
+    old.Halts ↔ new.Halts := by
+  simp only [TraceRow.Halts, slot]
 
 private theorem RebuildAgreement.slot_eq
     {joltInstance : JoltInstance SourceInstruction}
@@ -1021,7 +1036,7 @@ private theorem advicePairsOk_narrow (instructions : List Instr)
 
 /-- A narrow tape load continues its source expansion and is followed by the
 multiply discarding its high bytes. AdviceLB uses `VirtualMULI rd rd 2^56`.
-See `jolt/crates/jolt-program/src/expand/memory/advice_lb.rs:3-11` at 8bbb2357. -/
+See `jolt/crates/jolt-program/src/expand/memory/advice_lb.rs:3-11` at ff6fc6568. -/
 private theorem narrow_load_shape (image : Rv64ProgramImage SourceInstruction)
     (bytecode : Array JoltInstructionRow) (expanded : expand_program image = some bytecode)
     (k : Nat) (inRange : k < bytecode.size) (dst : Dst) (width : BitVec 64)
@@ -1701,7 +1716,8 @@ theorem rebuild_valid_run
       rows := replayRows.agrees
       sourceStartPre := replayRows.sourceStartPre }
 
-/-- Final device agreement transfers the public output and panic claim. -/
+/-- Agreement on final shared memory, device and halt transfers outputs and the panic claim.
+For example, replaying a panic trace retains both its output bytes and panic claim. -/
 theorem rebuild_matches_outputs
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -1727,6 +1743,10 @@ theorem rebuild_matches_outputs
   have newAt : replay.rows[index]? = some new := by simp [new, newBound]
   have deviceEq : old.postState.jolt_device = new.postState.jolt_device :=
     ((agreement.rows index old new oldAt newAt).2.2.2.2).device_eq
+  have memoryEq : old.postState.sail.mem = new.postState.sail.mem :=
+    ((agreement.rows index old new oldAt newAt).2.2.2.2).mem_eq
+  have haltedEq : old.postState.halted = new.postState.halted :=
+    ((agreement.rows index old new oldAt newAt).2.2.2.2).halted_eq
   have oldBack : original.rows.back? = some old := by
     rw [Array.back?_eq_getElem?]
     simpa [index, agreement.length] using oldAt
@@ -1735,7 +1755,7 @@ theorem rebuild_matches_outputs
     simpa [index] using newAt
   unfold Trace.matches_outputs at outputs ⊢
   simp only [oldBack, newBack, Option.map_some, Option.getD_some] at outputs ⊢
-  simpa only [deviceEq] using outputs
+  simpa only [deviceEq, memoryEq, haltedEq] using outputs
 
 /-- The row slot and the base-register value agree, so RAM accesses use the
 same recorded address in the original run and the replay for all memory widths.
@@ -1800,7 +1820,7 @@ theorem RebuildAgreement.execution_dimensions_eq
       obtain ⟨sameIndex, _, _, _, _⟩ := agreement.rows index old new oldAt newAt
       have sameSlot := agreement.slot_eq old new sameIndex
       simp only [oldBack, newBack, Option.any_some]
-      exact congrArg (fun slot : JoltInstructionRow => slot.instruction.is_jump) sameSlot
+      exact congrArg (fun slot : JoltInstructionRow => slot.instruction.haltKind?.isSome) sameSlot
     · have zero : replay.rows.size = 0 := by omega
       have oldZero : original.rows.size = 0 := by rw [← agreement.length]; exact zero
       simp [Array.back?_eq_getElem?, zero, oldZero]
@@ -1904,7 +1924,7 @@ theorem rebuild_spoil_asserts
 
 /-- The honest advice calculator reads registers, not tape bytes: replacing
 `[0x2C, 0x01]` with `[0x2C]` leaves its result unchanged.
-See `jolt/tracer/src/instruction/mod.rs:207-233` at 5def437f. -/
+See `jolt/tracer/src/instruction/mod.rs:220-246` at ff6fc6568. -/
 private theorem honestTracerAdvice_ignores_tape
     (source : SourceInstruction) (old replay : SailJoltState)
     (same : SameExceptTapeBytes old replay) :
@@ -2105,8 +2125,9 @@ theorem rebuild_honest_advice
     observed.symm.trans (originalAdvice.trans
       (agreement.honestAdviceAt_eq n.val old new oldAt newAt))
 
-/-- PR #2109's stable-stall predicate depends on bytecode, row index and nextPC,
-all preserved by replay. Pinned to a16z/jolt PR #2109 merge commit 0249591a. -/
+/-- The replay ends at an explicit halt because the original does: `Halts` reads
+the bytecode row's instruction, and replay preserves the bytecode and row index.
+For example, a replay of a run that ends at a `JoltSuccess` row ends at that row. -/
 theorem rebuild_stops
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -2114,7 +2135,7 @@ theorem rebuild_stops
     (replay : ValidRun joltInstance
       (rebuiltInputs privateInputs original.toUntrustedAnswerRun))
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay) :
-    ∀ last ∈ replay.rows.back?, last.StableStall := by
+    ∀ last ∈ replay.rows.back?, last.Halts := by
   intro last lastMem
   have nonempty : 0 < replay.rows.size := by
     simpa [agreement.length] using original.nonempty
@@ -2133,9 +2154,10 @@ theorem rebuild_stops
   have oldStable := original.stops old oldLast
   obtain ⟨sameIndex, _, sameNextPC, _, _⟩ := agreement.rows index old last oldAt newAt
   have sameSlot := agreement.slot_eq old last sameIndex
-  exact (stableStall_iff_of_slot_nextPC old last sameSlot sameNextPC).mp oldStable
+  exact (halts_iff_of_slot old last sameSlot).mp oldStable
 
-/-- The replay has no stable stall before its final row, as in the original. -/
+/-- The replay has no halt before its final row, as in the original.
+For example, a replay cannot continue past an EBREAK panic row. -/
 theorem rebuild_runs_until_stop
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -2145,7 +2167,7 @@ theorem rebuild_runs_until_stop
     (agreement : RebuildAgreement original.toUntrustedAnswerRun replay) :
     ∀ (i : Nat) (current next : TraceRow replay.bytecode),
       replay.rows[i]? = some current → replay.rows[i + 1]? = some next →
-      ¬ current.StableStall := by
+      ¬ current.Halts := by
   intro i current next currentAt nextAt stable
   have length := agreement.length
   have oldCurrentBound : i < original.rows.size := by
@@ -2165,8 +2187,7 @@ theorem rebuild_runs_until_stop
   obtain ⟨sameIndex, _, sameNextPC, _, _⟩ :=
     agreement.rows i oldCurrent current oldCurrentAt currentAt
   have sameSlot := agreement.slot_eq oldCurrent current sameIndex
-  exact oldNoStop ((stableStall_iff_of_slot_nextPC oldCurrent current
-    sameSlot sameNextPC).mpr stable)
+  exact oldNoStop ((halts_iff_of_slot oldCurrent current sameSlot).mpr stable)
 
 /-- The replay has at least one row because it has the original row count. -/
 theorem rebuild_nonempty

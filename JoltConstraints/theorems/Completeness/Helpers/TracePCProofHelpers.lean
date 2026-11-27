@@ -1,12 +1,10 @@
-import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Read
+import JoltConstraints.theorems.ProgramLayout
+import JoltConstraints.theorems.trace_interface
 
 open LeanRV64D
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 set_option autoImplicit false
 set_option linter.unusedSimpArgs false
-set_option maxHeartbeats 400000
 
 namespace PCFrame
 
@@ -151,16 +149,22 @@ theorem get_rule : Preserves (get : JoltMonad SailJoltState) := by
   cases h
   rfl
 
+private theorem recordHalt_rule (kind : JoltHaltKind) :
+    Preserves (modify (JoltISA.recordHalt kind)) := by
+  intro s t value runs
+  cases runs
+  rfl
+
 /-- A doubleword load preserves the PC because it preserves the entire state;
 for example, the word read by LoadB cannot change the instruction address.
-Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::load_doubleword`) at `ff6fc6568`. -/
 theorem load_doubleword_rule (address : BitVec 64) : Preserves (Mmu.load_doubleword address) := by
   intro s t value runs
   rw [Mmu.load_doubleword_state runs]
 
 /-- A doubleword store preserves registers, including PC; for example, a merged
 byte store updates memory while retaining the current instruction address.
-Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/emulator/mmu.rs` (`Mmu::store_doubleword`) at `ff6fc6568`. -/
 theorem store_doubleword_rule (address value : BitVec 64) :
     Preserves (Mmu.store_doubleword address value) := by
   intro s t result runs
@@ -168,7 +172,7 @@ theorem store_doubleword_rule (address value : BitVec 64) :
 
 /-- Compose PC frame rules through instruction actions; for example, a floor
 load composes a source read, MMU load, and destination write.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 macro "jolt_pc_auto" : tactic => `(tactic|
   repeat' first
   | exact read_rule _
@@ -176,6 +180,7 @@ macro "jolt_pc_auto" : tactic => `(tactic|
   | exact pure_rule _
   | exact throw_rule _
   | exact get_rule
+  | exact recordHalt_rule _
   | exact load_doubleword_rule _
   | exact store_doubleword_rule _ _
   | exact lift_rule (PCFrame.read_rule _)
@@ -188,7 +193,7 @@ macro "jolt_pc_auto" : tactic => `(tactic|
 /-- Every non-native-memory, non-host row preserves PC, including floor
 memory rows; for example, VirtualStoreW preserves PC through its MMU write.
 The native LD/SD and host cases are handled by their callers' separate branches.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `store`) at `ff6fc6568`. -/
 theorem ordinary_instruction (instr : Instr)
     (hload : ∀ fault dst base imm, instr ≠ .LD fault dst base imm)
     (hstore : ∀ base value imm, instr ≠ .SD base value imm)
@@ -208,7 +213,7 @@ theorem ordinary_instruction (instr : Instr)
   all_goals try exact False.elim (hload _ _ _ _ rfl)
   all_goals try exact False.elim (hstore _ _ _ rfl)
   all_goals try exact False.elim (hhost rfl)
-  all_goals simp only [execInstr]
+  all_goals simp only [execInstr, execHalt]
   all_goals try jolt_pc_auto
 
 end JoltPCFrame

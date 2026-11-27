@@ -14,7 +14,7 @@ open scoped BigOperators
 Uses the address-chunk selection and operand-encoding correspondence.
 For example, LD interleaves zero on the left with its captured destination.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/riscv/ld.rs`
-(`LookupQuery`) at `c6703570`. -/
+(`LookupQuery`) at `ff6fc6568`. -/
 theorem honestWitness_leftLookupOperandEqInstructionRaf
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

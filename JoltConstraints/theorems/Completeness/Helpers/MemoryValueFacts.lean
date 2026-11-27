@@ -1,4 +1,7 @@
-import JoltConstraints.translation.honest_witness
+import JoltConstraints.translation.honest_witness_helpers.ram_read_value
+import JoltConstraints.translation.metadata
+import JoltConstraints.translation.witness_helpers.ram_write_value
+import JoltConstraints.translation.witness_helpers.rd_write_value
 
 open LeanRV64D
 
@@ -8,7 +11,7 @@ namespace JoltConstraints
 
 /-- A load's RAM read is its captured destination, including floor loads;
 for example, LoadB captures the containing doubleword rather than one byte.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 theorem ramReadValue_of_load {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {inputs : JoltPrivateInputs}
     (trace : HonestTrace joltInstance inputs) (t : Fin params.traceLength)
@@ -30,7 +33,7 @@ theorem ramReadValue_of_load {F : Type} [Field F] (params : WitnessParams)
 
 /-- A load's RAM write also preserves its captured doubleword; for example,
 LoadW changes a register but leaves RAM unchanged.
-Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `c6703570`. -/
+Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`) at `ff6fc6568`. -/
 theorem ramWriteValue_of_load {F : Type} [Field F] (params : WitnessParams)
     (trace : Trace) (t : Fin params.traceLength) (ht : t.val < trace.rows.size)
     (load : JoltMetadata.opcodeFlag trace.bytecode[(trace.rows[t.val]'ht).rowIndex].instruction

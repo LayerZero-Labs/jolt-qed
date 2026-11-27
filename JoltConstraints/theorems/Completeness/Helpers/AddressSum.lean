@@ -13,7 +13,7 @@ namespace JoltConstraints
 field value; for example, encoding 8 in either 64 or 128 bits still gives 8.
 Jolt's prover casts these unsigned lookup words into the field in
 `crates/jolt-witness/src/witnesses/operands.rs` (`RightLookupOperand::to_field`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem encodedInt_cast {F : Type} [Field F] (width : Nat) (value : Int)
     (nonneg : 0 ≤ value) (below : value < 2 ^ width) :
     ((BitVec.ofInt width value).toNat : F) = (value : F) := by

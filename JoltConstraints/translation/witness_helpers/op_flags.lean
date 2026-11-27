@@ -1,5 +1,3 @@
-import Mathlib.Algebra.Field.Defs
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.metadata
 
@@ -7,7 +5,7 @@ open LeanRV64D
 
 set_option autoImplicit false
 
--- Rust paths are relative to /Users/ari.biswas/Work-with-A16z/jolt.
+-- Rust paths are relative to the Jolt repository root at ff6fc6568.
 
 namespace TraceWitness
 
@@ -15,7 +13,7 @@ variable {F : Type} (p : WitnessParams)
 
 -- Rust: crates/jolt-witness/src/witnesses/flags.rs::OpFlag::{extract_indexed, to_field}.
 -- Rust: crates/jolt-witness/src/backend/trace/cycle.rs::walk_cycles.
--- Rust: [no-op circuit flags](https://github.com/abiswas3/jolt/tree/main/crates/jolt-riscv/src/instructions/mod.rs#L536-L543).
+-- Rust: [no-op circuit flags](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-riscv/src/instructions/mod.rs#L555-L562).
 -- Circuit-flag bits over the padded witness. Padding sets only
 -- DoNotUpdateUnexpandedPC to one, keeping its zero unexpanded PC unchanged.
 noncomputable def OpFlags [Field F] (trace : Trace) : CircuitFlags → Fin p.traceLength → F :=

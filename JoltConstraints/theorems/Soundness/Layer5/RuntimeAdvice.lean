@@ -1,5 +1,4 @@
 import JoltConstraints.translation.honest_trace
-import JoltConstraints.translation.expansions
 
 open LeanRV64D
 

@@ -8,7 +8,7 @@ namespace JoltRegisterEncoding
 
 /-- Decode a Rust register address using the existing ISA register map.
 Rust has one address space: x0..x31 followed by virtual registers 32..127.
-Rust: https://github.com/abiswas3/jolt/tree/main/common/src/constants.rs -/
+Rust: https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/common/src/constants.rs -/
 def source (address : JoltISA.VReg) : JoltISA.Src :=
   match JoltISA.joltRegisterSlot address with
   | .xreg index => .xreg index
@@ -43,10 +43,11 @@ including captured operands that execution ignores.
 For example, a floor load checks its destination and base, while a floor
 store checks its base and stored-value source.
 Jolt's tracer: `tracer/src/instruction/format/format_{load,s,shift_data}.rs`
-(`FormatLoad`, `FormatS`, `FormatShiftData`) at `c6703570`. -/
+(`FormatLoad`, `FormatS`, `FormatShiftData`) at `ff6fc6568`. -/
 def instructionIsCanonical (instruction : JoltISA.Instr) : Bool :=
   match instruction with
   -- One source and one destination.
+  | .JoltSuccess dst src _ | .JoltPanic dst src _
   | .ADDI dst src _ | .ADDIW dst src _ | .ANDI dst src _ | .ORI dst src _
   | .XORI dst src _ | .SLTI dst src _ | .SLTIU dst src _ | .JALR dst src _
   | .VirtualMULI dst src _ | .VirtualMULIW dst src _

@@ -1,4 +1,3 @@
-import JoltConstraints.theorems.Soundness.Layer4.RangeCheckEntry
 import JoltConstraints.theorems.Soundness.Layer4.ShiftEntry
 
 open LeanRV64D

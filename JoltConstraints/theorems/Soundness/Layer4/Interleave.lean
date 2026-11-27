@@ -1,12 +1,13 @@
 import JoltConstraints.theorems.interleave_facts
 import JoltConstraints.translation.lookup_table
+import JoltConstraints.translation.Constraints.LookupOperandData
 
 open LeanRV64D
 
 /-! Pure identities for the interleaved lookup address, shared with completeness.
 Odd positions hold the left operand and even positions the right, counting from
 bit zero at the least significant end. The bit-unpacking implementation mirrors
-Jolt's `uninterleave_bits` at revision 8bbb2357890928d8f83b00ca542879077c4d3d28. -/
+Jolt's `uninterleave_bits` at revision ff6fc6568. -/
 
 set_option autoImplicit false
 

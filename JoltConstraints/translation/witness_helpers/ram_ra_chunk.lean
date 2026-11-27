@@ -1,7 +1,5 @@
 import JoltConstraints.translation.witness_helpers.address_chunk
 import JoltConstraints.translation.witness_helpers.ram_address
-import JoltConstraints.translation.witness
-import JoltConstraints.translation.trace
 
 open LeanRV64D
 
@@ -9,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [remap_word_address](/Users/ari.biswas/Work-with-A16z/jolt/common/src/jolt_device.rs:496).
+-- Rust: `common/src/jolt_device.rs` (`remap_word_address`).
 -- RAM and device I/O share one word-address domain, starting at the lower
 -- advice-region address. Address 0 and addresses below that start have no hot
 -- entry, matching RemappedRamAddress's treatment of Rust remapping errors.
@@ -29,7 +27,7 @@ noncomputable def remappedRamAddress (trace : Trace) (t : Nat) : Option Nat :=
       (remapRamAddress trace.initialState.jolt_device.memory_layout)
   else none
 
--- Rust: [RamRaChunk](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/one_hot.rs:134).
+-- Rust: `crates/jolt-witness/src/witnesses/one_hot.rs` (`RamRaChunk`).
 -- Each actual remapped access selects one entry per chunk. All other cycles
 -- are entirely zero, unlike instruction and bytecode padding.
 noncomputable def RamRaChunk {F : Type} [Field F] (p : WitnessParams)
