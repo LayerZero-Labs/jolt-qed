@@ -1,30 +1,29 @@
 ---
 title: Jolt model in Lean, open issues
-updated: 2026-11-25
-rust: ff6fc656813d950565c9f6e1258b78bdaf0e60e8
-lean_head: db02bb9
+updated: 2026-11-27
+rust: 504dd78a2e99b1e2e641ab523e9258a45f086350
+lean_head: 85652fdb
 ---
 
 # Open issues
 
-The `ff6fc6568` re-pin is complete at `3ff14b2` on `split/c-constraints`.
-At that commit `lake build JoltConstraints` succeeds, and `JoltInstance.soundness` depends only on `propext`, `Classical.choice` and `Quot.sound`.
+Quang Dao's re-pin of the constraints to Jolt `ff6fc6568` (PR #73) is in this branch at `85652fdb`, without its whole-run layer, adapted to this branch's bytecode model and checked against Jolt `504dd78a2`.
+`lake build` succeeds, and `JoltInstance.soundness` and `JoltInstance.completeness` depend only on `propext`, `Classical.choice` and `Quot.sound`.
 The soundness theorem takes no temporary program restriction: the three flag-word restrictions, `tracerAddressChecks` and `hostCallsSucceed` are all removed, and so is the `TemporaryRestrictions` structure.
-`hostCallsSucceed` became unnecessary because the merged bytecode HostIO model is total, as Jolt's tracer is at this pin: an invalid event or a rejected guest read is ignored, and every call retires (`JoltISA.execHostIO_succeeds`).
+`hostCallsSucceed` became unnecessary because the bytecode HostIO model is total, as Jolt's tracer is at this pin: an invalid event or a rejected guest read is ignored, and every call retires (`InstructionFrame.execHostIO_result`).
 The selected RAM word's address and protected-value checks follow from the pinned constraints.
 Both requested RAM-history completeness theorems are proved with unchanged statements.
 The three #1949 obligations are proved since 2026-11-25: honest memory rows never wrap their effective address (`HonestTrace.access_noWrap`, `theorems/Completeness/Helpers/AddressWindow.lean`), and `JoltInstance.completeness` has no `sorry`.
-The whole-run relation and initialization use the shared byte map, and the shared-memory simulations replace the old device-memory and I/O modules.
-`docs/whole-run-theorem.md` and `docs/riscv-alignment.md` describe the current whole-run statements since 2026-11-25.
-See [the re-pin report](../../reports/2026-11-24-constraints-repin.md) for the changed statements.
-Neither `JoltBytecode/` nor `JoltConstraints/` has a `sorry`.
+Initialization uses the shared byte map; the whole-run layer is not yet in this branch.
+`JoltConstraints/` has no `sorry`; `JoltBytecode/` has one, the EBREAK case of `equivalenceStatement_holds`.
 
 This file lists what the theorems rest on that is not proved: Jolt issues, assumptions, owed proofs and gaps in the model.
 Two earlier milestones keep their revisions: `JoltInstance.soundness` was first proved at Lean HEAD `7096dca`, under temporary restrictions that the re-pin removed ([2026-10-23 status](../../methods/soundness.md#top-level-status-on-2026-10-23)), and again after the Step 4 migration on top of `e299498` ([2026-11-03 state](../../methods/soundness.md#current-state-2026-11-03)).
 The latest check of the soundness statement against Jolt's code is `reports/2026-10-29-soundness-statement-audit.md`.
 
-**Jolt pin:** `ff6fc656813d950565c9f6e1258b78bdaf0e60e8`, since 2026-11-24.
-The previous pin was `c97e93004fbf804409f0374fe8457c8f1562ce71`, the merge of a16z/jolt#2250.
+**Jolt pin:** `504dd78a2e99b1e2e641ab523e9258a45f086350`, since 2026-11-27.
+Between `ff6fc6568` and `504dd78a2` no modelled code changes, except the verifier's `entry_instruction`, whose new checks the model's entry guards already imply.
+The pin before `ff6fc6568` was `c97e93004fbf804409f0374fe8457c8f1562ce71`, the merge of a16z/jolt#2250.
 The earlier constraint migration targeted `c6703570`, then `c97e9300`.
 The current migration also models the shared-memory and halt-end changes at `ff6fc6568`.
 The previous pin was `5def437f`.
@@ -130,11 +129,10 @@ No `bv_decide` remains in `JoltBytecode` or `JoltConstraints`; all 21 uses were 
 
 ### Bytecode
 
-`JoltBytecode/` has no `sorry`.
-At Lean HEAD `7096dca` it had seven: ECALL, EBREAK, LR.W, SC.W, LR.D and SC.D in the dispatcher `equivalenceStatement_holds`, and MRET's exception-handler postlude in `InstructionEquivalence/Instructions/System/Mret.lean`.
-The MRET theorem is now proved.
-`joltRun_eq_execute` (`JoltBytecode/Step/Instructions.lean`) replaces the dispatcher, and the step theorems in `JoltBytecode/Step/` cover ECALL's trap entry and LR/SC against `try_step`.
-Explicit halts (EBREAK and `jolt.success`) are not executed: the whole-run theorem stops in front of the first one (`docs/riscv-alignment.md` section 4).
+`JoltBytecode/` has one `sorry`: the EBREAK case of the dispatcher `equivalenceStatement_holds` (`JoltBytecode/RiscvInstruction.lean`).
+At Lean HEAD `7096dca` it had seven: ECALL, EBREAK, LR.W, SC.W, LR.D and SC.D in the dispatcher, and MRET's exception-handler postlude.
+MRET, LR/SC and ECALL are now proved; ECALL is stated against Sail's `execute_ECALL` followed by the trap entry of `try_step` (`InstructionEquivalence/Instructions/System/Ecall.lean`).
+EBREAK has no Sail counterpart: Jolt halts where Sail traps, so its case needs a halt statement instead.
 
 Do not weaken a main statement to close a gap.
 
@@ -178,8 +176,8 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
   The 2026-10-29 report (finding 1) suggested that LD followed by MULHU could turn such a word into a false claim. The constraints block that attack at `ff6fc6568`: LD carries `RightOperandIsRdWriteValue` (`crates/jolt-riscv/src/instructions/i/ld.rs:1-8`). Constraint (11) therefore makes the loaded value the right lookup operand, and constraint (41) bounds that operand below `2^64` through the instruction read-RAF.
   Closing the gap still needs either a proof that no satisfying witness reads an out-of-range advice word, or a model of advice words as field elements, which changes a core definition and waits for Ari.
 - **HostIO END marker (resolved by the re-pin).** At `ff6fc6568` Jolt's tracer reads the label for both cycle-marker events and ignores a rejected read; the total host-call model (`JoltISA.execHostIOWith`) does the same, so finding 2 of the 2026-10-29 report no longer applies.
-- **Host allocation.** The model assumes every host allocation succeeds. In Jolt's tracer at `ff6fc6568`, `read_host_bytes` returns `HostReadError::Allocation` when `try_reserve` fails (`tracer/src/emulator/host_io.rs:72-75`), and `handle_advice_write` then logs the error and appends nothing (`tracer/src/emulator/cpu.rs:1185-1196`). The model appends the bytes to the advice tape. Host out-of-memory aborts, for example in memory-access bookkeeping or the tracing subscriber, are not modelled as guest outcomes ([host-call report](../../reports/2026-11-24-hostio-repin.md), "Explicit modelling choices and limits").
-- **ELF sections and `tohost`.** Lean's initial RAM (`initialRam`, `program.lean`) zero-fills the RAM region and writes preprocessing's `memory_init`, which `decode_elf` fills from every section at or above `RAM_START_ADDRESS` (`crates/jolt-program/src/image/elf.rs:84-133`). Jolt's tracer differs in two ways (`setup_program`, `tracer/src/emulator/mod.rs:270-340`). The model cannot state either difference, because `ElfSection` (`WholeRun/Elf.lean`) records no section type, file offset or symbol (2026-10-29 report, findings 3 and 4).
+- **Host allocation.** The model assumes every host allocation succeeds. In Jolt's tracer at `ff6fc6568`, `read_host_bytes` returns `HostReadError::Allocation` when `try_reserve` fails (`tracer/src/emulator/host_io.rs:72-75`), and `handle_advice_write` then logs the error and appends nothing (`tracer/src/emulator/cpu.rs:1185-1196`). The model appends the bytes to the advice tape. Host out-of-memory aborts, for example in memory-access bookkeeping or the tracing subscriber, are not modelled as guest outcomes (Quang Dao's host-call report in PR #73).
+- **ELF sections and `tohost`.** Lean's initial RAM (`initialRam`, `program.lean`) zero-fills the RAM region and writes preprocessing's `memory_init`, which `decode_elf` fills from every section at or above `RAM_START_ADDRESS` (`crates/jolt-program/src/image/elf.rs:84-133`). Jolt's tracer differs in two ways (`setup_program`, `tracer/src/emulator/mod.rs:270-340`). The model cannot state either difference, because it records no section type, file offset or symbol (2026-10-29 report, findings 3 and 4).
   - **Section types and offsets.** The tracer loads only sections of type `SHT_PROGBITS`, `SHT_INIT_ARRAY`, `SHT_FINI_ARRAY` and `SHT_PREINIT_ARRAY` (1, 14, 15 and 16), and only when the section starts at or above `RAM_START_ADDRESS` and has a nonzero file offset and size. Any other section that `decode_elf` loads stays zero in the tracer.
   - **`tohost` cap.** When the ELF has a nonzero `tohost` symbol (`tohost_address`, `mod.rs:51-56`), the tracer treats it as a riscv-tests ELF and caps its RAM backing at the smaller of the layout's RAM size and `TEST_MEMORY_CAPACITY` (`DEFAULT_HEAP_SIZE`, `mod.rs:1`). Accesses past that cap fault in the tracer, while the model keeps the full layout.
 - **Termination word (resolved by the re-pin).** The old verifier/model gap described in finding 5 of the 2026-10-29 report disappears with the removed memory word.
@@ -202,11 +200,11 @@ Step 5 restates `JoltInstance.completeness` at Jolt's own sizes and adapts every
 - **Expansions.** `SourceInstruction.expand` uses the bytecode project's programs.
   On 2026-10-29 every source kind's rows were compared with Jolt's expander at `5def437f` and match (2026-10-29 report).
   The header of `JoltBytecode/JoltISA/ExpansionsAutomated.lean` says it is generated by `jolt-lean-gen`, but the generator at the pin cannot produce it; the local generator patches are in `methods/model_update/`.
-  The LR/SC expansions are proved against Sail by `joltRun_eq_execute` (`JoltBytecode/Step/Instructions.lean`).
+  The LR/SC expansions are proved against Sail by `equivalenceStatement_holds` (`JoltBytecode/RiscvInstruction.lean`).
 - **LR/SC reservations.** Jolt's native `SCW::exec` and `SCD::exec` consult `cpu.reservation_covers`, but the tracer does not use them at `ff6fc6568`: `SCW::trace` and `SCD::trace` run the expanded sequence, and untraced execution (`Instruction::execute`, `tracer/src/instruction/mod.rs:714-741`) dispatches to `trace(cpu, None)`.
   The expansions and this model both compute success from virtual registers 32 and 33. No correspondence with the native reservation remains to be proved.
 - **Floating-point axioms.** `LeanRV64D/RiscvExtras.lean`, the Sail model's handwritten platform file, declares 67 floating-point primitives (for example `riscv_f16Add`) as Lean `axiom`s.
-  They lie outside the headline closures: F and D are off in Jolt's hart, their instruction modules are not generated (`docs/riscv-alignment.md` section 8), and `#print axioms` for the soundness and whole-run theorems lists none of them.
+  They lie outside the headline closures: F and D are off in Jolt's hart, their instruction modules are not generated (`docs/riscv-alignment.md` section 8), and `#print axioms` for the soundness and completeness theorems lists none of them.
 - **To do.** Fix comments that cite an unpinned fork or the crate `jolt-trace`; answer the `metadata.lean` TODOs the 2026-10-29 report settled.
   Drop the unused `ramFits`, `traceFits` and `bytecodeDomain` arguments.
 

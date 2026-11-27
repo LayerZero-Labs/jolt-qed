@@ -714,7 +714,7 @@ untrusted advice must fit the layout's capacity, its configured maximum rounded 
 multiple of 8, as in Jolt's `JoltDevice::try_with_io`. There is no check against the raw
 configured maximum. The tracer's `create_emulator` can also fail while loading the ELF, for
 example a text section past the memory cap of a nonzero `tohost` symbol; the model loads
-preprocessing's `memory_init` and has no such failure (`docs/whole-run-theorem.md`).
+preprocessing's `memory_init` and has no such failure (`model_review.md`, "ELF sections and `tohost`").
 For example, `max_input_size = 1` admits two input bytes (below).
 Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`
 (`JoltDevice::try_with_io`). -/

@@ -368,8 +368,8 @@ def program_image_len_words (memory_init : List (BitVec 64 × BitVec 8)) : Nat :
 -- See : jolt/tracer/src/emulator/mod.rs:320-336 at ff6fc6568
 --       jolt/tracer/src/emulator/memory.rs:76-78 (init_with_capacity)
 -- The tracer loads RAM from the ELF section headers, while preprocessing uses
--- decode_elf's memory_init, and the two do not always agree: see "Initial memory
--- is preprocessing's, not the tracer's" in docs/whole-run-theorem.md.
+-- decode_elf's memory_init, and the two do not always agree: see "ELF sections and
+-- `tohost`" in model_review.md.
 def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 8)) :
     Array (BitVec 8) :=
   let zeros := Array.replicate (8 * ((layout.get_total_memory_size.toNat + 7) / 8)) 0
@@ -501,7 +501,7 @@ configured maximum rounded up to a multiple of 8.
 This is not exactly the state the tracer's `create_emulator` builds. The tracer loads only
 some section types and caps its memory when the ELF has a nonzero `tohost` symbol, so a
 readable NOTE section, for example, initializes model RAM but not tracer RAM
-(`docs/whole-run-theorem.md`, "Initial memory is preprocessing's, not the tracer's").
+(`JoltConstraints/documentation/model_review.md`, "ELF sections and `tohost`").
 For example, `max_input_size = 1` gives an input capacity of 8 bytes, so two input bytes are
 accepted and nine are rejected (`initial_state_isSome_iff` in `theorems/layout_facts.lean`).
 Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`

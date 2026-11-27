@@ -20,9 +20,11 @@ flowchart LR
 
 ```
 
-As of 2026-11-02, `lake build JoltBytecode` passes with seven existing admitted cases.
-The recorded Jolt pin is `c97e9300`, the merge of a16z/jolt#2250.
-The constraints migration is merged, and `lake build JoltConstraints` passes.
+As of 2026-11-27, `lake build` passes.
+The recorded Jolt pin is `504dd78a2`.
+`JoltInstance.soundness` and `JoltInstance.completeness` depend only on Lean's standard axioms (`propext`, `Classical.choice`, `Quot.sound`).
+Soundness takes no premise about the instance; completeness assumes only that the maximum padded trace length is at most `2^63`.
+The whole-run layer, which relates the modelled Jolt run to Sail's, is not yet in this branch.
 See [current status](methods/soundness.md) and [proof obligations](JoltConstraints/documentation/model_review.md).
 
 A self contained manuscript describing the efforts of formally verifying bytecode expansion is available [here](./jolt-qed.pdf)
@@ -36,11 +38,9 @@ Loosely, it says given a RISC-V instruction, here is
 2. Here is the theorem statement we wish to prove.
 3. Here is the proof for the above theorem statement. 
 
-The current `RiscvInstruction` type has 91 constructors, covering native instructions and instructions that expand into sequences.
-Seven equivalence cases remain admitted: ECALL, EBREAK, LR.W, SC.W, LR.D, SC.D, and MRET.
-The first six have `sorry` in the dispatcher; MRET's `sorry` is in `JoltBytecode/InstructionEquivalence/Instructions/System/Mret.lean`.
-All seven were already present at Lean HEAD `7096dca`.
-The current source and proof-debt inventory determine the status of this working tree.
+The current `RiscvInstruction` type has 95 constructors, covering native instructions and instructions that expand into sequences.
+One equivalence case remains admitted: EBREAK, where Jolt halts and Sail traps.
+ECALL is stated against Sail's `execute_ECALL` followed by the trap entry of Sail's step function.
 
 ## Trusted Reference Model and Provenance
 
