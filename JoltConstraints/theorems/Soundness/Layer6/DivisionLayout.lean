@@ -133,7 +133,7 @@ private theorem source_advice_kind (source : SourceInstruction)
         ↓apply_ite expandedInternalAdvice, ↓apply_ite Instr.adviceValue?, ↓apply_ite Program.instrs,
         ↓apply_ite (fun rows : List Instr => rows.any (·.adviceValue?.isSome)),
         Encoded.LD, Encoded.SD, Encoded.ADDI, Encoded.ADDIW, Encoded.AUIPC,
-        Encoded.JAL, Encoded.JALR, Encoded.BEQ, Encoded.BNE, Encoded.BLT,
+        Encoded.JALR, Encoded.BEQ, Encoded.BNE, Encoded.BLT,
         Encoded.BGE, Encoded.BLTU, Encoded.BGEU, Encoded.SLTI, Encoded.SLTIU,
         Encoded.XORI, Encoded.ORI, Encoded.ANDI, Encoded.VirtualAssertEQ,
         Encoded.VirtualWindowMaskB, Encoded.VirtualWindowMaskH, Encoded.VirtualWindowMaskW,
@@ -152,8 +152,7 @@ private theorem source_advice_kind (source : SourceInstruction)
         amoanddProgramAuto, amoordProgramAuto, amoxordProgramAuto, amomindProgramAuto,
         amomaxdProgramAuto, amominudProgramAuto, amomaxudProgramAuto,
         advicelbProgramAuto, advicelhProgramAuto, advicelwProgramAuto, adviceldProgramAuto,
-        ecallProgramAuto, ebreakProgramAuto, mretProgramAuto,
-        pureWritebackRdZeroProgram] at advice
+        ecallProgramAuto, ebreakProgramAuto, mretProgramAuto] at advice
 
 private theorem source_internal_advice_of_rows
     (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)

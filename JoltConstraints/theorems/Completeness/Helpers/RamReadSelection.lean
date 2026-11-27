@@ -134,7 +134,7 @@ theorem JoltISA.Mmu.store_doubleword_below_ram_backing_end (address value : BitV
   · split at stored
     · rename_i valid
       simp only [JoltISA.Mmu.effective_address_ok, ite_eq_right (Nat.not_lt.mpr inRam),
-        ↓reduceIte, Bool.and_eq_true, decide_eq_true_eq] at valid
+        Bool.and_eq_true, decide_eq_true_eq] at valid
       exact valid.1
     · cases stored
 

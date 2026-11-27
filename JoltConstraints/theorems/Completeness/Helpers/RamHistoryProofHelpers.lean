@@ -136,7 +136,7 @@ private theorem ram_history_store_read_value
     simp only [MemoryWidth.store] at same <;>
     simp only [HonestWitness.RamReadValue, dite_eq_left inside, HonestTrace.row,
       same, MemoryWidth.accessed, getValue]
-  all_goals split <;> simp_all [getValue]
+  all_goals split <;> simp_all
   all_goals
     rename_i excluded
     exact False.elim (excluded _ _ _ _ rfl rfl rfl rfl)
@@ -277,7 +277,7 @@ theorem ram_history_word_step
     have memory := nonstore_memory _ patched row.preState row.postState _ (trace.row cycle.val inside).executes
     have increment : HonestWitness.RamInc (F := F) params trace cycle = 0 := by
       simp only [HonestWitness.RamInc, dite_eq_left inside,
-        JoltMetadata.circuitFlag, Fin.getElem_fin, storeFlag, Bool.false_eq_true, ↓reduceIte]
+        JoltMetadata.circuitFlag, storeFlag, Bool.false_eq_true, ↓reduceIte]
     rw [memory, increment, mul_zero, add_zero]
   | true =>
     simp only [row, Fin.getElem_fin] at storeFlag
@@ -289,10 +289,10 @@ theorem ram_history_word_step
     have increment : HonestWitness.RamInc (F := F) params trace cycle =
         TraceWitness.RamWriteValue params trace cycle - HonestWitness.RamReadValue params trace cycle := by
       simp only [HonestWitness.RamInc, dite_eq_left inside,
-        JoltMetadata.circuitFlag, Fin.getElem_fin, storeFlag, ↓reduceIte]
+        JoltMetadata.circuitFlag, storeFlag, ↓reduceIte]
     rw [memory, increment, write, read]
     by_cases same : index.val = chosen
-    · simp only [same, ite_true, TraceWitness.RamRa, selected, ↓reduceIte, one_mul]
+    · simp only [same, TraceWitness.RamRa, selected, ↓reduceIte, one_mul]
       ring
     · simp only [ite_eq_right same, TraceWitness.RamRa, selected,
         show ¬ some chosen = some index.val from fun equal => same (Option.some.inj equal).symm,

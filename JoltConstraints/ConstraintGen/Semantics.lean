@@ -37,7 +37,7 @@ column; `Branch` is the instruction flag of that name, one of Jolt's two
 product-factor columns.
 Jolt: `crates/jolt-claims/src/protocols/composed/r1cs/rv64.rs`
 (`RV64_VARIABLE_NAMES`). -/
-def Generated.R1CSVar.value (w : WitnessType F params) (extra : RepinInputs F params) (t : Fin params.traceLength) : R1CSVar → F
+def Generated.R1CSVar.value (w : WitnessType F params) (_extra : RepinInputs F params) (t : Fin params.traceLength) : R1CSVar → F
   | .One => 1
   | .LeftInstructionInput => w.LeftInstructionInput t
   | .RightInstructionInput => w.RightInstructionInput t

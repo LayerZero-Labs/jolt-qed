@@ -19,8 +19,8 @@ theorem honestWitness_ramValEqInitialPlusPrefixRamInc
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)
     (ramFits : params.RamFits trace)
-    (traceFits : params.ProverPaddedFor trace.rows.size)
-    (bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
+    (_traceFits : params.ProverPaddedFor trace.rows.size)
+    (_bytecodeDomain : params.BytecodeDomainFor trace.bytecode.size)
     (validAccesses : ramAccessesValid trace)
     : ramValEqInitialPlusPrefixRamInc (TraceWitness.initialRamWord trace)
       (HonestTrace.honestWitness (F := F) params trace) := by

@@ -40,9 +40,8 @@ private theorem instruction_halt_of_end_lane {F : Type} [Field F]
         mul_one] at lane
       linear_combination lane
     cases kind <;> cases claimedPanic <;>
-      simp only [Bool.false_eq_true, Bool.true_eq, ↓reduceIte, reduceCtorEq,
+      simp only [Bool.false_eq_true, ↓reduceIte, reduceCtorEq,
         zero_ne_one, one_ne_zero] at claim ⊢
-    all_goals exact kindIs
 
 /-- A selected real bytecode row followed by padding is the halt of the
 publicly claimed kind.
@@ -114,9 +113,9 @@ private theorem halt_lane_nonzero {F : Type} [Field F]
   | none => simp only [kindIs, Option.isSome_none, Bool.false_eq_true] at halted
   | some kind =>
     cases kind <;> cases claim <;>
-      simp only [kindIs, Option.isSome_some, beq_iff_eq, Option.some.injEq,
-        reduceCtorEq, Bool.false_eq_true, Bool.true_eq, ↓reduceIte,
-        sub_zero, mul_one, add_zero, sub_self]
+      simp only [Option.isSome_some, beq_iff_eq, Option.some.injEq,
+        reduceCtorEq, Bool.false_eq_true, ↓reduceIte,
+        sub_zero, mul_one, add_zero]
     all_goals norm_num only [Nat.reduceAdd, zero_add, one_mul, sub_self, sub_add_cancel]
     all_goals first
       | exact one_ne_zero

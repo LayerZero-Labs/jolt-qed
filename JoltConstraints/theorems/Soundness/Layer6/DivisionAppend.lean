@@ -829,7 +829,7 @@ private theorem division_replay_finalRamWord
       (TraceWitness.finalTraceState candidate.toTrace).jolt_device := by
     rw [finalPost]
     exact same.device
-  simp only [TraceWitness.finalRamWord, ← initialEq, sailEq, deviceEq]
+  simp only [TraceWitness.finalRamWord, ← initialEq, sailEq]
 
 private theorem division_segment_pre_frame
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}

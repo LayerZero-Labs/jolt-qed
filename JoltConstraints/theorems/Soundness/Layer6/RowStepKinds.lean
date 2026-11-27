@@ -94,6 +94,9 @@ variable {F : Type} [Field F] (joltField : JoltField F)
 
 include joltField equations state unfinished honestAdvice indexIs entry registers
 
+-- Keep the staged row-step interfaces while their callers use these section parameters.
+set_option linter.unusedSectionVars false
+
 /-- A terminal HostIO row appends its call, which always retires, and keeps
 live-register agreement; for example, an advice-write call changes the tape.
 See jolt/tracer/src/instruction/virtual_host_io.rs (`VirtualHostIO::exec`) at ff6fc6568. -/

@@ -117,7 +117,7 @@ theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
       context.io context.entry witness)
     (trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs)
-    (bytecodeEq : trace.bytecode = context.bytecode)
+    (_bytecodeEq : trace.bytecode = context.bytecode)
     (represented : Represents witness trace.toUntrustedAnswerRun.toTrace) :
     (trace.prover_config joltInstance).isSome := by
   have halt := relaxed_trace_ends_in_halt trace

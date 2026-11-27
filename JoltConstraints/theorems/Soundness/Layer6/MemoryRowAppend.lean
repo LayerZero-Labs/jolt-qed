@@ -74,7 +74,7 @@ theorem append_memory_row
       (∀ next : run.rows.size + 1 < params.traceLength,
         SharedRamAgreement context.io.memory_layout
           (fun index => witness.RamVal index ⟨run.rows.size + 1, next⟩) step.postState) ∧
-      (∀ last : run.rows.size + 1 = params.traceLength,
+      (∀ _last : run.rows.size + 1 = params.traceLength,
         SharedRamAgreement context.io.memory_layout witness.RamValFinal step.postState)) :
     PlainRowExtension witness context run first done bound := by
   have image (values : Fin params.ramSize → F)

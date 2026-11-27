@@ -491,13 +491,13 @@ theorem ramStore_guard_of_run (address value : BitVec 64) (pre post : SailJoltSt
     (result : Result Bool ExecutionResult) (inRam : RAM_START_ADDRESS ≤ address.toNat)
     (runs : Mmu.store_doubleword address value pre = .ok result post) :
     Assumptions.JoltRamStoreOk address pre value 8 := by
-  simp only [Mmu.store_doubleword, if_pos inRam] at runs
+  simp only [Mmu.store_doubleword, ite_eq_left inRam] at runs
   split at runs
   · cases runs
   · split at runs
     · rename_i valid
       simp only [Bool.and_eq_true, Mmu.effective_address_ok,
-        if_neg (Nat.not_lt.mpr inRam), decide_eq_true_eq] at valid
+        ite_eq_right (Nat.not_lt.mpr inRam), decide_eq_true_eq] at valid
       exact ⟨valid.1, valid.2⟩
     · cases runs
 
@@ -508,13 +508,13 @@ theorem ramLoad_guard_of_run (address : BitVec 64) (pre post : SailJoltState)
     (result : Result (BitVec 64) ExecutionResult) (inRam : RAM_START_ADDRESS ≤ address.toNat)
     (runs : Mmu.load_doubleword address pre = .ok result post) :
     Assumptions.JoltRamLoadOk address pre := by
-  simp only [Mmu.load_doubleword, if_pos inRam] at runs
+  simp only [Mmu.load_doubleword, ite_eq_left inRam] at runs
   split at runs
   · cases runs
   · split at runs
     · rename_i valid
       refine ⟨?_⟩
-      simpa only [Mmu.effective_address_ok, if_neg (Nat.not_lt.mpr inRam),
+      simpa only [Mmu.effective_address_ok, ite_eq_right (Nat.not_lt.mpr inRam),
         decide_eq_true_eq] using valid
     · cases runs
 

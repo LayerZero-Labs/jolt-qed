@@ -700,8 +700,7 @@ theorem initial_state_build {Source : Type} (joltInstance : JoltInstance Source)
   · by_cases untrustedFits :
         privateInputs.untrusted_advice.size ≤ layout.max_untrusted_advice_size.toNat
     · by_cases inputsFit : joltInstance.inputs.size ≤ layout.max_input_size.toNat
-      · simp only [trustedFits, untrustedFits, inputsFit, guard, if_true, Option.pure_def,
-          Option.bind_some] at deviceBuilt
+      · simp only [trustedFits, untrustedFits, inputsFit, guard, ite_true, Option.pure_def] at deviceBuilt
         cases deviceBuilt
         exact ⟨layout, layoutBuilt, trustedFits, untrustedFits, inputsFit, built⟩
       · simp [inputsFit, guard] at deviceBuilt
@@ -741,7 +740,7 @@ theorem initial_state_isSome_iff {Source : Type} (joltInstance : JoltInstance So
     unfold JoltInstance.memory_layout at layoutBuilt
     unfold JoltInstance.initial_state JoltDevice.try_with_io
     unfold JoltISA.codeRegionOf at regionBuilt
-    simp only [layoutBuilt, Option.bind_some, guard]
+    simp only [layoutBuilt, guard]
     unfold JoltISA.protect_code CodeGuard.new
     simp [trustedFits, untrustedFits, inputsFit, init_state_jolt_device, regionBuilt]
 

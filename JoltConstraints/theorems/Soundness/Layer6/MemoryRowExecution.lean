@@ -43,7 +43,7 @@ theorem load_row_execution
       (∀ bound : t.val + 1 < params.traceLength,
         SharedRamAgreement context.io.memory_layout
           (fun index => witness.RamVal index ⟨t.val + 1, bound⟩) post) ∧
-      (∀ last : t.val + 1 = params.traceLength,
+      (∀ _last : t.val + 1 = params.traceLength,
         SharedRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   obtain ⟨_, executes, nextRam, finalRam⟩ := load_shared_step joltField context equations selected rowIs
     loadRow inst.ramRegionFits registers baseLive ram layoutIs 0 advice
@@ -65,7 +65,7 @@ theorem store_row_execution
       (∀ bound : t.val + 1 < params.traceLength,
         SharedRamAgreement context.io.memory_layout
           (fun index => witness.RamVal index ⟨t.val + 1, bound⟩) post) ∧
-      (∀ last : t.val + 1 = params.traceLength,
+      (∀ _last : t.val + 1 = params.traceLength,
         SharedRamAgreement context.io.memory_layout witness.RamValFinal post) := by
   obtain ⟨_, post, executes, nextRam, finalRam⟩ := store_shared_step_agreement joltField context
     equations selected rowIs storeRow inst.ramRegionFits registers baseLive sourceLive ram layoutIs

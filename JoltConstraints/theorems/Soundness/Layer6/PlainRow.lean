@@ -1294,7 +1294,7 @@ private theorem append_plain_execution {F : Type} [Field F] (joltField : JoltFie
       RegisterAgreementOn (rowLive (ExpansionLive context.bytecode first done)
         run.bytecode[step.rowIndex].instruction) witness ⟨run.rows.size + 1, next⟩ step.postState)
     (memory : step.postState.sail.mem = step.preState.sail.mem)
-    (device : step.postState.jolt_device = step.preState.jolt_device) :
+    (_device : step.postState.jolt_device = step.preState.jolt_device) :
     PlainRowExtension witness context run first done bound := by
   obtain ⟨atRow, slot, selected, slotIs, rowIs⟩ := state.selectedRow unfinished bound step.rowIndex indexIs
   have prepared := rawEntry_prepared ready (state.registers bound)

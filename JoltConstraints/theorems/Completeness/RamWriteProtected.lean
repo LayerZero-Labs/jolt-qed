@@ -35,7 +35,7 @@ theorem honestWitness_ramWriteProtected {F : Type} [Field F] (params : WitnessPa
     unfold ramWriteProtectedMask at notOne ⊢
     dsimp only at notOne ⊢
     split_ifs with isProtected
-    · exact False.elim (notOne (by rw [if_pos isProtected]))
+    · exact False.elim (notOne (by rw [ite_eq_left isProtected]))
     · rfl
   rw [masked, one_mul]
   by_cases inside : t.val < trace.rows.size

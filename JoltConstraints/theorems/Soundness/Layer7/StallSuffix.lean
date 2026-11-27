@@ -696,7 +696,7 @@ theorem stall_jal_next_target
     (present : JoltConstraints.bytecodeRow context.bytecode slot.val = some row)
     (dst : JoltISA.Dst) (imm : BitVec 64)
     (jump : row.instruction = .JAL dst imm)
-    (nextReal : witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ ≠ 1) :
+    (_nextReal : witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ ≠ 1) :
     witness.NextUnexpandedPC cycle = ((row.address + imm).toNat : F) := by
   have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
   have jumpFlag : witness.OpFlags .Jump cycle = 1 := by
@@ -1320,7 +1320,7 @@ theorem selected_jalr_next_target
     (jump : row.instruction = .JALR dst base imm)
     (baseAt : witness.RegistersVal (TraceWitness.sourceRegisterAddress base) cycle =
       (value.toNat : F))
-    (nextReal : witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ ≠ 1) :
+    (_nextReal : witness.InstructionFlags .IsNoop ⟨cycle.val + 1, next⟩ ≠ 1) :
     witness.NextUnexpandedPC cycle = ((jolt_jalr_target64 value imm).toNat : F) := by
   have charAbove2pow127 := JoltConstraints.Soundness.two_pow_127_lt_char joltField
   have jumpFlag : witness.OpFlags .Jump cycle = 1 := by

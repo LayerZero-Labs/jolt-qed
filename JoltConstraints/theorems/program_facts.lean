@@ -1048,7 +1048,7 @@ theorem ExpandedRows.source_extents {address : BitVec 64} {compressed : Bool}
       have isZero := congrArg BitVec.toNat (beq_iff_eq.mp zero)
       change (rows[k].virtual_sequence_remaining.getD 0).toNat = 0 at isZero
       omega
-    · simpa only [terminal, beq_self_eq_true]
+    · simp only [terminal, beq_self_eq_true]
   rw [filtered]
   simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true, Prod.mk.injEq]
   exact ⟨expanded.same_address _ (List.getElem_mem lastBound),
@@ -1074,7 +1074,7 @@ theorem expand_program_source_extents (image : Rv64ProgramImage SourceInstructio
       simp only [List.length_map, lengths] at leftBound
       simp only [List.getElem_map, Array.getElem_toList]
       exact (steps k leftBound (by omega)).source_extents
-  simp only [bytecode_source_extents, List.toList_toArray, List.filter_flatten, List.map_flatten,
+  simp only [bytecode_source_extents, List.filter_flatten, List.map_flatten,
     List.map_map, Function.comp_def]
   rw [blocks]
   exact List.map_eq_flatMap.symm

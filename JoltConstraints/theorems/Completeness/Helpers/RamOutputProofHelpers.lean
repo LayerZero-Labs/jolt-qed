@@ -195,7 +195,7 @@ theorem finalRamWord_output (trace : Trace) (config : MemoryConfig) (layout : Me
     (built : MemoryLayout.new config = some layout)
     (initialLayout : trace.initialState.jolt_device.memory_layout = layout)
     (finalLayout : (TraceWitness.finalTraceState trace).jolt_device.memory_layout = layout)
-    (q : Nat) (inOutput : q < layout.max_output_size.toNat / 8) :
+    (q : Nat) (_inOutput : q < layout.max_output_size.toNat / 8) :
     TraceWitness.finalRamWord trace ((layout.output_start.toNat - ramLowestAddress layout) / 8 + q) =
       TraceWitness.ramImageWord (fun i =>
         ((TraceWitness.finalTraceState trace).jolt_device.outputsOf
@@ -229,7 +229,7 @@ theorem ramPublicIoWord_output (config : MemoryConfig) (layout : MemoryLayout)
     (built : MemoryLayout.new config = some layout)
     (io : JoltPublicIo) (sameLayout : io.memory_layout = layout)
     (inputsFit : io.inputs.size ≤ layout.max_input_size.toNat)
-    (q : Nat) (inOutput : q < layout.max_output_size.toNat / 8) :
+    (q : Nat) (_inOutput : q < layout.max_output_size.toNat / 8) :
     ramPublicIoWord io ((layout.output_start.toNat - ramLowestAddress layout) / 8 + q) =
       TraceWitness.ramImageWord (fun i => io.outputs[i]?.getD 0) (8 * q) := by
   obtain ⟨lowLeInput, _, _, _, _⟩ := new_io_ordered config layout built
@@ -320,7 +320,7 @@ theorem ramPublicIoWord_input (config : MemoryConfig) (layout : MemoryLayout)
     unfold TraceWitness.overlayRamBytes
     rw [remapOutput]
     dsimp only
-    rw [ite_eq_right (by change ¬ (outputFirst ≤ inputFirst + q ∧ _); dsimp only [inputFirst, outputFirst, ramLowestAddress] at *; omega)]
+    rw [ite_eq_right (by dsimp only [inputFirst, outputFirst, ramLowestAddress] at *; omega)]
   unfold ramPublicIoWord
   rw [sameLayout]
   dsimp only

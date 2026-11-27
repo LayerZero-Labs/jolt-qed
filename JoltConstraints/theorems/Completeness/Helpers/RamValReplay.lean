@@ -54,7 +54,7 @@ private theorem ramHistoryReplacementDelta
         (TraceWitness.RamWriteValue params trace cycle - HonestWitness.RamReadValue params trace cycle) := by
     by_cases inside : cycle.val < trace.rows.size
     · simp only [HonestWitness.RamInc, TraceWitness.OpFlags, dite_eq_left inside]
-      split <;> simp only [ite_true, ite_false, one_mul, zero_mul]
+      split <;> simp only [one_mul, zero_mul]
     · simp only [HonestWitness.RamInc, TraceWitness.OpFlags, dite_eq_right inside, zero_mul]
   have read := ramHistoryReadAgreement (F := F) params trace valid index cycle
   rw [increment]

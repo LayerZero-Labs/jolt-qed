@@ -154,7 +154,7 @@ theorem store_raw_device_readable (before after : SailJoltState) (address : Nat)
     by_contra failed
     have rejected := Bool.eq_false_iff.mpr failed
     simp [JoltISA.Mmu.store_raw?, rejected] at stored
-  simpa only [JoltISA.Mmu.effective_address_ok, if_pos below] using checked
+  simpa only [JoltISA.Mmu.effective_address_ok, ite_eq_left below] using checked
 
 theorem store_bytes_device_readable (address : Nat) (value : BitVec 64) :
     ∀ (offsets : List Nat) (before after : SailJoltState),
@@ -224,7 +224,7 @@ theorem store_doubleword_old_present (state after : SailJoltState) (address valu
       · rename_i valid
         have below : address.toNat < JoltISA.Mmu.ram_backing_end state.jolt_device := by
           simp only [Bool.and_eq_true, JoltISA.Mmu.effective_address_ok,
-            if_neg (by omega : ¬ address.toNat < JoltISA.RAM_START_ADDRESS),
+            ite_eq_right (by omega : ¬ address.toNat < JoltISA.RAM_START_ADDRESS),
             decide_eq_true_eq] at valid
           exact valid.1
         have endAligned := ram_backing_end_aligned state.jolt_device alignedBase
@@ -235,7 +235,7 @@ theorem store_doubleword_old_present (state after : SailJoltState) (address valu
     · rename_i notRam
       split at stored
       · rename_i finalState writes
-        rw [JoltISA.trace_doubleword?, if_pos (by omega)]
+        rw [JoltISA.trace_doubleword?, ite_eq_left (by omega)]
         apply read_doubleword_present
         intro k hk
         have readable := store_bytes_device_readable address.toNat value (List.range 8)

@@ -285,7 +285,7 @@ theorem assert_write_protected_store_byte_iff (s : SailJoltState) (address : Nat
   have hstart : max address (address / 8 * 8) = address := by omega
   have hstop : min (address + 1) (address / 8 * 8 + 8) = address + 1 := by omega
   unfold assert_write_protected_store protected_byte
-  simp only [hword, if_true, List.all_cons, List.all_nil, Bool.and_true, hstart, hstop,
+  simp only [hword, ite_true, List.all_cons, List.all_nil, Bool.and_true, hstart, hstop,
     show address + 1 - address = 1 by omega, Nat.sub_self, Nat.mul_zero]
   split
   · rename_i free
@@ -325,7 +325,7 @@ theorem assert_write_protected_store_aligned_iff (s : SailJoltState) (ea : Nat)
   have hfirst : ea / 8 * 8 = ea := by omega
   have hlast : (ea + 8 - 1) / 8 * 8 = ea := by omega
   unfold assert_write_protected_store protected_byte
-  simp only [hfirst, hlast, if_true, List.all_cons, List.all_nil, Bool.and_true, max_self,
+  simp only [hfirst, hlast, ite_true, List.all_cons, List.all_nil, Bool.and_true, max_self,
     min_self, show ea + 8 - ea = 8 by omega, Nat.sub_self, Nat.mul_zero,
     BitVec.ushiftRight_zero, BitVec.shiftLeft_zero]
   split
@@ -341,7 +341,7 @@ theorem assert_write_protected_store_aligned_iff (s : SailJoltState) (ea : Nat)
   · rename_i guarded
     have hmask : BitVec.allOnes 64 >>> (64 - 8 * 8) = BitVec.allOnes 64 := by
       simp
-    simp only [hmask, BitVec.and_allOnes, beq_iff_eq]
+    simp only [BitVec.and_allOnes, beq_iff_eq]
     constructor
     · intro h _; exact h
     · intro h
@@ -370,7 +370,6 @@ theorem store_raw_protected {s t : SailJoltState} {address : Nat} {value : BitVe
     | (cases stored; exact ProtectedMemory.refl s)
     | (cases stored; exact ⟨rfl, rfl, keeps⟩)
     | cases stored
-    | (simp only [Option.map_some] at stored; cases stored; exact ⟨rfl, rfl, keeps⟩)
 
 private theorem write_doubleword_keeps_protected (s : SailJoltState) (ea : Nat)
     (value : BitVec 64) (aligned : ea % 8 = 0)

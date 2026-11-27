@@ -208,7 +208,8 @@ theorem load_raw_value (state : SailJoltState) (address : Nat) (value : BitVec 8
     value = Mmu.ram_byte state.sail.mem address := by
   simp only [Mmu.load_raw?, JoltDevice.load?] at loaded
   repeat' split at loaded
-  all_goals cases loaded <;> rfl
+  all_goals cases loaded
+  all_goals rfl
 
 /-- Reading eight accepted bytes packs their shared-memory values.
 For example, eight reads starting at address eight form its little-endian word. -/
@@ -290,7 +291,7 @@ private theorem load_raw_of_checks (state : SailJoltState) (address : Nat)
   · simp only [Mmu.load_raw?, checked, Bool.not_true, Bool.false_eq_true,
       ↓reduceIte, inRam]
   · have readable : state.jolt_device.readable address = true := by
-      simpa only [Mmu.effective_address_ok, if_pos (Nat.lt_of_not_ge inRam)] using checked
+      simpa only [Mmu.effective_address_ok, ite_eq_left (Nat.lt_of_not_ge inRam)] using checked
     simp only [Mmu.load_raw?, checked, Bool.not_true, Bool.false_eq_true,
       ↓reduceIte, inRam, peripheral, JoltDevice.load?, readable]
     rfl
@@ -334,10 +335,10 @@ private theorem store_raw_of_checks (state : SailJoltState) (address : Nat) (val
     by_cases inRam : RAM_START_ADDRESS ≤ address
     · simp [Mmu.store_raw?, checked, preservesProtected, inRam] at stored
     · have readable : state.jolt_device.readable address = true := by
-        simpa only [Mmu.effective_address_ok, if_pos (Nat.lt_of_not_ge inRam)] using checked
+        simpa only [Mmu.effective_address_ok, ite_eq_left (Nat.lt_of_not_ge inRam)] using checked
       simp [Mmu.store_raw?, checked, preservesProtected, inRam, peripheral, JoltDevice.store?,
         readable] at stored
-      split_ifs at stored <;> simp_all
+      split_ifs at stored
 
 /-- Address, peripheral and protected-value checks suffice for a doubleword store
 in the shared map, including I/O; memory then reads as the written doubleword.

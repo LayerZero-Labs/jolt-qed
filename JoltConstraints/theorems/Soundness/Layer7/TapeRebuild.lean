@@ -53,7 +53,7 @@ private theorem execInstr_tapeGrowth (instr : Instr)
       vreg := fun _ _ _ => ⟨rfl, #[], by simp⟩
       store := store_doubleword_relation TapeGrowth tapeGrowth_refl tapeGrowth_trans
         (fun _ _ => ⟨rfl, #[], by simp⟩)
-      halt := fun _ _ => ⟨rfl, #[], by simp [recordHalt]⟩
+      halt := fun _ _ => ⟨rfl, #[], by simp⟩
       append := fun _ bytes => ⟨rfl, bytes, rfl⟩ }
   intro dst width isLoad
   exact False.elim (notLoad dst width isLoad)

@@ -22,7 +22,7 @@ theorem execHalt_end (kind : JoltHaltKind) (dst : Dst) (src : Src) (imm : BitVec
     execHalt_shape kind dst src imm pre post runs
   have sourceEq : source = address := Option.some.inj (sourceIs.symm.trans pc)
   rw [shape, sourceEq]
-  simp [recordHalt]
+  simp
 
 end JoltConstraints
 

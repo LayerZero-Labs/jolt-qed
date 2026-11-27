@@ -138,7 +138,7 @@ theorem protected_byte_mask_one
     JoltDevice.is_input, JoltDevice.is_trusted_advice, JoltDevice.is_untrusted_advice,
     Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq] at protects
   dsimp only [ramWriteProtectedMask]
-  rw [if_pos]
+  rw [ite_eq_left]
   rw [lowIs]
   unfold ramLowestAddress at protects
   simp only [STACK_CANARY_SIZE] at protects ⊢
