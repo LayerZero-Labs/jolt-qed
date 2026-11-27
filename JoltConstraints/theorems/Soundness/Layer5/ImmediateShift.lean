@@ -1,11 +1,12 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer4.Shift
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 
 /-! Immediate right shifts use a checked bitmask in their bytecode row. The
 expansion's `immShiftOk` fact supplies the mask shape required by Layer 4.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_srli.rs:20-31
 See : jolt/tracer/src/instruction/virtual_srai.rs:20-28
 See : jolt/tracer/src/instruction/virtual_srliw.rs:19-27
@@ -85,7 +86,7 @@ private theorem wordMask_ne_zero (mask : Nat)
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -103,14 +104,14 @@ private theorem immediateShift_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem immediateShift_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
     (sourceLive : live (TraceWitness.sourceRegisterAddress source)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue source pre) mask).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   obtain ⟨left, right⟩ := agrees.immediateInputs bound context equations selected rowIs
     source (BitVec.ofNat 64 mask)
     (immediateShift_canonical context rowIs operation instructionIs).2
@@ -179,9 +180,9 @@ theorem immediateShift_step {pre : SailJoltState}
   dsimp only
   have sourceRead := (agrees.read source
     (immediateShift_canonical context rowIs operation instructionIs).2 sourceLive).1
-  have encoded := immediateShift_write_value charAbove2pow128 context equations
+  have encoded := immediateShift_write_value charAbove2pow128Minus2pow64 context equations
     selected rowIs operation instructionIs agrees sourceLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

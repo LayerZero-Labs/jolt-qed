@@ -10,7 +10,7 @@ namespace TraceWitness
 
 variable {F : Type} (p : WitnessParams)
 
--- Rust: [RdWriteValue](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/registers.rs).
+-- Rust: [RdWriteValue](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/witnesses/registers.rs).
 -- Capture rd from the post-state; instructions without rd and padding give zero.
 noncomputable def RdWriteValue [Field F] (trace : Trace) : Fin p.traceLength → F :=
   fun t =>

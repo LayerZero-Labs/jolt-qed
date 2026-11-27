@@ -1,4 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
+import JoltConstraints.theorems.Soundness.Layer4.Table
 
 open LeanRV64D
 
@@ -7,7 +8,7 @@ RangeCheck entry, independently of honest division advice.
 See jolt/crates/jolt-lookup-tables/src/instructions/virt/advice.rs
 (`LookupQuery::to_lookup_output`) and
 jolt/tracer/src/instruction/virtual_advice.rs (`RISCVInstruction::execute`)
-at 5def437f. -/
+at ff6fc6568. -/
 
 set_option autoImplicit false
 
@@ -20,7 +21,7 @@ The table and write-flag premises describe the selected instruction, without
 requiring a particular destination or a prepared state.
 For example, both VirtualAdvice and VirtualAdviceLoad obtain their words here.
 See jolt/crates/jolt-lookup-tables/src/tables/range_check.rs
-(`RangeCheckTable::materialize_entry`) at 5def437f. -/
+(`RangeCheckTable::materialize_entry`) at ff6fc6568. -/
 theorem rangeCheck_write_value {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
@@ -55,11 +56,11 @@ For example, REM may write witness quotient 5 to temporary 40 even when the
 honest quotient is 0; this theorem establishes execution, not advice honesty.
 See jolt/crates/jolt-riscv/src/instructions/virt/advice.rs (VirtualAdvice flags)
 and jolt/crates/jolt-lookup-tables/src/tables/range_check.rs
-(`RangeCheckTable::materialize_entry`) at 5def437f. -/
+(`RangeCheckTable::materialize_entry`) at ff6fc6568. -/
 theorem advice_step {F : Type} [Field F] {params : WitnessParams}
     {witness : WitnessType F params} {live : Fin 128 → Prop}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -78,14 +79,14 @@ theorem advice_step {F : Type} [Field F] {params : WitnessParams}
         RegisterAgreementOn
           (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress destination)
           witness ⟨t.val + 1, next⟩ (afterWriteDst destination value pre) := by
-  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128)
+  obtain ⟨value, encoded⟩ := rangeCheck_write_value (two_pow_127_lt_char charAbove2pow128Minus2pow64)
     context equations selected rowIs (by rw [instructionIs]; rfl) (by rw [instructionIs]; rfl)
   obtain ⟨advice, patched⟩ : ∃ advice : row.instruction.RuntimeAdvice,
       row.instruction.withRuntimeAdvice advice = .VirtualAdvice destination value imm := by
     rw [instructionIs]
     exact ⟨value, rfl⟩
   refine ⟨value, advice, patched, ?_⟩
-  exact registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  exact registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by rw [instructionIs]; rfl) value encoded answer advice
     (by rw [patched]; rfl)
 

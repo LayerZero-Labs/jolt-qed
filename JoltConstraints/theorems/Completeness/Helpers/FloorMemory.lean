@@ -1,5 +1,4 @@
-import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
-import JoltBytecode.InstructionEquivalence.ProofSupport.Memory.Write
+import JoltConstraints.theorems.trace_interface
 
 open LeanRV64D
 
@@ -13,7 +12,7 @@ namespace JoltConstraints
 /-- Successful retirement after an alignment guard supplies both its zero-bit
 check and the continuation at the captured address; mask 1 checks halfwords.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 private theorem floor_access_guard (base : Src) (imm mask : BitVec 64)
     (fault : ExceptionType) (next : BitVec 64 → JoltMonad ExecutionResult)
     (pre post : SailJoltState)
@@ -33,7 +32,7 @@ private theorem floor_access_guard (base : Src) (imm mask : BitVec 64)
 /-- A floor load retires only after its natural-alignment check and the
 containing doubleword load; for example H checks bit zero and reads `ea & ~7`.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`load`, `addresses`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem floor_load_access (instruction : Instr) (faultClass : LoadFaultClass)
     (dst : Dst) (base : Src) (imm mask : BitVec 64) (fault : ExceptionType)
     (selected : (instruction = .VirtualLoadB faultClass dst base imm fault ∧ mask = 0) ∨
@@ -57,7 +56,7 @@ theorem floor_load_access (instruction : Instr) (faultClass : LoadFaultClass)
 /-- A floor store checks alignment then writes its captured second source to
 the containing doubleword; for example W checks bits zero and one.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`store`, `addresses`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem floor_store_access (instruction : Instr) (base value : Src)
     (imm mask : BitVec 64) (fault : ExceptionType)
     (selected : (instruction = .VirtualStoreB base value imm fault ∧ mask = 0) ∨
@@ -85,7 +84,7 @@ theorem floor_store_access (instruction : Instr) (base value : Src)
 /-- The recorded floor address is the containing doubleword when the natural
 alignment bits vanish; for example `ea = 10`, mask 1 and offset mask 6 give 8.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem floor_recorded_address (ea mask offset : BitVec 64)
     (partition : mask ||| offset = 7) (aligned : ea &&& mask = 0) :
     ea - (ea &&& offset) = ea &&& ~~~7 := by

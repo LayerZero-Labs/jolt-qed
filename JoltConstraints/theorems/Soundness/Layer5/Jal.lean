@@ -1,5 +1,7 @@
-import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
-import JoltConstraints.theorems.Soundness.Layer4.Arithmetic
+import JoltConstraints.theorems.Soundness.Layer5.RegisterWrite
+import JoltConstraints.theorems.Soundness.Layer5.Registers
+import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 
 open LeanRV64D
 
@@ -8,7 +10,7 @@ The jump constraint supplies the return address, including compressed rows;
 the execution-prefix induction must connect the selected row's address to
 Sail's PC and its already advanced `nextPC`. The no-wrap fact follows from
 the image's `next_pc_no_wrap` field at the source boundary.
-At public Rust pin 8bbb2357:
+At public Rust pin ff6fc6568:
 See : jolt/tracer/src/instruction/jal.rs:19-30
 See : jolt/crates/jolt-riscv/src/instructions/i/jal.rs -/
 
@@ -18,25 +20,26 @@ namespace JoltConstraints.Soundness
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
-private theorem jal_write_value
+/-- Every selected jump writes the advanced source PC, including explicit halts.
+For example, a panic halt writes its source address plus four on an uncompressed row. -/
+theorem jump_write_value
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
     (selected : bytecodeRa witness slot t = 1)
     {row : JoltInstructionRow} (rowIs : bytecodeRow context.bytecode slot.val = some row)
-    {dst : Dst} {imm : BitVec 64}
-    (instruction : row.instruction = .JAL dst imm)
+    (jump : JoltMetadata.opcodeFlag row.instruction .Jump = true)
     (noWrap : row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64) :
     witness.RdWriteValue t =
       ((row.address + BitVec.ofNat 64 (if row.is_compressed then 2 else 4)).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have flags := opFlag_of_selected_bytecode bound context equations
   have jumpFlag : witness.OpFlags .Jump t = 1 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag,
-      instruction, JoltMetadata.opcodeFlag] using! flags .Jump t slot selected
+      jump] using! flags .Jump t slot selected
   have compressedFlag : witness.OpFlags .IsCompressed t =
       if row.is_compressed then 1 else 0 := by
     simpa only [bytecodeCircuitFlag, rowIs, JoltMetadata.circuitFlag] using!
@@ -99,7 +102,7 @@ execution prefix. -/
 theorem jal_step
     {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-    (charAbove2pow128 : 2 ^ 128 < ringChar F)
+    (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
     (context : ConstraintContext joltInstance privateInputs params)
     (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
     {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -126,8 +129,8 @@ theorem jal_step
         (fun register => live register ∨ register = TraceWitness.destinationRegisterAddress dst)
         witness ⟨t.val + 1, next⟩ post := by
   dsimp only
-  have encoded := jal_write_value charAbove2pow128 context equations selected rowIs
-    instruction noWrap
+  have encoded := jump_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
+    (by rw [instruction]; rfl) noWrap
   have canonical := instruction_destination_canonical _ _
     (bytecodeRow_rowOk context rowIs).canonical (by rw [instruction]; rfl)
   have written := writeDst_afterWriteDst dst canonical
@@ -147,7 +150,7 @@ theorem jal_step
     rfl
   · intro next
     apply RegisterAgreementOn.setNextPC
-    exact agrees.write charAbove2pow128 context equations next slot selected rowIs
+    exact agrees.write charAbove2pow128Minus2pow64 context equations next slot selected rowIs
       (by rw [instruction]; rfl) _ encoded written
 
 end JoltConstraints.Soundness

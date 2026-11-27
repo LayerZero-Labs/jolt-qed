@@ -1,11 +1,15 @@
-import JoltConstraints.theorems.Soundness.Layer5.AssertLessThanEqual
 import JoltConstraints.theorems.Soundness.Layer4.Conditional
+import JoltConstraints.theorems.Soundness.Layer4.Comparison
+import JoltConstraints.theorems.Soundness.Layer4.Outputs
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
+import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
+import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 
 open LeanRV64D
 
 /-! Three two-register assertion rows. The selected lookup and Assert flag force
 each condition before execution; no successful-assertion premise is assumed.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/virtual_assert_eq.rs:17-34
 See : jolt/tracer/src/instruction/virtual_assert_valid_div0.rs:17-25
 See : jolt/tracer/src/instruction/virtual_assert_valid_unsigned_remainder.rs:17-27 -/
@@ -37,7 +41,7 @@ def BinaryAssertion.Passes (kind : BinaryAssertion) (lhs rhs : BitVec 64) : Prop
 
 variable {F : Type} [Field F] {params : WitnessParams} {live : Fin 128 → Prop} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -55,7 +59,7 @@ private theorem binaryAssertion_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 /-- The selected assertion's lookup and Assert constraint enforce its predicate
 on the two 64-bit words encoded by its instruction inputs.
@@ -63,12 +67,12 @@ For example, an equality assertion forces `leftWord = rightWord` even when
 its nonzero immediate lets Jolt's tracer continue after unequal operands.
 See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
 and jolt/crates/jolt-lookup-tables/src/instructions/virt/assert_eq.rs
-(`LookupQuery<XLEN>::to_lookup_output`) at 5def437f. -/
+(`LookupQuery<XLEN>::to_lookup_output`) at ff6fc6568. -/
 theorem binaryAssertion_passes_of_inputs (leftWord rightWord : BitVec 64)
     (left : witness.LeftInstructionInput t = (leftWord.toNat : F))
     (right : witness.RightInstructionInput t = (rightWord.toNat : F)) :
     kind.Passes leftWord rightWord := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have raf : witness.InstructionRafFlag t = 0 := by
     have flag := instructionRafFlag_of_selected_bytecode bound context equations t slot selected
     cases kind <;>
@@ -117,12 +121,12 @@ private theorem binaryAssertion_passes {pre : SailJoltState}
     kind.Passes (sourceValue lhs pre) (sourceValue rhs pre) := by
   have canonical := binaryAssertion_canonical context rowIs kind instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs
-    (two_pow_127_lt_char charAbove2pow128) context equations selected rowIs
+    (two_pow_127_lt_char charAbove2pow128Minus2pow64) context equations selected rowIs
     lhs rhs canonical.1 canonical.2
     (by cases kind <;> rw [instructionIs] <;> rfl)
     (by cases kind <;> rw [instructionIs] <;> rfl)
     (by cases kind <;> rw [instructionIs] <;> rfl) leftLive rightLive
-  exact binaryAssertion_passes_of_inputs charAbove2pow128 context equations
+  exact binaryAssertion_passes_of_inputs charAbove2pow128Minus2pow64 context equations
     selected rowIs kind instructionIs _ _ left right
 
 /-- All three assertion rows retire with no state change and preserve register
@@ -142,7 +146,7 @@ theorem binaryAssertion_step {pre : SailJoltState}
   have canonical := binaryAssertion_canonical context rowIs kind instructionIs
   have leftRead := (agrees.read lhs canonical.1 leftLive).1
   have rightRead := (agrees.read rhs canonical.2 rightLive).1
-  have passes := binaryAssertion_passes charAbove2pow128 context equations
+  have passes := binaryAssertion_passes charAbove2pow128Minus2pow64 context equations
     selected rowIs kind instructionIs agrees leftLive rightLive
   refine ⟨passes, ?_, ?_⟩
   · rw [withRuntimeAdvice_eq_of_noAdvice _ advice
@@ -169,7 +173,7 @@ theorem binaryAssertion_step {pre : SailJoltState}
       simp only [execWithTapeAnswer, execInstr, bind, EStateM.bind,
         leftRead, rightRead, ite_eq_left succeeds, pure, EStateM.pure]
   · intro next
-    exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128) context equations
+    exact agrees.noWrite (two_pow_127_lt_char charAbove2pow128Minus2pow64) context equations
       next slot selected rowIs (by cases kind <;> rw [instructionIs] <;> rfl)
 
 end JoltConstraints.Soundness

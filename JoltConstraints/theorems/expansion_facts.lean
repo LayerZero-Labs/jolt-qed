@@ -2,10 +2,10 @@
 Syntactic facts about the rows each expansion emits. `trace_interface.lean` turns
 them into `ExpansionRowsValid`.
 -/
-import JoltConstraints.translation.expansions
 import JoltConstraints.translation.register_encoding
 import JoltConstraints.translation.metadata
 import JoltConstraints.theorems.expansion_temp_liveness
+import JoltBytecode.InstructionEquivalence.Instructions.System.CsrPrograms
 
 open LeanRV64D
 
@@ -97,7 +97,7 @@ def shiftsOk : List JoltISA.Instr → Bool
 
 /-- If the final instruction is JAL or JALR, every instruction has its Store
 opcode flag unset. For example, ECALL ends in JALR and contains no store.
-See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:23-52 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:20-51 at ff6fc6568. -/
 def jumpEndNoStore (instructions : List JoltISA.Instr) : Bool :=
   match instructions.getLast? with
   | some (.JAL ..) | some (.JALR ..) =>
@@ -106,7 +106,7 @@ def jumpEndNoStore (instructions : List JoltISA.Instr) : Bool :=
 
 /-- Every JALR in a sequence has a virtual destination and a virtual base.
 For example, MRET reads virtual mepc and writes its link to a temporary.
-See jolt/crates/jolt-program/src/expand/control_flow/mret.rs:11-18 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/mret.rs:17-28 at ff6fc6568. -/
 def sequenceJalrsVirtual (instructions : List JoltISA.Instr) : Bool :=
   instructions.all fun instruction =>
     match instruction with
@@ -117,7 +117,7 @@ def sequenceJalrsVirtual (instructions : List JoltISA.Instr) : Bool :=
 /-- Each virtual-base, virtual-destination JALR reads a virtual register that
 no instruction in its sequence names as a virtual destination.
 For example, ECALL jumps through mtvec without writing mtvec.
-See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:15-50 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/control_flow/ecall.rs:25-50 at ff6fc6568. -/
 def virtualJalrBaseUnwritten (instructions : List JoltISA.Instr) : Bool :=
   instructions.all fun instruction =>
     match instruction with
@@ -134,9 +134,9 @@ These are exactly the destination and source forms of `sideEffectingRdZeroDst`
 and `adviceReadSource`: for example, AdviceLB x0 loads virtual register 40,
 then multiplies that register by `slliMultiplier (BitVec.ofNat 6 56)`.
 A narrow load at the end of the list fails this check.
-See jolt/crates/jolt-program/src/expand/memory/shared.rs:137-169 at 8bbb2357.
+See jolt/crates/jolt-program/src/expand/memory/shared.rs:191-223 at ff6fc6568.
 The width check follows jolt/tracer/src/instruction/virtual_advice_load.rs
-(`VirtualAdviceLoad::exec`) at 5def437f. -/
+(`VirtualAdviceLoad::exec`) at ff6fc6568. -/
 def advicePairsOk : List JoltISA.Instr → Bool
   | [] => true
   | instruction :: rest =>
@@ -162,7 +162,7 @@ def advicePairsOk : List JoltISA.Instr → Bool
 /-- Every advice load in a checked list has a supported byte count.
 For example, the first row of AdviceLH reads two bytes.
 See jolt/tracer/src/instruction/virtual_advice_load.rs
-(`VirtualAdviceLoad::exec`) at 5def437f. -/
+(`VirtualAdviceLoad::exec`) at ff6fc6568. -/
 theorem advicePairsOk_width (instructions : List JoltISA.Instr)
     (ok : advicePairsOk instructions = true) {destination : JoltISA.Dst} {width : BitVec 64}
     (member : JoltISA.Instr.VirtualAdviceLoad destination width ∈ instructions) :
@@ -179,7 +179,7 @@ theorem advicePairsOk_width (instructions : List JoltISA.Instr)
 /-- A native JALR has an architectural base; its destination may be
 architectural or virtual after the x0 rewrite.
 For example, native JALR x0, 0(x2) retains x2 as its base.
-See jolt/crates/jolt-program/src/expand/mod.rs:126-170 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/mod.rs:127-171 at ff6fc6568. -/
 def nativeJalrBaseOk : JoltISA.Instr → Bool
   | .JALR _ (.vreg _) _ => false
   | _ => true
@@ -322,13 +322,13 @@ theorem wordMaskOk_shamt (shamt : BitVec 5) :
   rw [ctz_wordShiftMask _ shamt.isLt]
   simp [shamt.isLt]
 
--- Unfold one program, split on its `if`s, and evaluate the checks; the split
--- hypotheses rule out x0 where a branch writes rd.
-macro "rows_ok " program:ident : tactic => `(tactic| (
-  unfold $program
-  repeat' split
-  all_goals
-    simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
+-- Evaluate the unchanged sequence checks after a program's branches are exposed.
+-- Try `rfl` first: most branches evaluate by definitional unfolding, which is
+-- several times cheaper than `simp` reducing matches on `JoltISA.Instr`.
+macro "finish_rows_ok" : tactic => `(tactic| (
+  all_goals first
+  | rfl
+  | simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
@@ -337,16 +337,35 @@ macro "rows_ok " program:ident : tactic => `(tactic| (
     first
     | rfl
     | cases_type regidx
-      simp only [BEq.beq, instBEqRegidx.beq, decide_true]
+      try simp only [BEq.beq, instBEqRegidx.beq, decide_true]
       rfl))
+
+-- Unfold one program and expose its branches before checking every row.
+macro "rows_ok " program:ident : tactic => `(tactic| (
+  unfold $program
+  repeat' split
+  finish_rows_ok))
+
+-- Jolt's CSR programs share read, write and operand-preparation combinators.
+-- Expose those combinators once, then use the same sequence checks as above.
+macro "system_rows_ok " program:ident : tactic => `(tactic| (
+  unfold $program
+  try dsimp only [JoltISA.csrReadInto, JoltISA.csrSwapWrite,
+    JoltISA.csrBitUpdateProgram, JoltISA.csrImmediateBitUpdateProgram]
+  repeat' (split <;> try simp_all only [Bool.not_eq_true, Bool.not_eq_false,
+    Bool.and_eq_true, Bool.not_eq_true', Bool.not_eq_false', Bool.not_false, Bool.not_true,
+    true_and, false_and, and_true, and_false, Bool.false_eq_true, Bool.true_eq_false,
+    ↓reduceIte])
+  finish_rows_ok))
 
 -- For a pure program only rd ≠ x0 matters: take that branch first.
 macro "pure_rows_ok " program:ident notX0:ident : tactic => `(tactic| (
   unfold $program
   simp only [$notX0:ident, Bool.false_eq_true, ↓reduceIte]
   repeat' split
-  all_goals
-    simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
+  all_goals first
+  | rfl
+  | simp only [JoltISA.Program.instrs, sequenceOk, rowsOk, sequenceRowOk, x0Ok, ordinary,
       JoltISA.Instr.destination?, isCanonicalNoOp, Bool.not_false, shiftsOk, shiftPairsOk,
       immShiftOk, isRegisterShift, masksFed, maskOk_srliBitmask, maskOk_sraiBitmask,
       wordMaskOk_shamt, jumpEndNoStore, sequenceJalrsVirtual, virtualJalrBaseUnwritten,
@@ -555,12 +574,12 @@ theorem amomaxud_ok (rd rs1 rs2 : regidx) :
     sequenceOk (JoltISA.amomaxudProgramAuto rd rs1 rs2).instrs = true := by
   rows_ok JoltISA.amomaxudProgramAuto
 
-theorem lrw_ok (rd rs1 rs2 : regidx) :
-    sequenceOk (JoltISA.lrwProgramAuto rd rs1 rs2).instrs = true := by
+theorem lrw_ok (rd rs1 : regidx) :
+    sequenceOk (JoltISA.lrwProgramAuto rd rs1).instrs = true := by
   rows_ok JoltISA.lrwProgramAuto
 
-theorem lrd_ok (rd rs1 rs2 : regidx) :
-    sequenceOk (JoltISA.lrdProgramAuto rd rs1 rs2).instrs = true := by
+theorem lrd_ok (rd rs1 : regidx) :
+    sequenceOk (JoltISA.lrdProgramAuto rd rs1).instrs = true := by
   rows_ok JoltISA.lrdProgramAuto
 
 theorem scw_ok (rd rs1 rs2 : regidx) :
@@ -588,26 +607,256 @@ theorem adviceld_ok (rd : regidx) :
   rows_ok JoltISA.adviceldProgramAuto
 
 theorem ecall_ok :
-    sequenceOk (JoltISA.ecallProgram).instrs = true := by
-  rows_ok JoltISA.ecallProgram
+    sequenceOk (JoltISA.ecallProgramAuto).instrs = true := by
+  rows_ok JoltISA.ecallProgramAuto
 
 theorem ebreak_ok :
-    sequenceOk (JoltISA.ebreakProgram).instrs = true := by
-  rows_ok JoltISA.ebreakProgram
+    sequenceOk (JoltISA.ebreakProgramAuto).instrs = true := by
+  rows_ok JoltISA.ebreakProgramAuto
 
 theorem mret_ok :
-    sequenceOk (JoltISA.mretProgram).instrs = true := by
-  rows_ok JoltISA.mretProgram
+    sequenceOk (JoltISA.mretProgramAuto).instrs = true := by
+  rows_ok JoltISA.mretProgramAuto
 
-theorem csrrw_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+/-- The mstatus case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrrw_mstatus (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgram .mstatus rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrrwProgram
+
+/-- The mtvec case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrrw_mtvec (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgram .mtvec rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrrwProgram
+
+/-- The mscratch case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrrw_mscratch (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgram .mscratch rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrrwProgram
+
+/-- The mepc case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrrw_mepc (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgram .mepc rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrrwProgram
+
+/-- The mcause case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrrw_mcause (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgram .mcause rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrrwProgram
+
+/-- The mtval case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrrw_mtval (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgram .mtval rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrrwProgram
+
+/-- Every CSRRW expansion passes the sequence checks.
+For example, mtvec's two temporaries are written before their first reads. -/
+theorem csrrw_program_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
     sequenceOk (JoltISA.csrrwProgram csr rs1 rd).instrs = true := by
-  -- The CSR's virtual register is fixed per CSR, so split on which CSR it is.
-  cases csr <;> rows_ok JoltISA.csrrwProgram
+  cases csr with
+  | mstatus => exact csrrw_mstatus rs1 rd
+  | mtvec => exact csrrw_mtvec rs1 rd
+  | mscratch => exact csrrw_mscratch rs1 rd
+  | mepc => exact csrrw_mepc rs1 rd
+  | mcause => exact csrrw_mcause rs1 rd
+  | mtval => exact csrrw_mtval rs1 rd
 
+/-- The mstatus case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_set_mstatus (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram false .mstatus rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mtvec case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_set_mtvec (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram false .mtvec rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mscratch case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_set_mscratch (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram false .mscratch rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mepc case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_set_mepc (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram false .mepc rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mcause case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_set_mcause (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram false .mcause rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mtval case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_set_mtval (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram false .mtval rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mstatus case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_clear_mstatus (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram true .mstatus rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mtvec case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_clear_mtvec (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram true .mtvec rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mscratch case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_clear_mscratch (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram true .mscratch rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mepc case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_clear_mepc (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram true .mepc rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mcause case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_clear_mcause (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram true .mcause rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- The mtval case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrBitUpdate_clear_mtval (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram true .mtval rs1 rd).instrs = true := by
+  system_rows_ok JoltISA.csrBitUpdateProgram
+
+/-- Jolt's shared register CSR bit-update routine passes the sequence checks.
+For example, both setting and clearing mstatus preserve canonical operands. -/
+theorem csrBitUpdate_ok (clear : Bool) (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrBitUpdateProgram clear csr rs1 rd).instrs = true := by
+  cases clear <;> cases csr
+  · exact csrBitUpdate_set_mstatus rs1 rd
+  · exact csrBitUpdate_set_mtvec rs1 rd
+  · exact csrBitUpdate_set_mscratch rs1 rd
+  · exact csrBitUpdate_set_mepc rs1 rd
+  · exact csrBitUpdate_set_mcause rs1 rd
+  · exact csrBitUpdate_set_mtval rs1 rd
+  · exact csrBitUpdate_clear_mstatus rs1 rd
+  · exact csrBitUpdate_clear_mtvec rs1 rd
+  · exact csrBitUpdate_clear_mscratch rs1 rd
+  · exact csrBitUpdate_clear_mepc rs1 rd
+  · exact csrBitUpdate_clear_mcause rs1 rd
+  · exact csrBitUpdate_clear_mtval rs1 rd
+
+/-- Every CSRRS expansion passes the sequence checks, including the x0 no-op. -/
+theorem csrrs_program_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrsProgram csr rs1 rd).instrs = true :=
+  csrBitUpdate_ok false csr rs1 rd
+
+/-- Every CSRRC expansion passes the sequence checks, including an aliased rd/rs1. -/
+theorem csrrc_program_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrcProgram csr rs1 rd).instrs = true :=
+  csrBitUpdate_ok true csr rs1 rd
+
+/-- Every generated CSRRW expansion passes the sequence checks. -/
+theorem csrrw_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrwProgramAuto csr rd rs1).instrs = true := by
+  rw [JoltISA.csrrwProgramAuto_eq]; exact csrrw_program_ok csr rs1 rd
+
+/-- Every generated CSRRS expansion passes the sequence checks. -/
 theorem csrrs_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
-    sequenceOk (JoltISA.csrrsProgram csr rs1 rd).instrs = true := by
-  -- The CSR's virtual register is fixed per CSR, so split on which CSR it is.
-  cases csr <;> rows_ok JoltISA.csrrsProgram
+    sequenceOk (JoltISA.csrrsProgramAuto csr rd rs1).instrs = true := by
+  rw [JoltISA.csrrsProgramAuto_eq]; exact csrrs_program_ok csr rs1 rd
+
+/-- Every generated CSRRC expansion passes the sequence checks. -/
+theorem csrrc_ok (csr : JoltISA.SystemCSR) (rs1 rd : regidx) :
+    sequenceOk (JoltISA.csrrcProgramAuto csr rd rs1).instrs = true := by
+  rw [JoltISA.csrrcProgramAuto_eq]; exact csrrc_program_ok csr rs1 rd
+
+/-- Every CSRRWI expansion passes the sequence checks.
+For example, a reserved mtvec MODE needs no instruction-local temporary. -/
+theorem csrrwi_ok (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrrwiProgram csr uimm rd).instrs = true := by
+  cases csr <;> system_rows_ok JoltISA.csrrwiProgram
+
+/-- The mstatus case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_set_mstatus (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram false .mstatus uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mtvec case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_set_mtvec (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram false .mtvec uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mscratch case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_set_mscratch (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram false .mscratch uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mepc case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_set_mepc (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram false .mepc uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mcause case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_set_mcause (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram false .mcause uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mtval case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_set_mtval (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram false .mtval uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mstatus case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_clear_mstatus (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram true .mstatus uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mtvec case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_clear_mtvec (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram true .mtvec uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mscratch case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_clear_mscratch (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram true .mscratch uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mepc case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_clear_mepc (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram true .mepc uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mcause case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_clear_mcause (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram true .mcause uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- The mtval case of the CSR sequence check, with operands left symbolic. -/
+private theorem csrImmediateBitUpdate_clear_mtval (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram true .mtval uimm rd).instrs = true := by
+  system_rows_ok JoltISA.csrImmediateBitUpdateProgram
+
+/-- Jolt's shared immediate CSR bit-update routine passes the sequence checks.
+For example, a zero effective mask with rd = x0 emits the canonical no-op. -/
+theorem csrImmediateBitUpdate_ok
+    (clear : Bool) (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrImmediateBitUpdateProgram clear csr uimm rd).instrs = true := by
+  cases clear <;> cases csr
+  · exact csrImmediateBitUpdate_set_mstatus uimm rd
+  · exact csrImmediateBitUpdate_set_mtvec uimm rd
+  · exact csrImmediateBitUpdate_set_mscratch uimm rd
+  · exact csrImmediateBitUpdate_set_mepc uimm rd
+  · exact csrImmediateBitUpdate_set_mcause uimm rd
+  · exact csrImmediateBitUpdate_set_mtval uimm rd
+  · exact csrImmediateBitUpdate_clear_mstatus uimm rd
+  · exact csrImmediateBitUpdate_clear_mtvec uimm rd
+  · exact csrImmediateBitUpdate_clear_mscratch uimm rd
+  · exact csrImmediateBitUpdate_clear_mepc uimm rd
+  · exact csrImmediateBitUpdate_clear_mcause uimm rd
+  · exact csrImmediateBitUpdate_clear_mtval uimm rd
+
+/-- Every CSRRSI expansion passes the sequence checks, including immediate zero. -/
+theorem csrrsi_ok (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrrsiProgram csr uimm rd).instrs = true :=
+  csrImmediateBitUpdate_ok false csr uimm rd
+
+/-- Every CSRRCI expansion passes the sequence checks, including immediate zero. -/
+theorem csrrci_ok (csr : JoltISA.SystemCSR) (uimm : BitVec 5) (rd : regidx) :
+    sequenceOk (JoltISA.csrrciProgram csr uimm rd).instrs = true :=
+  csrImmediateBitUpdate_ok true csr uimm rd
 
 -- A branch's offset comes from a 13-bit immediate (FormatB, sign-extended).
 def BranchOffsetOk : JoltISA.Instr → Prop
@@ -831,7 +1080,7 @@ theorem virtualAssertEQ_native_ok (rs1 rs2 : regidx) (imm : BitVec 13) :
 
 /-- An operandless host call satisfies the native-row expansion checks.
 For example, it reads no instruction temporary and has no destination to rewrite.
-See jolt/crates/jolt-program/src/expand/materialize.rs:79-101 at 5def437f. -/
+See jolt/crates/jolt-program/src/expand/materialize.rs:83-105 at ff6fc6568. -/
 theorem virtualHostIO_native_ok :
     ExpandedOk (.ofNative JoltISA.Instr.VirtualHostIO) := by
   native_ok
@@ -944,6 +1193,10 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .riscv (.AMOMAXU_D rd rs1 rs2 _ _), _, h => by cases h; exact ofProgram_ok _ (amomaxud_ok ..)
   | .riscv (.CSRRW rd csr rs1), _, h => by cases h; exact ofProgram_ok _ (csrrw_ok ..)
   | .riscv (.CSRRS rd csr rs1), _, h => by cases h; exact ofProgram_ok _ (csrrs_ok ..)
+  | .riscv (.CSRRC rd csr rs1), _, h => by cases h; exact ofProgram_ok _ (csrrc_ok ..)
+  | .riscv (.CSRRWI rd csr uimm), _, h => by cases h; exact ofProgram_ok _ (csrrwi_ok ..)
+  | .riscv (.CSRRSI rd csr uimm), _, h => by cases h; exact ofProgram_ok _ (csrrsi_ok ..)
+  | .riscv (.CSRRCI rd csr uimm), _, h => by cases h; exact ofProgram_ok _ (csrrci_ok ..)
   | .riscv (.MRET), _, h => by cases h; exact ofProgram_ok _ (mret_ok ..)
   | .jolt (.AdviceLB rd), _, h => by cases h; exact ofProgram_ok _ (advicelb_ok ..)
   | .jolt (.AdviceLH rd), _, h => by cases h; exact ofProgram_ok _ (advicelh_ok ..)
@@ -952,6 +1205,7 @@ theorem expand_ok : ∀ (source : SourceInstruction) (expanded : ExpandedSource)
   | .jolt (.VirtualRev8W rd rs1), _, h => by cases h; exact virtualRev8W_native_ok ..
   | .jolt (.VirtualAssertEQ rs1 rs2 imm), _, h => by cases h; exact virtualAssertEQ_native_ok ..
   | .jolt .VirtualHostIO, _, h => by cases h; exact virtualHostIO_native_ok
+  | .jolt .JoltSuccess, _, h => by cases h; native_ok
 
 /-- The first read of each instruction temporary in a source expansion follows
 a write within that same expansion. Reserved virtual registers are excluded. -/
@@ -967,7 +1221,7 @@ theorem expand_temps_ok (source : SourceInstruction) (expanded : ExpandedSource)
 
 /-- The Store circuit flag is the instruction's Store opcode flag: stamping
 metadata does not affect it. For example, a stamped SD retains Store = true.
-See jolt/crates/jolt-riscv/src/lib.rs:399-421 at 8bbb2357. -/
+See jolt/crates/jolt-riscv/src/lib.rs:475-497 at ff6fc6568. -/
 theorem circuitFlag_store_eq_opcodeFlag (row : JoltInstructionRow) :
     JoltMetadata.circuitFlag row .Store =
       JoltMetadata.opcodeFlag row.instruction .Store := rfl
@@ -977,7 +1231,7 @@ checks. A native expansion has one instruction satisfying the native checks;
 a sequence satisfies the sequence checker, including its jump and advice checks.
 For example, stamping ECALL keeps its final JALR in the last position.
 See jolt/crates/jolt-program/src/expand/metadata.rs:25-53 and
-jolt/crates/jolt-program/src/expand/materialize.rs:71-101 at 8bbb2357. -/
+jolt/crates/jolt-program/src/expand/materialize.rs:75-105 at ff6fc6568. -/
 theorem expand_instruction_checks (source : SourceInstructionRow SourceInstruction)
     (rows : List JoltInstructionRow) (expanded : expand_instruction source = some rows) :
     match source.instruction.expand with

@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.translation.Constraints.Rs2ValueEqRegistersRead
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.RegistersReadProofHelpers
 import JoltConstraints.theorems.witness_domain

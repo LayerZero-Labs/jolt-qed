@@ -1,6 +1,4 @@
-import JoltBytecode.JoltISA.Semantics
-import JoltBytecode.InstructionEquivalence.ProofSupport.DeviceFrame
-import Mathlib.Tactic
+import JoltConstraints.theorems.DeviceFrame
 
 open LeanRV64D
 
@@ -64,83 +62,66 @@ theorem execWithTapeAnswer_of_ne (instruction : Instr) (answer : BitVec 64)
     execWithTapeAnswer instruction answer = execInstr instruction := by
   cases instruction <;> first | rfl | exact absurd rfl (notAdvice _ _)
 
-/-- Every relaxed instruction preserves a reflexive, transitive device
-relation whose byte-store obligations cover SD and all floor stores.
-For example, a relaxed advice load preserves equality of the entire device.
-See Jolt's tracer at c6703570, `tracer/src/instruction/floor_access.rs`
-(`store`) and `tracer/src/instruction/sd.rs` (`SD::exec`). -/
-theorem execWithTapeAnswer_rule_of_device_relation_for_store
-    (relation : JoltDevice → JoltDevice → Prop)
-    (refl : ∀ io, relation io io)
-    (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (instruction : Instr) (answer : BitVec 64)
-    (store : ∀ base source imm, instruction = .SD base source imm →
-      ∀ io io' address value,
-        JoltDevice.store? io address value = some io' → relation io io')
-    (floorStore : ∀ base source imm fault,
-      (instruction = .VirtualStoreB base source imm fault ∨
-       instruction = .VirtualStoreH base source imm fault ∨
-       instruction = .VirtualStoreW base source imm fault) →
-      ∀ io io' address value,
-        JoltDevice.store? io address value = some io' → relation io io') :
-    StatePreservation.Preserves
-      (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
-      (execWithTapeAnswer instruction answer) := by
-  cases instruction <;> simp only [execWithTapeAnswer]
-  case VirtualAdviceLoad destination byteCount =>
+/-- The relaxed interpreter preserves a state relation whenever its primitive
+instruction rules and tape-cursor advance preserve that relation.
+For example, code-region equality permits every primitive and tape advance. -/
+theorem execWithTapeAnswer_relation
+    (relation : SailJoltState → SailJoltState → Prop)
+    (rules : InstructionFrame.Rules relation)
+    (advance : ∀ state width, relation state
+      { state with adviceTape := { state.adviceTape with
+        readPosition := state.adviceTape.readPosition + width } })
+    (instruction : Instr) (answer : BitVec 64) :
+    StatePreservation.Preserves relation (execWithTapeAnswer instruction answer) := by
+  by_cases advice : ∃ dst width, instruction = .VirtualAdviceLoad dst width
+  · obtain ⟨destination, byteCount, rfl⟩ := advice
     intro before after value runs
+    simp only [execWithTapeAnswer] at runs
     split at runs
-    · have keeps := StatePreservation.bind_rule
-        (relation := fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
-        (fun a b c ab bc => trans _ _ _ ab bc)
-        (JoltIOSetupFrame.writeDst_rule_of_device_relation relation refl destination answer)
-        (fun _ => StatePreservation.pure_rule
-          (fun s : SailJoltState => refl s.jolt_device) RETIRE_SUCCESS)
-      have kept : relation
-          ({ before with adviceTape := { before.adviceTape with
-            readPosition := before.adviceTape.readPosition + byteCount.toNat } }).jolt_device
-          after.jolt_device := keeps _ _ _ runs
-      exact kept
+    · have keeps := StatePreservation.bind_rule rules.trans
+        (InstructionFrame.writeDst_rule relation rules.sail rules.vreg destination answer)
+        (fun _ => StatePreservation.pure_rule rules.refl RETIRE_SUCCESS)
+      exact rules.trans _ _ _ (advance before byteCount.toNat)
+        (keeps _ after value runs)
     · cases runs
-  all_goals
-    exact JoltIOSetupFrame.execInstr_rule_of_device_relation_for_store
-      relation refl trans _ store floorStore
+  · rw [execWithTapeAnswer_of_ne instruction answer
+      (fun dst width same => advice ⟨dst, width, same⟩)]
+    apply InstructionFrame.execInstr_rule rules instruction
+    intro dst width same
+    exact False.elim (advice ⟨dst, width, same⟩)
 
-/-- Every relaxed instruction preserves a reflexive, transitive device
-relation that successful device byte stores preserve.
-For example, both SD and VirtualStoreH preserve the device's memory layout. -/
-theorem execWithTapeAnswer_rule_of_device_relation
+/-- Every relaxed instruction preserves a reflexive, transitive device relation.
+For example, every tape read and both halts preserve the memory layout.
+Stores change shared memory and halts record only `halted`, so neither changes the device. -/
+theorem execWithTapeAnswer_device_relation
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
     (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (store : ∀ io io' address value,
-      JoltDevice.store? io address value = some io' → relation io io')
     (instruction : Instr) (answer : BitVec 64) :
     StatePreservation.Preserves
       (fun s t : SailJoltState => relation s.jolt_device t.jolt_device)
-      (execWithTapeAnswer instruction answer) := by
-  exact execWithTapeAnswer_rule_of_device_relation_for_store relation refl trans
-    instruction answer (fun _ _ _ _ => store) (fun _ _ _ _ _ => store)
+      (execWithTapeAnswer instruction answer) :=
+  execWithTapeAnswer_relation _ (deviceRelationRules relation refl trans)
+    (fun state _ => refl state.jolt_device) instruction answer
 
-/-- A successful relaxed instruction other than SD or a floor store preserves
-its entire device; `notStore` and `notFloorStore` exclude those constructors.
-For example, LD and VirtualAdviceLoad leave the panic flag and output bytes fixed.
-See Jolt's tracer at c6703570, `tracer/src/instruction/floor_access.rs` (`store`). -/
-theorem execWithTapeAnswer_device_of_not_store (instruction : Instr) (answer : BitVec 64)
-    (notStore : ∀ base source imm, instruction ≠ .SD base source imm)
-    (notFloorStore : ∀ base source imm fault,
-      ¬ (instruction = .VirtualStoreB base source imm fault ∨
-         instruction = .VirtualStoreH base source imm fault ∨
-         instruction = .VirtualStoreW base source imm fault)) :
+/-- Every relaxed instruction retains the initialized code-word interval.
+For example, an output store and a panic halt preserve the same protected code words.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`CodeGuard`, `assert_write_protected_store`). -/
+theorem execWithTapeAnswer_codeRegion (instruction : Instr) (answer : BitVec 64) :
     StatePreservation.Preserves
-      (fun s t : SailJoltState => s.jolt_device = t.jolt_device)
+      (fun s t : SailJoltState => s.codeRegion = t.codeRegion)
       (execWithTapeAnswer instruction answer) := by
-  apply execWithTapeAnswer_rule_of_device_relation_for_store Eq (fun _ => rfl)
-    (fun _ _ _ first second => first.trans second)
-  · intro base source imm isStore
-    exact False.elim (notStore base source imm isStore)
-  · intro base source imm fault isStore
-    exact False.elim (notFloorStore base source imm fault isStore)
+  let rules : InstructionFrame.Rules
+      (fun s t : SailJoltState => s.codeRegion = t.codeRegion) := {
+    refl := fun _ => rfl
+    trans := fun _ _ _ first next => first.trans next
+    sail := fun _ _ _ => rfl
+    vreg := fun _ _ _ => rfl
+    store := store_doubleword_relation _ (fun _ => rfl)
+      (fun _ _ _ first next => first.trans next) (fun _ _ => rfl)
+    halt := fun _ _ => rfl
+    append := fun _ _ => rfl }
+  exact execWithTapeAnswer_relation _ rules (fun _ _ => rfl) instruction answer
 
 /-- The answer supplied by the existing fixed-tape interpreter, or zero for an
 instruction with no tape answer or a read that fails. -/

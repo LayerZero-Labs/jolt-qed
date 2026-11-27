@@ -1,8 +1,6 @@
 import JoltConstraints.theorems.Completeness.Helpers.BytecodeReadSelection
 import JoltConstraints.translation.Constraints.OpFlagsEqBytecodeRead
-import JoltConstraints.translation.Constraints.BytecodeReadData
 import JoltConstraints.theorems.Completeness.Helpers.BytecodeReadSelection
-import JoltConstraints.translation.honest_witness
 
 open LeanRV64D
 

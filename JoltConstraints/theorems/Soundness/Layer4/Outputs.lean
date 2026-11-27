@@ -1,4 +1,6 @@
-import JoltConstraints.theorems.Soundness.Layer4.Table
+import JoltConstraints.translation.Constraints.AssertLookupOne
+import JoltConstraints.translation.Constraints.RdWriteEqLookupIfWriteLookupToRd
+import JoltConstraints.translation.Constraints.ShouldBranchEqLookupOutputMulBranch
 
 open LeanRV64D
 

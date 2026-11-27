@@ -1,7 +1,7 @@
 import JoltConstraints.translation.Constraints.RamReadEqRdWriteIfLoad
-import JoltConstraints.translation.witness
 import JoltConstraints.theorems.Completeness.Helpers.MemoryValueFacts
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.translation.honest_witness
 
 open LeanRV64D
 
@@ -12,7 +12,7 @@ namespace JoltConstraints
 /-- A load preserves its captured doubleword in RAM and its destination,
 including floor rows; for example, a floor byte load preserves the whole loaded word.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs`
-(`load`) at `c6703570`. -/
+(`load`) at `ff6fc6568`. -/
 theorem honestWitness_ramReadEqRdWriteIfLoad
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

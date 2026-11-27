@@ -401,4 +401,46 @@ def jolt_virtual_sign_extend_word_value (x : BitVec 64) : BitVec 64 :=
 def mulhs (a b : BitVec 64) : BitVec 64 :=
   BitVec.ofInt 64 ((a.toInt * b.toInt) / (2 ^ 64))
 
+namespace JoltISA
+
+def storeDwordValue (width : Nat) (ea original value : BitVec 64) : BitVec 64 :=
+  match width with
+  | 1 => (original &&& ~~~jolt_virtual_window_mask_b_value ea 0) + jolt_virtual_shift_data_b_value value ea
+  | 2 => (original &&& ~~~jolt_virtual_window_mask_h_value ea 0) + jolt_virtual_shift_data_h_value value ea
+  | 4 => (original &&& ~~~jolt_virtual_window_mask_w_value ea 0) + jolt_virtual_shift_data_w_value value ea
+  | _ => value
+
+def amoDwordStoreValue (op : amoop) (old rs2 : BitVec 64) : BitVec 64 :=
+  match op with
+  | .AMOADD => old + rs2
+  | .AMOXOR => old ^^^ rs2
+  | .AMOAND => old &&& rs2
+  | .AMOOR => old ||| rs2
+  | .AMOMIN => old + (if rs2.slt old then 1 else 0) * (rs2 - old)
+  | .AMOMAX => old + (if old.slt rs2 then 1 else 0) * (rs2 - old)
+  | .AMOMINU => old + (if rs2.ult old then 1 else 0) * (rs2 - old)
+  | .AMOMAXU => old + (if old.ult rs2 then 1 else 0) * (rs2 - old)
+  | .AMOSWAP => rs2
+  | .AMOCAS => rs2
+
+def amoWordStoreValue (op : amoop) (ea original rs2 : BitVec 64) : BitVec 64 :=
+  let shift := 8 * (ea.toNat % 8)
+  let old : BitVec 64 := ((original >>> shift).setWidth 32).signExtend 64
+  let rs2w : BitVec 64 := (rs2.setWidth 32).signExtend 64
+  let new : BitVec 64 :=
+    match op with
+    | .AMOADD => old + rs2
+    | .AMOXOR => old ^^^ rs2
+    | .AMOAND => old &&& rs2
+    | .AMOOR => old ||| rs2
+    | .AMOMIN => old + (if rs2w.slt old then 1 else 0) * (rs2 - old)
+    | .AMOMAX => old + (if old.slt rs2w then 1 else 0) * (rs2 - old)
+    | .AMOMINU => old + (if rs2w.ult old then 1 else 0) * (rs2 - old)
+    | .AMOMAXU => old + (if old.ult rs2w then 1 else 0) * (rs2 - old)
+    | .AMOSWAP => rs2
+    | .AMOCAS => rs2
+  storeDwordValue 4 ea original new
+
+end JoltISA
+
 end

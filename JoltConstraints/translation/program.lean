@@ -2,10 +2,6 @@
 The program Jolt is asked to prove, and the public instance the verifier checks it
 against. Each definition is checked against the Rust source.
 -/
-import JoltBytecode.JoltISA.Semantics
-import JoltBytecode.JoltISA.DeviceMemory
-import JoltBytecode.JoltISA.JoltDevice
-import JoltBytecode.RiscvInstruction
 import JoltConstraints.translation.expansions
 import Mathlib.Tactic.DeriveFintype
 import Mathlib.Data.Nat.Log
@@ -14,10 +10,22 @@ open LeanRV64D
 
 set_option autoImplicit false
 
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
-set_option maxRecDepth 4096 in
-deriving instance Fintype for Register
+-- `Register` is a Sail enumeration of 181 constructors.
+-- Mathlib's `deriving instance Fintype` needs a raised recursion depth and a relaxed
+-- transparency setting at this size, so the instance goes through the constructor index instead.
+-- The bound `181` only has to be an upper bound on the number of constructors.
+-- (`Register.ofNat_ctorIdx` is generated with the enumeration.)
+theorem LeanRV64D.Register.ctorIdx_lt (r : Register) : r.ctorIdx < 181 := by
+  cases r <;> decide
+
+theorem LeanRV64D.Register.ctorIdx_injective : Function.Injective Register.ctorIdx := fun a b h =>
+  (Register.ofNat_ctorIdx a).symm.trans ((congrArg Register.ofNat h).trans (Register.ofNat_ctorIdx b))
+
+noncomputable instance : Fintype Register :=
+  haveI : Finite Register :=
+    Finite.of_injective (β := Fin 181) (fun r => ⟨r.ctorIdx, r.ctorIdx_lt⟩)
+      (fun _ _ h => Register.ctorIdx_injective (congrArg Fin.val h))
+  Fintype.ofFinite Register
 
 def ramPmaRegion (ramSize : Nat) : PMA_Region :=
   { base := BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
@@ -40,8 +48,8 @@ def ramPmaRegion (ramSize : Nat) : PMA_Region :=
 
 /-
 Jolt initialises its register file according to this rule. 
-See : jolt/tracer/src/emulator/cpu.rs:443-473 (Cpu::new)
-      jolt/tracer/src/emulator/mod.rs:262 (setup_program sets the PC to the ELF entry)
+See : jolt/tracer/src/emulator/cpu.rs:463-495 (Cpu::new)
+      jolt/tracer/src/emulator/mod.rs:359 (setup_program sets the PC to the ELF entry)
 -/
 def initialRegisterValue (entryAddress : BitVec 64) (ramSize : Nat)
     (register : Register) : RegisterType register :=
@@ -73,13 +81,8 @@ noncomputable def init_state
       (fun regs r => regs.insert r (initialRegisterValue entryAddress ram.size r))
       {}
 
-  -- Logically Jolt models memory as one table, but the Rust tracer splits it
-  -- in two and so do we: RAM, and the rest, which Rust calls the Jolt device
-  -- (inputs, advice, outputs, panic, termination).
-  -- Jolt RAM starts at RAM_START_ADDRESS (`JoltISA.RAM_START_ADDRESS`, 0x80000000).
-  -- Sail has its own devices (CLINT and HTIF), but these are not the Jolt device.
-  -- CLINT lies below RAM and HTIF is switched off, so Sail's memory hash map
-  -- corresponds to Jolt RAM only. The Jolt device lives in `io` instead.
+  -- The bootstrap map contains the program/RAM bytes.
+  -- `JoltInstance.initial_state` installs I/O bytes in this same map.
   let memory : Std.ExtHashMap Nat (BitVec 8) :=
     ram.toList.zipIdx.foldl
       (fun mem (byte, offset) => mem.insert (JoltISA.RAM_START_ADDRESS + offset) byte)
@@ -95,7 +98,7 @@ noncomputable def init_state
 
   { sail := sail
     vregs := fun _ => 0 -- Jolt initialises all virtual registers to zero.
-    jolt_device := { io with outputs := #[], panic := false } -- TODO: (ari) draw this out and link later
+    jolt_device := { io with panic := false } -- TODO: (ari) draw this out and link later
     adviceTape := { adviceTape with readPosition := 0 }-- TODO: (ari) draw this out and link later
     hostIO := hostIO -- TODO: (ari) draw this out and link later
   }
@@ -104,7 +107,7 @@ noncomputable def init_state
 DRAFT: the program image Jolt builds from the guest ELF.
 Parsing the ELF and decoding bytes into instructions are not modelled; the model
 starts from the decoded image.
-See : jolt/crates/jolt-program/src/image/elf.rs:18-30 (Rv64ProgramImage)
+See : jolt/crates/jolt-program/src/image/elf.rs:26-44 (Rv64ProgramImage)
       jolt/crates/jolt-program/src/image/decode.rs (decode_instruction)
 -/
 
@@ -126,23 +129,9 @@ def JoltInstructionRow.starts_source (row : JoltInstructionRow) : Bool :=
 
 -- A row that is not the last row of its source instruction: more rows of the same
 -- instruction follow. Rust's DoNotUpdateUnexpandedPC flag.
--- See : jolt/crates/jolt-riscv/src/lib.rs:411-413 (circuit_flags)
+-- See : jolt/crates/jolt-riscv/src/lib.rs:487-489 (circuit_flags)
 def JoltInstructionRow.continues (row : JoltInstructionRow) : Bool :=
   row.virtual_sequence_remaining.getD 0 != 0
-
-/-- Whether a row that jumped to its own address would jump there again.
-The expanded JALR row retains the normalized base and sign-extended immediate;
-the `rd = x0` rewrite uses a virtual destination and takes the `true` branch.
-See : a16z/jolt#2109, merge commit 0249591a, crates/jolt-riscv/src/row.rs
-(`JoltInstructionRow::self_jump_repeats`). -/
-def JoltInstructionRow.selfJumpRepeats (row : JoltInstructionRow) : Bool :=
-  match row.instruction with
-  | .JALR (.xreg rd) (.xreg rs1) imm =>
-      if JoltISA.isX0 rd || rd != rs1 then true
-      else
-        jolt_jalr_target64
-          (row.address + (if row.is_compressed then 2 else 4)) imm == row.address
-  | _ => true
 
 -- See : jolt/crates/jolt-program/src/expand/metadata.rs:25-53 (stamp_sequence_metadata)
 def stamp_sequence (address : BitVec 64) (is_compressed : Bool)
@@ -161,13 +150,14 @@ structure SourceInstructionRow (Source : Type) where
   instruction : Source
   is_compressed : Bool
 
--- See : jolt/crates/jolt-program/src/expand/materialize.rs:19
+-- See : jolt/crates/jolt-program/src/expand/materialize.rs:20
 def MAX_FINAL_ROWS_PER_SOURCE : Nat := 64
 
 -- The final rows for one source row; none where Rust returns an error.
--- Rust also checks every final row against the profile (metadata.rs:39-45); for
+-- Rust also checks every final row against the profile
+-- (crates/jolt-program/src/expand/metadata.rs:39-45); for
 -- RV64IMAC_JOLT that check always passes, so it is left out.
--- See : jolt/crates/jolt-program/src/expand/materialize.rs:71-101, 150-175
+-- See : jolt/crates/jolt-program/src/expand/materialize.rs:75-105, 150-175
 --       jolt/crates/jolt-program/src/expand/metadata.rs:25-53
 --       jolt/crates/jolt-riscv/src/row.rs:53-68 (native rows)
 def expand_instruction (row : SourceInstructionRow SourceInstruction) :
@@ -186,7 +176,7 @@ def expand_instruction (row : SourceInstructionRow SourceInstruction) :
 
 -- Source is RiscvInstruction for a pure RISC-V ELF, and SourceInstruction for
 -- any ELF Jolt's base profile accepts.
--- See : jolt/crates/jolt-program/src/image/elf.rs:18-30 (Rv64ProgramImage)
+-- See : jolt/crates/jolt-program/src/image/elf.rs:26-44 (Rv64ProgramImage)
 structure Rv64ProgramImage (Source : Type) where
   instructions : Array (SourceInstructionRow Source)
   memory_init : List (BitVec 64 × BitVec 8)
@@ -196,12 +186,12 @@ structure Rv64ProgramImage (Source : Type) where
   -- Facts that the fields above must satisfy.
   -- Provide proofs of these facts when constructing the image.
   -- decode_elf starts program_end at RAM_START_ADDRESS and only raises it.
-  -- See : jolt/crates/jolt-program/src/image/elf.rs:43, 52
+  -- See : jolt/crates/jolt-program/src/image/elf.rs:57, 52
   program_end_ge_ram_start : JoltISA.RAM_START_ADDRESS ≤ program_end.toNat
   -- decode_elf takes memory_init only from sections at or above RAM_START_ADDRESS,
   -- and program_end is the end of the last such section. So every ELF byte lies
   -- in [RAM_START_ADDRESS, program_end), which is below stack_end.
-  -- See : jolt/crates/jolt-program/src/image/elf.rs:45-66
+  -- See : jolt/crates/jolt-program/src/image/elf.rs:83-125
   memory_init_in_program : ∀ entry ∈ memory_init,
     (JoltISA.RAM_START_ADDRESS ≤ entry.1.toNat) ∧ (entry.1.toNat < program_end.toNat)
   -- decode_elf rejects a section whose end, its start plus its size, passes 2^64 - 1,
@@ -210,10 +200,20 @@ structure Rv64ProgramImage (Source : Type) where
   -- compressed, else 4), is below 2^64. For example, an ELF with an instruction
   -- at 2^64 - 4 is rejected with "section extent overflows address space".
   -- Jolt added the check in a16z/jolt#2129.
-  -- See : jolt/crates/jolt-program/src/image/elf.rs:50-55 (decode_elf),
+  -- See : jolt/crates/jolt-program/src/image/elf.rs:88-97 (decode_elf),
   --       118-141 (decode_text_section)
   next_pc_no_wrap : ∀ row ∈ instructions,
     row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
+  -- decode_text_section emits an instruction only when its first halfword is nonzero:
+  -- it skips a zero halfword as padding, and a 4-byte instruction's first byte ends in
+  -- binary 11. decode_elf reads that halfword from the section bytes it also puts in
+  -- memory_init, and reads an address that no section loads as 0. So memory_init holds
+  -- a byte at each instruction's address or at the next address.
+  -- For example, an ELF whose text section is empty has no instructions.
+  -- See : jolt/crates/jolt-program/src/image/elf.rs:121-140 (decode_elf),
+  --       201-228 (decode_text_section)
+  instruction_loaded : ∀ row ∈ instructions, ∃ entry ∈ memory_init,
+    row.address.toNat ≤ entry.1.toNat ∧ entry.1.toNat < row.address.toNat + 2
 
 -- No instruction's next PC, its address plus its length (2 if compressed, else 4),
 -- passes 2^64. Every image meets this: it is the field `next_pc_no_wrap`, which
@@ -222,15 +222,14 @@ def Rv64ProgramImage.NextPCNoWrap {Source : Type} (image : Rv64ProgramImage Sour
   ∀ row ∈ image.instructions, row.address.toNat + (if row.is_compressed then 2 else 4) < 2 ^ 64
 
 -- The program is not empty: its memory image loads at least one byte.
--- Assumed: a16z told us by phone on 2026-10-08 that Jolt can assume a program is
--- never empty. Rust's prover does not reject an empty ELF: it traces it and picks
--- its sizes, and only Rust's verifier rejects those sizes (InvalidRamK;
--- bug-report/verifier-ram-minimum). (model_review.md, Assumptions)
+-- Every program whose run passes the prover's sizing meets this
+-- (`HonestTrace.prover_config_image_nonempty`): the prover rejects an empty trace,
+-- and a program with an instruction loads that instruction's bytes.
 def Rv64ProgramImage.ImageNonempty {Source : Type} (image : Rv64ProgramImage Source) : Prop :=
   image.memory_init ≠ []
 
 -- The host sets the program size from the image.
--- See : jolt/crates/jolt-host/src/program.rs:355-356, 482-492 (8bbb2357)
+-- See : jolt/crates/jolt-host/src/program.rs:357-358, 482-492 (ff6fc6568)
 def Rv64ProgramImage.program_size {Source : Type} (image : Rv64ProgramImage Source) :
     BitVec 64 :=
   image.program_end - BitVec.ofNat 64 JoltISA.RAM_START_ADDRESS
@@ -242,37 +241,57 @@ def Rv64ProgramImage.toJolt (image : Rv64ProgramImage RiscvInstruction) : Rv64Pr
       { row with instruction := .riscv row.instruction }
     next_pc_no_wrap := fun row member => by
       obtain ⟨source, inImage, rfl⟩ := Array.mem_map.mp member
-      exact image.next_pc_no_wrap source inImage }
+      exact image.next_pc_no_wrap source inImage
+    instruction_loaded := fun row member => by
+      obtain ⟨source, inImage, rfl⟩ := Array.mem_map.mp member
+      exact image.instruction_loaded source inImage }
 
 -- Every source row's final rows, in order; none if any source row fails.
 -- Rust's preprocessing then puts a NoOp at slot 0 and pads with NoOps (preprocess below).
--- See : jolt/crates/jolt-program/src/expand/mod.rs:281-307 (expand_program)
+-- See : jolt/crates/jolt-program/src/expand/mod.rs:286-312 (expand_program)
 def expand_program (image : Rv64ProgramImage SourceInstruction) :
     Option (Array JoltInstructionRow) :=
   (image.instructions.toList.mapM expand_instruction).map fun rows => rows.flatten.toArray
 
 -- One slot of Rust's preprocessed bytecode.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:279-293 (noop_instruction)
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:307-321 (noop_instruction)
 inductive BytecodeSlot where
   | noop
   | row (row : JoltInstructionRow)
 
 -- Rust accepts a bytecode address when it is at least RAM_START_ADDRESS and even.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:222-230 (try_get_index)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:250-258 (try_get_index)
 --       jolt/common/src/constants.rs:7 (ALIGNMENT_FACTOR_BYTECODE)
 def bytecode_address_ok (address : BitVec 64) : Bool :=
   JoltISA.RAM_START_ADDRESS ≤ address.toNat && address.toNat % 2 == 0
 
+/-- The explicit halt kind of a bytecode instruction, if it has one.
+For example, `Panic` is a panic halt and `JAL` has no halt kind.
+Jolt at `ff6fc6568`: `tracer/src/emulator/cpu.rs` (`Cpu::halt`).
+This instruction classifier is a candidate to move into JoltBytecode. -/
+def JoltISA.Instr.haltKind? : JoltISA.Instr → Option JoltHaltKind
+  | .JoltSuccess _ _ _ => some .success
+  | .JoltPanic _ _ _ => some .panic
+  | _ => none
+
+/-- The halt row of a halt kind: `JoltSuccess` for success and `JoltPanic` for panic.
+For example, `haltRow .panic v40 x0 0` is the row EBREAK expands to. -/
+def JoltISA.haltRow (kind : JoltHaltKind) (dst : Dst) (src : Src) (imm : BitVec 12) : Instr :=
+  match kind with
+  | .success => .JoltSuccess dst src imm
+  | .panic => .JoltPanic dst src imm
+
 -- The rows of one address count down to 0 one step at a time; none counts as 0.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:166-205 (validate_run)
+-- Jolt at ff6fc6568: crates/jolt-program/src/preprocess/bytecode.rs
+-- (BytecodePCMapper::validate_run, BytecodePCMapper::try_new).
+-- A halt can occupy only a one-row source instruction.
 def valid_run (run : List JoltInstructionRow) : Bool :=
   let counts := run.map fun row => (row.virtual_sequence_remaining.getD 0).toNat
-  counts == (List.range counts.length).reverse && counts.length < 2 ^ 16
+  (counts == (List.range counts.length).reverse && counts.length < 2 ^ 16) &&
+    (counts.length ≤ 1 || run.all fun row => row.instruction.haltKind?.isNone)
 
 -- true exactly when Rust's BytecodePCMapper::try_new accepts the expanded rows.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:119-164 (try_new)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:128-187 (try_new)
 def pc_map_ok (rows : Array JoltInstructionRow) : Bool :=
   let runs := rows.toList.splitBy fun a b => a.address == b.address
   let addresses : List (BitVec 64) := runs.filterMap fun run => run.head?.map (·.address)
@@ -292,21 +311,52 @@ def preprocess (rows : Array JoltInstructionRow) : Option (Array BytecodeSlot) :
 
 -- The slot where the source instruction at `address` starts; address 0 is the
 -- NoOp at slot 0. Matches Rust whenever pc_map_ok holds.
--- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:218-226 (get_first_pc)
+-- See : jolt/crates/jolt-program/src/preprocess/bytecode.rs:246-254 (get_first_pc)
 def get_first_pc (bytecode : Array BytecodeSlot) (address : BitVec 64) : Option Nat :=
   if address = 0 then some 0
   else bytecode.findIdx? fun
     | .row row => row.address == address
     | .noop => false
 
+/-- Source byte extents extracted from the last row at each expanded source address.
+For example, a compressed source contributes two bytes even if its earlier rows
+carry an uncompressed stamp.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`bytecode_source_extents`). -/
+def bytecode_source_extents (rows : Array JoltInstructionRow) : List (BitVec 64 × Bool) :=
+  (rows.toList.filter fun row => row.virtual_sequence_remaining.getD 0 == 0).map
+    fun row => (row.address, row.is_compressed)
+
+/-- The code-word interval of `sources` at the layout's lowest address, as the tracer's
+`protect_code` computes it (`JoltISA.code_region`).
+For example, sources at `lowest + 6` (compressed) and `lowest + 38` give `(0, 6)`.
+Jolt at `504dd78a2`: `crates/jolt-program/src/preprocess/ram.rs` (`code_region`). -/
+def JoltISA.codeRegionOf (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
+    Option (Nat × Nat) :=
+  JoltISA.code_region sources layout.get_lowest_address.toNat
+
+/-- Compute a checked code-word interval within the layout's maximum RAM domain.
+For example, a source beyond the maximum padded RAM end is rejected.
+An empty interval has the unique encoding `(0, 0)`.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/ram.rs`
+(`code_region`, `validate_code_region`).
+This checked primitive is a candidate to move into JoltBytecode. -/
+def JoltISA.checkedCodeRegion (layout : MemoryLayout) (sources : List (BitVec 64 × Bool)) :
+    Option (Nat × Nat) := do
+  let region ← JoltISA.codeRegionOf layout sources
+  let maximum ← layout.max_ram_k?
+  guard (region.1 ≤ region.2 ∧ region.2 ≤ maximum ∧
+    (region.1 = region.2 → region.1 = 0))
+  pure region
+
 -- The lowest address of the program image; 0 if the image is empty.
--- See : jolt/crates/jolt-program/src/preprocess/ram.rs:46-50
+-- See : jolt/crates/jolt-program/src/preprocess/ram.rs:55-59
 def min_bytecode_address (memory_init : List (BitVec 64 × BitVec 8)) : Nat :=
   ((memory_init.map (·.1.toNat)).min?).getD 0
 
 -- The number of 64-bit slots the program image spans: from the slot of its lowest
 -- byte to the slot of its highest byte plus 3 (the rest of a 4-byte instruction).
--- See : jolt/crates/jolt-program/src/preprocess/ram.rs:52-59
+-- See : jolt/crates/jolt-program/src/preprocess/ram.rs:61-68
 --       jolt/common/src/constants.rs:6 (BYTES_PER_INSTRUCTION = 4)
 def program_image_len_words (memory_init : List (BitVec 64 × BitVec 8)) : Nat :=
   let highest := ((memory_init.map (·.1.toNat)).max?).getD 0 + 3
@@ -315,10 +365,11 @@ def program_image_len_words (memory_init : List (BitVec 64 × BitVec 8)) : Nat :
 -- Jolt RAM before the first instruction: zeros for Rust's whole RAM, with the ELF
 -- bytes written over them in order. Rust allocates RAM in whole 64-bit units, so
 -- its size is the total memory size rounded up to a multiple of 8.
--- See : jolt/tracer/src/emulator/mod.rs:219-239 at 5def437f
---       jolt/tracer/src/emulator/memory.rs:49-51 (init_with_capacity)
--- TODO: (claude) the tracer loads RAM from the ELF section headers, while
--- preprocessing uses decode_elf's memory_init; check that they always agree.
+-- See : jolt/tracer/src/emulator/mod.rs:320-336 at ff6fc6568
+--       jolt/tracer/src/emulator/memory.rs:76-78 (init_with_capacity)
+-- The tracer loads RAM from the ELF section headers, while preprocessing uses
+-- decode_elf's memory_init, and the two do not always agree: see "ELF sections and
+-- `tohost`" in model_review.md.
 def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 8)) :
     Array (BitVec 8) :=
   let zeros := Array.replicate (8 * ((layout.get_total_memory_size.toNat + 7) / 8)) 0
@@ -331,9 +382,9 @@ def initialRam (layout : MemoryLayout) (memory_init : List (BitVec 64 × BitVec 
 
 /-
 The fixed instance and the prover's private execution inputs.
-See : jolt/crates/jolt-verifier/src/verifier.rs:38-43 (verify takes preprocessing,
+See : jolt/crates/jolt-verifier/src/verifier.rs:51-56 (verify takes preprocessing,
       public_io : JoltDevice, proof, optional trusted advice commitment)
-      jolt/crates/jolt-verifier/src/verifier.rs:357-426 (validate_inputs)
+      jolt/crates/jolt-verifier/src/verifier.rs:491-557 (validate_inputs)
 The program and memory configuration stand in for verifier preprocessing.
 
 NOTE: the PCS is ignored for now. This differs from the inputs of Jolt's verifier
@@ -344,7 +395,7 @@ in two ways:
    representation does not assert that the verifier learns the bytes.
 2. Omitted: `preprocessing.pcs_setup`, `preprocessing.vc_setup` and
    `preprocessing.preprocessing_digest`. They serve only the PCS and transcript.
-   See : jolt/crates/jolt-verifier/src/preprocessing.rs:200-211 at 8bbb2357
+   See : jolt/crates/jolt-verifier/src/preprocessing.rs:241-252 at ff6fc6568
 -/
 structure JoltInstance (Source : Type) where
   program : Rv64ProgramImage Source
@@ -361,8 +412,8 @@ structure JoltInstance (Source : Type) where
   panic : Bool
   -- Part of the verifier's preprocessing; the padded trace length may not exceed it.
   -- A usize in Rust, so 64 bits.
-  -- See : jolt/crates/jolt-program/src/preprocess/program.rs:17
-  --       jolt/crates/jolt-verifier/src/verifier.rs:375-380
+  -- See : jolt/crates/jolt-program/src/preprocess/program.rs:20
+  --       jolt/crates/jolt-verifier/src/verifier.rs:509-514
   max_padded_trace_length : BitVec 64
 
 -- The pure RISC-V instance seen as a Jolt instance.
@@ -377,75 +428,94 @@ structure JoltPrivateInputs where
 
 -- The host overwrites program_size with the size of the program image.
 -- Checked layout failures propagate as none, including a padded I/O start at zero.
--- Rust (8bbb2357): jolt-sdk/src/host_utils.rs:128-143 (program_preprocessing)
--- https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/jolt-sdk/src/host_utils.rs#L128-L143
+-- Rust (ff6fc6568): jolt-sdk/src/host_utils.rs:111-126 (program_preprocessing)
+-- https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/jolt-sdk/src/host_utils.rs#L111-L126
 def JoltInstance.memory_layout {Source : Type} (joltInstance : JoltInstance Source) :
     Option MemoryLayout :=
   MemoryLayout.new { joltInstance.memory_config with program_size := some joltInstance.program.program_size }
 
 -- The verifier's checks on the instance alone; the proof's own parameters come
 -- with the trace.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:357-380 (validate_inputs)
---       jolt/crates/jolt-verifier/src/verifier.rs:999-1016 (validate_ram_remap_base)
+-- Jolt at ff6fc6568: crates/jolt-verifier/src/verifier.rs
+-- (validate_inputs, validate_ram_remap_base).
 def JoltInstance.validate_inputs {Source : Type} (joltInstance : JoltInstance Source) : Bool :=
   match joltInstance.memory_layout with
   | none => false
   | some layout =>
       8 < layout.get_lowest_address.toNat &&
       joltInstance.inputs.size ≤ layout.max_input_size.toNat &&
-      joltInstance.outputs.size ≤ layout.max_output_size.toNat
+      joltInstance.outputs.size ≤ layout.max_output_size.toNat &&
+      (joltInstance.program.entry_address != 0 &&
+        (JoltISA.checkedCodeRegion layout
+          (joltInstance.program.instructions.toList.map fun row =>
+            (row.address, row.is_compressed))).isSome)
 
 -- The bytes without their trailing zero bytes, as Rust's verifier trims the claimed
 -- outputs.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:432-439
+-- See : jolt/crates/jolt-verifier/src/verifier.rs:563-570
 def trimTrailingZeros (bytes : Array (BitVec 8)) : Array (BitVec 8) :=
   (bytes.toList.reverse.dropWhile (· == 0)).reverse.toArray
 
--- The public I/O the verifier checks a proof against: the instance's layout, inputs,
--- claimed outputs (trailing zero bytes dropped) and panic flag. Rust's verify takes it
--- as a JoltDevice and never reads its advice fields.
--- See : jolt/crates/jolt-verifier/src/verifier.rs:38-43 (verify), 357, 432-439 at 5def437f
---       jolt/crates/jolt-program/src/preprocess/public_io.rs:21-65
+/-- Public statement bytes and the halt claim, separate from the execution device.
+For example, a success statement contains output bytes and `panic = false`.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`JoltDevice`) and
+`crates/jolt-program/src/preprocess/public_io.rs` (`PublicIoMemory::new`). -/
+structure JoltPublicIo where
+  memory_layout : MemoryLayout
+  inputs : Array (BitVec 8)
+  outputs : Array (BitVec 8)
+  panic : Bool
+
+/-- The verifier's public I/O statement, with trailing output zeros removed.
+For example, output `[1, 0]` is represented by `[1]`.
+Jolt at `ff6fc6568`: `crates/jolt-program/src/preprocess/public_io.rs`
+(`PublicIoMemory::new`). -/
 def JoltInstance.public_io {Source : Type} (joltInstance : JoltInstance Source) :
-    Option JoltDevice := do
+    Option JoltPublicIo := do
   let layout ← joltInstance.memory_layout
   pure { inputs := joltInstance.inputs
-         trusted_advice := #[]
-         untrusted_advice := #[]
          outputs := trimTrailingZeros joltInstance.outputs
          panic := joltInstance.panic
          memory_layout := layout }
 
--- The verifier's bytecode for an instance; none where Rust rejects the program:
--- expansion fails, the PC map rejects the rows, or the entry address maps to no slot.
--- See : jolt/crates/jolt-program/src/preprocess/program.rs:21-36 (JoltProgramPreprocessing::new)
---       jolt/crates/jolt-prover/src/preprocessing.rs:43-50
---       jolt/crates/jolt-verifier/src/preprocessing.rs:132-141
+-- The verifier's bytecode for an instance; none where Rust rejects the program.
+-- See : jolt/crates/jolt-program/src/preprocess/program.rs:24-42 (JoltProgramPreprocessing::new)
+--       jolt/crates/jolt-prover/src/preprocessing.rs:56-63
+--       jolt/crates/jolt-verifier/src/preprocessing.rs:172-181
 def JoltInstance.bytecode (joltInstance : JoltInstance SourceInstruction) : Option (Array BytecodeSlot) := do
   let rows ← expand_program joltInstance.program
   let bytecode ← preprocess rows
   guard (get_first_pc bytecode joltInstance.program.entry_address).isSome
+  guard (joltInstance.program.entry_address != 0)
+  let layout ← joltInstance.memory_layout
+  let _ ← JoltISA.checkedCodeRegion layout (bytecode_source_extents rows)
   pure bytecode
 
--- See : jolt/tracer/src/lib.rs:351-395 (create_emulator)
--- Lean 4.35's `do` elaborator copies the continuation into both branches of each
--- `if _ then none` below (eight copies in all). The legacy elaborator keeps the
--- term exactly as stated and as elaborated before the toolchain update.
-set_option backward.do.legacy true in
+/-- **The modelled initial state for an instance and private inputs**, or none where a size
+or layout check fails. It builds the checked memory layout, loads the program image as
+preprocessing records it (`memory_init`) and the starting registers (`init_state`), and
+installs the inputs and the advice (`JoltDevice.initial_ram_state`) and the code guard
+(`JoltISA.protect_code`). The only size checks are those of `JoltDevice.try_with_io`, which,
+like Jolt's `JoltDevice::try_with_io`, compare each length with the layout's capacity: the
+configured maximum rounded up to a multiple of 8.
+This is not exactly the state the tracer's `create_emulator` builds. The tracer loads only
+some section types and caps its memory when the ELF has a nonzero `tohost` symbol, so a
+readable NOTE section, for example, initializes model RAM but not tracer RAM
+(`JoltConstraints/documentation/model_review.md`, "ELF sections and `tohost`").
+For example, `max_input_size = 1` gives an input capacity of 8 bytes, so two input bytes are
+accepted and nine are rejected (`initial_state_isSome_iff` in `theorems/layout_facts.lean`).
+Jolt at ff6fc6568: `tracer/src/lib.rs` (`create_emulator`) and `common/src/jolt_device.rs`
+(`JoltDevice::try_with_io`, `MemoryLayout::try_new`). -/
 noncomputable def JoltInstance.initial_state {Source : Type} (joltInstance : JoltInstance Source)
     (privateInputs : JoltPrivateInputs) :
     Option SailJoltState := do
-  let layout ← joltInstance.memory_layout
-  -- create_emulator asserts these sizes against the configuration.
-  if joltInstance.memory_config.max_trusted_advice_size.toNat < joltInstance.trusted_advice.size then none
-  if joltInstance.memory_config.max_untrusted_advice_size.toNat < privateInputs.untrusted_advice.size then none
-  if joltInstance.memory_config.max_input_size.toNat < joltInstance.inputs.size then none
-  let device : JoltDevice :=
-    { inputs := joltInstance.inputs
-      trusted_advice := joltInstance.trusted_advice
-      untrusted_advice := privateInputs.untrusted_advice
-      outputs := #[]
-      panic := false
-      memory_layout := layout }
-  pure (init_state joltInstance.program.entry_address (initialRam layout joltInstance.program.memory_init) device
-    { bytes := privateInputs.advice_tape, readPosition := 0 })
+  let device ← JoltDevice.try_with_io
+    { joltInstance.memory_config with program_size := some joltInstance.program.program_size }
+    joltInstance.inputs joltInstance.trusted_advice privateInputs.untrusted_advice
+  let state := init_state joltInstance.program.entry_address
+    (initialRam device.memory_layout joltInstance.program.memory_init) device
+    { bytes := privateInputs.advice_tape, readPosition := 0 }
+  let mem := device.initial_ram_state state.sail.mem
+    joltInstance.inputs joltInstance.trusted_advice privateInputs.untrusted_advice
+  JoltISA.protect_code { state with sail := { state.sail with mem := mem } }
+    (joltInstance.program.instructions.toList.map fun row => (row.address, row.is_compressed))

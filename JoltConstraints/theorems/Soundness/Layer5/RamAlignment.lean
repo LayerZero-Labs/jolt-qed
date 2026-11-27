@@ -1,5 +1,5 @@
-import JoltConstraints.theorems.Soundness.Layer5.MemoryAddress
 import JoltConstraints.theorems.Soundness.Layer3.State
+import JoltConstraints.theorems.Soundness.Layer3.Address
 
 open LeanRV64D
 
@@ -7,9 +7,9 @@ open LeanRV64D
 zero or an aligned layout base plus eight times an index. LD/SD therefore need
 no additional alignment premise. This does not establish address legality or
 agreement with the value read by a device.
-At public pin 8bbb2357:
-See : jolt/tracer/src/emulator/mmu.rs:321-329
-See : jolt/tracer/src/emulator/mmu.rs:429-435 -/
+At public pin ff6fc6568:
+See : jolt/tracer/src/emulator/mmu.rs:437-445
+See : jolt/tracer/src/emulator/mmu.rs:545-551 -/
 
 set_option autoImplicit false
 

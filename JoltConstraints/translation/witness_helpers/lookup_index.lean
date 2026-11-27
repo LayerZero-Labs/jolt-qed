@@ -1,6 +1,5 @@
 import JoltConstraints.translation.trace
 import JoltConstraints.translation.witness_helpers.destination_capture
-import JoltBytecode.JoltISA.semantic_helpers
 
 open LeanRV64D
 
@@ -8,7 +7,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [interleave_bits](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/interleave.rs:17).
+-- Rust: `crates/jolt-lookup-tables/src/interleave.rs` (`interleave_bits`).
 -- Counting from the least significant bit, left occupies odd positions and
 -- right occupies even positions: interleaveLookupOperands 1 2 = 6.
 def interleaveLookupOperands (left right : BitVec 64) : BitVec 128 :=
@@ -24,15 +23,16 @@ For example, a floor load with base 10 and immediate -2 has index 8;
 LD interleaves zero with its loaded destination.
 Jolt's prover: `crates/jolt-lookup-tables/src/traits.rs` (`LookupQuery`),
 `instructions/virt/floor_access.rs` (`floor_access!`),
-`instructions/virt/shift_data_{b,h,w}.rs` (`to_instruction_inputs`), and
-`instructions/riscv/{ld,sd}.rs` (`LookupQuery`) at `c6703570`. -/
+`crates/jolt-lookup-tables/src/instructions/virt/shift_data_{b,h,w}.rs`
+(`to_instruction_inputs`), and
+`instructions/riscv/{ld,sd}.rs` (`LookupQuery`) at `ff6fc6568`. -/
 noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
     (address : BitVec 64) (preState postState : SailJoltState) : BitVec 128 :=
   let source := fun src => JoltISA.sourceValue src preState
   match instruction with
   -- Rust masks these immediates to 64 bits before widening to 128. In
   -- particular, -1 contributes 2^64 - 1; a carry into bit 64 is retained.
-  -- Rust: [ADDI](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/addi.rs:18).
+  -- Rust: ADDI, `crates/jolt-lookup-tables/src/instructions/riscv/addi.rs` (`to_instruction_inputs`).
   | .ADDI _ src imm | .ADDIW _ src imm | .JALR _ src imm
   | .VirtualWindowMaskB _ src imm
   | .VirtualWindowMaskH _ src imm | .VirtualWindowMaskW _ src imm =>
@@ -49,10 +49,10 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .LUI _ imm => imm.setWidth 128
   -- Rust's FormatU decoder stores the sign-extended offset as u64 widened to
   -- i128, so AUIPC retains the unsigned 64-bit offset, including any carry.
-  -- Jolt: FormatU decoding, jolt/crates/jolt-program/src/image/decode.rs:513-520 at 5def437f.
+  -- Jolt: FormatU decoding, jolt/crates/jolt-program/src/image/decode.rs:535-542 at ff6fc6568.
   | .AUIPC _ imm =>
       BitVec.ofNat 128 (JoltISA.addWide address imm)
-  -- Rust: [JAL](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-lookup-tables/src/instructions/riscv/jal.rs:18).
+  -- Rust: JAL, `crates/jolt-lookup-tables/src/instructions/riscv/jal.rs` (`to_instruction_inputs`).
   | .JAL _ imm => BitVec.ofNat 128 (JoltISA.addWide address imm)
   | .VirtualLoadB _ _ base imm _ | .VirtualLoadH _ _ base imm _
   | .VirtualLoadW _ _ base imm _ | .VirtualStoreB base _ imm _
@@ -90,9 +90,9 @@ noncomputable def instructionLookupIndex (instruction : JoltISA.Instr)
   | .VirtualAdvice dst _ _ | .VirtualAdviceLoad dst _ =>
       (capturedDestinationValue dst postState).setWidth 128
   | .LD _ dst _ _ => interleaveLookupOperands 0 (capturedDestinationValue dst postState)
-  | .FENCE | .SD _ _ _ | .VirtualHostIO => 0
+  | .JoltSuccess .. | .JoltPanic .. | .FENCE | .SD _ _ _ | .VirtualHostIO => 0
 
--- Rust: [LookupIndex](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/lookups.rs:45).
+-- Rust: `crates/jolt-witness/src/witnesses/lookups.rs` (`LookupIndex`).
 -- Both committed and virtual instruction address chunks use this same index.
 -- Padding is the no-op lookup at address 0.
 noncomputable def lookupIndex (trace : Trace) (t : Nat) : BitVec 128 :=

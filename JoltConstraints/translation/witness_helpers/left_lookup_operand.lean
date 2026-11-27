@@ -6,7 +6,7 @@ set_option autoImplicit false
 
 namespace TraceWitness
 
--- Rust: [LeftLookupOperand](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/witnesses/operands.rs:45).
+-- Rust: `crates/jolt-witness/src/witnesses/operands.rs` (`LeftLookupOperand`).
 -- Combined-operand tables put the entire lookup index on the right and zero
 -- on the left. Other tables use the left instruction input. Padding is zero.
 noncomputable def LeftLookupOperand {F : Type} [Field F] (p : WitnessParams)

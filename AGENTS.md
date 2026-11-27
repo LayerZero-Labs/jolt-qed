@@ -69,7 +69,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
    Do not pass the whole witness context to a bytecode fact.
 3. Prove a property of a constructor or combinator once, then derive the instances.
    For example, if every expansion is built from a few combinators, show they preserve "no control row" or "no store row" rather than checking each expansion separately.
-4. Split cases on a small classification proved once, such as `stable_stall_control_flow` (a stall is a JAL, a JALR or a branch), not on the whole instruction set inside each lemma.
+4. Split cases on a small classification proved once, such as `row_kind` in `Layer6/RowStepKinds.lean` (every row is plain, a load, a store, HostIO, JAL, JALR or an explicit halt), not on the whole instruction set inside each lemma.
 5. Use the existing frameworks before writing new ones:
    - `StatePreservation.Preserves` and `preservation_auto` (`JoltBytecode/InstructionEquivalence/ProofSupport/Preservation.lean`) for frame properties;
    - `expand_program_layout` and `ExpansionRows` (`JoltConstraints/theorems/program_facts.lean`) for bytecode layout;
@@ -84,7 +84,7 @@ If you believe a staged statement is false, stop and report the exact missing fa
 Each of these has made a staged statement false before.
 
 1. A trace row or state given on its own carries no execution certificate.
-   A property of its post-state, such as `StableStall`, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
+   A property of its post-state, such as whether it recorded a halt kind, says nothing about its instruction unless the lemma also has the run (`last ∈ run.rows.back?`) or an explicit execution fact.
 2. Witness values are field sums that do not wrap; Sail stores 64-bit words that do.
    Comparing them needs a bound, such as `NextPCNoWrap` (`joltInstance.program.next_pc_no_wrap`), as in `theorems/Soundness/Layer5/Jal.lean`.
 3. Some flags are set per row, not per source instruction.
@@ -103,6 +103,6 @@ Each of these has made a staged statement false before.
 ## Sources
 
 - Jolt's Rust code: `/Users/ari.biswas/Work-with-A16z/jolt`.
-  The model is pinned to the commit recorded in `methods/soundness.md` (currently `c97e9300`), which may not be the checked-out HEAD.
+  The model is pinned to the commit recorded in `methods/soundness.md` (currently `504dd78a2`), which may not be the checked-out HEAD.
   Read pinned files with `git -C /Users/ari.biswas/Work-with-A16z/jolt show <pin>:<path>`.
-- The stopping rule follows a16z/jolt PR #2109 at merge commit `0249591a`.
+- A run stops at its first explicit halt (`jolt.success` or EBREAK), as Jolt's tracer does at `504dd78a2` (a16z/jolt#2417 and #2451).

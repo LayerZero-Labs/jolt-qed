@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer1.BytecodeReads
 import JoltConstraints.theorems.Soundness.Layer1.InstructionReads
+import JoltConstraints.theorems.Soundness.Layer1.Bytecode
 
 open LeanRV64D
 

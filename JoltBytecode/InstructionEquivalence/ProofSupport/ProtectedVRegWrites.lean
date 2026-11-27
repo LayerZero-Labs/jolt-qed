@@ -36,6 +36,8 @@ def Instr.WritesProtectedVReg : Instr → Prop
   | .SLTIU dst _ _
   | .LUI dst _
   | .AUIPC dst _
+  | .JoltPanic dst _ _
+  | .JoltSuccess dst _ _
   | .JAL dst _
   | .JALR dst _ _
   | .ADD dst _ _

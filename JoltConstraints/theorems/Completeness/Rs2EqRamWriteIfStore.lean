@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.Rs2EqRamWriteIfStore
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain
 
@@ -12,7 +11,7 @@ namespace JoltConstraints
 /-- A store writes its captured second source to RAM,
 including floor rows; for example, a floor byte store writes its merged doubleword.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs`
-(`store`) at `c6703570`. -/
+(`store`) at `ff6fc6568`. -/
 theorem honestWitness_rs2EqRamWriteIfStore
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

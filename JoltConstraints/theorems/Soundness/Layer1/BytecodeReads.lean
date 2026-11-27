@@ -1,4 +1,4 @@
-import JoltConstraints.theorems.Soundness.Layer1.Bytecode
+import JoltConstraints.theorems.Soundness.Layer1.Addresses
 
 open LeanRV64D
 

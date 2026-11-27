@@ -1,11 +1,12 @@
 import JoltConstraints.theorems.Soundness.Layer5.LookupWrite
 import JoltConstraints.theorems.Soundness.Layer4.Comparison
+import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
 
 open LeanRV64D
 
 /-! Shared step for signed and unsigned register comparisons. Both tables
 return the exact 0/1 word written by the instruction interpreter.
-At public pin 8bbb2357:
+At public pin ff6fc6568:
 See : jolt/tracer/src/instruction/slt.rs:17-27
 See : jolt/tracer/src/instruction/sltu.rs:17-29 -/
 
@@ -67,7 +68,7 @@ private theorem sltu_value_eq (lhs rhs : BitVec 64) :
 
 variable {F : Type} [Field F] {params : WitnessParams} {witness : WitnessType F params}
   {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs}
-  (charAbove2pow128 : 2 ^ 128 < ringChar F)
+  (charAbove2pow128Minus2pow64 : 2 ^ 128 - 2 ^ 64 < ringChar F)
   (context : ConstraintContext joltInstance privateInputs params)
   (equations : ConstraintEquations context.bytecode context.initialRam context.io context.entry witness)
   {live : Fin 128 → Prop} {t : Fin params.traceLength} {slot : Fin (2 ^ params.logBytecodeK)}
@@ -86,7 +87,7 @@ private theorem comparison_canonical :
       JoltRegisterEncoding.instructionIsCanonical, Bool.and_eq_true] using
       (bytecodeRow_rowOk context rowIs).canonical
 
-include charAbove2pow128 context equations selected rowIs instructionIs
+include charAbove2pow128Minus2pow64 context equations selected rowIs instructionIs
 
 private theorem comparison_write_value {pre : SailJoltState}
     (agrees : RegisterAgreementOn live witness t pre)
@@ -94,7 +95,7 @@ private theorem comparison_write_value {pre : SailJoltState}
     (rhsLive : live (TraceWitness.sourceRegisterAddress rhs)) :
     witness.RdWriteValue t =
       ((operation.value (sourceValue lhs pre) (sourceValue rhs pre)).toNat : F) := by
-  have bound := two_pow_127_lt_char charAbove2pow128
+  have bound := two_pow_127_lt_char charAbove2pow128Minus2pow64
   have canonical := comparison_canonical context rowIs operation instructionIs
   obtain ⟨left, right⟩ := agrees.registerInputs bound context equations selected rowIs
     lhs rhs canonical.1.2 canonical.2
@@ -146,9 +147,9 @@ theorem comparison_step {pre : SailJoltState} (agrees : RegisterAgreementOn live
   have canonical := comparison_canonical context rowIs operation instructionIs
   have leftRead := (agrees.read lhs canonical.1.2 lhsLive).1
   have rightRead := (agrees.read rhs canonical.2 rhsLive).1
-  have encoded := comparison_write_value charAbove2pow128 context equations selected rowIs
+  have encoded := comparison_write_value charAbove2pow128Minus2pow64 context equations selected rowIs
     operation instructionIs agrees lhsLive rhsLive
-  apply registerWriteOn_step context equations selected rowIs charAbove2pow128 agrees
+  apply registerWriteOn_step context equations selected rowIs charAbove2pow128Minus2pow64 agrees
     destination (by cases operation <;> rw [instructionIs] <;> rfl) _ encoded answer advice
   rw [withRuntimeAdvice_eq_of_noAdvice _ advice
     (by cases operation <;> rw [instructionIs] <;> rfl)]

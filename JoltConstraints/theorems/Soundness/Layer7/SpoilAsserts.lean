@@ -15,7 +15,7 @@ instruction temporaries 40–47; for example, a guest's custom assertion reads x
 and x2, whereas built-in expansions introduce no nonzero-immediate assertions.
 See jolt/crates/jolt-program/src/image/decode.rs (`decode_custom`,
 `format_b_operands`) and jolt/crates/jolt-program/src/asm.rs
-(`__jolt_asm_stmt!`, `assert_eq`) at 5def437f. -/
+(`__jolt_asm_stmt!`, `assert_eq`) at ff6fc6568. -/
 theorem source_spoil_assert_read_not_temporary
     (source : SourceInstructionRow SourceInstruction) (rows : List JoltInstructionRow)
     (expanded : expand_instruction source = some rows)
@@ -75,7 +75,7 @@ theorem source_spoil_assert_read_not_temporary
 temporaries 40–47, independently of any witness or execution.
 For example, a guest assertion's x1 operand remains architectural after stamping.
 See jolt/crates/jolt-program/src/expand/materialize.rs
-(`ExpansionState::dispatch_source`) at 5def437f. -/
+(`ExpansionState::dispatch_source`) at ff6fc6568. -/
 theorem expanded_spoil_assert_read_not_temporary
     (program : Rv64ProgramImage SourceInstruction) (bytecode : Array JoltInstructionRow)
     (expanded : expand_program program = some bytecode)
@@ -98,7 +98,7 @@ For example, an executed custom equality assertion with immediate 2 must read
 equal pre-state words even though the tracer would only warn if they differed.
 See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
 and jolt/crates/jolt-riscv/src/instructions/assert/assert_eq.rs (`AssertEq`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem represented_spoil_asserts_pass
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)

@@ -1,4 +1,3 @@
-import JoltConstraints.theorems.Soundness.Layer5.TapeSemantics
 import JoltBytecode.InstructionEquivalence.ProofSupport.ExpansionBlocks.ALU
 
 open LeanRV64D

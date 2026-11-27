@@ -1,6 +1,4 @@
 import JoltConstraints.theorems.Completeness.Helpers.AddressOffsetEntry
-import JoltConstraints.translation.Constraints.LookupOperandData
-import JoltBytecode.InstructionEquivalence.ProofSupport.BitVecMasks
 import JoltConstraints.theorems.Soundness.Layer4.ByteSwap
 import JoltConstraints.theorems.Soundness.Layer4.WordEntry
 import JoltConstraints.theorems.Soundness.Layer4.BitwiseEntry
@@ -8,8 +6,8 @@ import JoltConstraints.theorems.Soundness.Layer4.ComparisonEntry
 import JoltConstraints.theorems.Soundness.Layer4.ConditionalEntry
 import JoltConstraints.theorems.Soundness.Layer4.RotateEntry
 import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
-import JoltConstraints.theorems.Completeness.Helpers.LookupPextProofHelpers
-import JoltConstraints.theorems.Completeness.Helpers.LookupShiftProofHelpers
+import JoltConstraints.theorems.Soundness.Layer4.PextEntry
+import JoltConstraints.theorems.Soundness.Layer4.RangeCheckEntry
 
 open LeanRV64D
 
@@ -312,7 +310,7 @@ theorem lookupEntryCorrect_RangeCheckAligned (row : HonestTraceRow bytecode)
 /-- The honest floor byte rows select the AddressOffsetB entry;
 for example, effective address 15 returns offset 7.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`floor_access!`) at `c6703570`. -/
+(`floor_access!`) at `ff6fc6568`. -/
 theorem lookupEntryCorrect_AddressOffsetB (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .AddressOffsetB) :
     LookupEntryCorrect F .AddressOffsetB row := by
@@ -322,7 +320,7 @@ theorem lookupEntryCorrect_AddressOffsetB (row : HonestTraceRow bytecode)
 /-- The honest floor halfword rows select the AddressOffsetH entry;
 for example, effective address 14 returns offset 6.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`floor_access!`) at `c6703570`. -/
+(`floor_access!`) at `ff6fc6568`. -/
 theorem lookupEntryCorrect_AddressOffsetH (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .AddressOffsetH) :
     LookupEntryCorrect F .AddressOffsetH row := by
@@ -332,7 +330,7 @@ theorem lookupEntryCorrect_AddressOffsetH (row : HonestTraceRow bytecode)
 /-- The honest floor word rows select the AddressOffsetW entry;
 for example, effective address 12 returns offset 4.
 Jolt's prover: `crates/jolt-lookup-tables/src/instructions/virt/floor_access.rs`
-(`floor_access!`) at `c6703570`. -/
+(`floor_access!`) at `ff6fc6568`. -/
 theorem lookupEntryCorrect_AddressOffsetW (row : HonestTraceRow bytecode)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some .AddressOffsetW) :
     LookupEntryCorrect F .AddressOffsetW row := by
@@ -853,7 +851,7 @@ theorem rowLookupOutput_eq_zero_of_lookupTable_none (row : HonestTraceRow byteco
 /-- Dispatch the honest entry proof for the selected table, including floor
 address offsets; for example, a LoadH row selects AddressOffsetH.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs` (`LookupTableKind`)
-and `instructions/virt/floor_access.rs` (`floor_access!`) at `c6703570`. -/
+and `instructions/virt/floor_access.rs` (`floor_access!`) at `ff6fc6568`. -/
 theorem lookupEntryCorrect_of_lookupTable (row : HonestTraceRow bytecode) (k : LookupTableKind)
     (h : JoltMetadata.lookupTable (rowInstruction row) = some k)
     (maskOk : ShiftMaskOk (rowInstruction row) row.preState) :

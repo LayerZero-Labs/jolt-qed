@@ -1,38 +1,57 @@
-import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Nat.Log
-import Mathlib.Tactic.DeriveFintype
+import Mathlib.Data.Fintype.EquivFin
 
 set_option autoImplicit false
 
--- Rust paths below refer to public pin 8bbb2357, inspected in the local checkout.
+-- An enumeration is finite once its constructor index is below a bound and has the
+-- generated left inverse `ofNat`. Mathlib's `deriving Fintype` for enums needs a relaxed
+-- transparency setting under Lean 4.35, so each enumeration below gives the instance
+-- through this lemma instead. The bound only has to be an upper bound on the constructors.
+theorem finite_of_ofNat_ctorIdx {α : Type} (index : α → Nat) (ofNat : Nat → α) (bound : Nat)
+    (index_lt : ∀ a, index a < bound) (ofNat_index : ∀ a, ofNat (index a) = a) : Finite α :=
+  Finite.of_injective (β := Fin bound) (fun a => ⟨index a, index_lt a⟩) fun a b h =>
+    (ofNat_index a).symm.trans ((congrArg ofNat (congrArg Fin.val h)).trans (ofNat_index b))
+
+-- Rust paths below refer to public pin ff6fc6568, inspected in the local checkout.
 
 -- Rust: crates/jolt-riscv/src/flags.rs::CircuitFlags.
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
 inductive CircuitFlags where
   | AddOperands | SubtractOperands | MultiplyOperands
   | Load | Store | Jump | WriteLookupOutputToRD
   | VirtualInstruction | Assert | DoNotUpdateUnexpandedPC | Advice
   | IsCompressed | IsFirstInSequence | IsLastInSequence
-  deriving DecidableEq, Fintype
+  | Halt | HaltPanic
+  deriving DecidableEq
 
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
+theorem CircuitFlags.ctorIdx_lt (a : CircuitFlags) : a.ctorIdx < 16 := by
+  cases a <;> decide
+
+noncomputable instance : Fintype CircuitFlags :=
+  haveI : Finite CircuitFlags :=
+    finite_of_ofNat_ctorIdx CircuitFlags.ctorIdx CircuitFlags.ofNat 16 CircuitFlags.ctorIdx_lt CircuitFlags.ofNat_ctorIdx
+  Fintype.ofFinite CircuitFlags
+
 /-- Operand-routing and branch/no-op flags in Jolt's prover.
 For example, LD selects its captured destination with `RightOperandIsRdWriteValue`.
-Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `c6703570`. -/
+Jolt's prover: `crates/jolt-riscv/src/flags.rs` (`InstructionFlags`) at `ff6fc6568`. -/
 inductive InstructionFlags where
   | LeftOperandIsPC | RightOperandIsImm
   | LeftOperandIsRs1Value | RightOperandIsRs2Value | Branch | IsNoop
   | RightOperandIsRdWriteValue
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
 
--- Lean 4.35: Mathlib v4.35.0 derives enum `Fintype` only with this option (see MathlibTest/DeriveFintype.lean).
-set_option backward.isDefEq.respectTransparency false in
-/-- The 55 lookup tables, in the order used by Jolt's prover.
+theorem InstructionFlags.ctorIdx_lt (a : InstructionFlags) : a.ctorIdx < 7 := by
+  cases a <;> decide
+
+noncomputable instance : Fintype InstructionFlags :=
+  haveI : Finite InstructionFlags :=
+    finite_of_ofNat_ctorIdx InstructionFlags.ctorIdx InstructionFlags.ofNat 7 InstructionFlags.ctorIdx_lt InstructionFlags.ofNat_ctorIdx
+  Fintype.ofFinite InstructionFlags
+
+/-- The lookup tables, in the order used by Jolt's prover.
 For example, `AddressOffsetH` returns an effective address masked with 6.
 Jolt's prover: `crates/jolt-lookup-tables/src/tables/mod.rs`
-(`LookupTableKind<64>`) at `c6703570`. -/
+(`LookupTableKind<64>`) at `ff6fc6568`. -/
 inductive LookupTableKind where
   | RangeCheck
   | RangeCheckAligned
@@ -89,7 +108,15 @@ inductive LookupTableKind where
   | AddressOffsetB
   | AddressOffsetH
   | AddressOffsetW
-  deriving DecidableEq, Fintype
+  deriving DecidableEq
+
+theorem LookupTableKind.ctorIdx_lt (a : LookupTableKind) : a.ctorIdx < 55 := by
+  cases a <;> decide
+
+noncomputable instance : Fintype LookupTableKind :=
+  haveI : Finite LookupTableKind :=
+    finite_of_ofNat_ctorIdx LookupTableKind.ctorIdx LookupTableKind.ofNat 55 LookupTableKind.ctorIdx_lt LookupTableKind.ofNat_ctorIdx
+  Fintype.ofFinite LookupTableKind
 
 -- These are the things God gives before we can begin Jolt. Some are free params, some are derived from the users program.
 -- Rust: crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs::JoltOneHotDimensions.
@@ -118,7 +145,8 @@ structure WitnessParams where
 
 -- The widths Rust's prover picks from the padded trace length: 4 and 16 below 2^25
 -- cycles, else 8 and 32. The verifier does not check this choice; it accepts any
--- widths that pass the structural checks above (dimensions.rs:381-412). So this is
+-- widths that pass the structural checks above (`JoltFormulaDimensions::try_from` in
+-- crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs). So this is
 -- a fact about the honest prover's sizes, used only by completeness.
 -- Rust: crates/jolt-prover/src/config.rs::one_hot_config.
 def WitnessParams.ProverChunkConfig (p : WitnessParams) : Prop :=
@@ -128,30 +156,30 @@ def WitnessParams.ProverChunkConfig (p : WitnessParams) : Prop :=
 /-- Number of witness positions, including padding, always a power of two.
 `trace.rows.size` counts actual execution steps and may be smaller: for example,
 six execution steps can occupy an eight-position witness, with two padding positions.
-Rust: [walk_cycles](/Users/ari.biswas/Work-with-A16z/jolt/crates/jolt-witness/src/backend/trace/cycle.rs:107).
+Rust: `crates/jolt-witness/src/backend/trace/cycle.rs` (`walk_cycles`).
 -/
 def WitnessParams.traceLength (p : WitnessParams) : Nat := 2 ^ p.logT
 
 /-- Rust `ProverConfig::derive_from_dimensions` chooses the first power-of-two cycle
-domain strictly larger than the physical trace, subject to the compiled PCS
+domain at least as large as the physical trace, subject to the compiled PCS
 floor. The ordinary build has `minimumLogT = 8` (256 cycles); Akita has
 `minimumLogT = 12` (4096 cycles). For zero rows the floor dominates. This mathematical formula describes successful
 padding; `ProverConfig.checkedTraceLength` also models overflow rejection.
 Rust: crates/jolt-prover/src/config.rs::derive_from_dimensions. -/
 def WitnessParams.proverTraceLength (minimumLogT physicalRows : Nat) : Nat :=
-  max (2 ^ minimumLogT) (2 ^ (Nat.log2 physicalRows + 1))
+  max (2 ^ minimumLogT) (2 ^ Nat.clog 2 physicalRows)
 
 /-- The witness cycle domain is the length selected by either supported Rust
-prover build, and contains at least one trailing padding row. The compiled
+prover build, and contains every real row, possibly with no padding. The compiled
 backend/profile itself is not yet part of `WitnessParams` (see issue #21). -/
 def WitnessParams.ProverPaddedFor (p : WitnessParams) (physicalRows : Nat) : Prop :=
   (p.traceLength = WitnessParams.proverTraceLength 8 physicalRows ∨
     p.traceLength = WitnessParams.proverTraceLength 12 physicalRows) ∧
-  physicalRows < p.traceLength
+  physicalRows ≤ p.traceLength
 
 theorem WitnessParams.ProverPaddedFor.traceFits {p : WitnessParams} {physicalRows : Nat}
     (padded : p.ProverPaddedFor physicalRows) : physicalRows ≤ p.traceLength :=
-  Nat.le_of_lt padded.2
+  padded.2
 
 /-- Rust inserts a leading no-op before rounding the expanded bytecode length
 up to a power of two, with a minimum of two rows.
@@ -173,17 +201,6 @@ theorem WitnessParams.BytecodeDomainFor.rowsFit {p : WitnessParams} {expandedRow
 
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::ram_log_k.
 def WitnessParams.ramSize (p : WitnessParams) : Nat := 2 ^ p.logRamK
-
-/-- Resource check for materializing every dense grid in Rust's trace-backed
-witness backend with a field whose elements occupy `fieldBytes` bytes. The
-address counts are `2^chunkBits` for one-hot chunks, `128` for registers,
-and `ramSize` for RAM; each grid has `traceLength` cycles. Rust caps each
-allocation at `2^35` bytes. This check depends on the field and backend, so
-it is separate from the prover's dimension policy above.
-Rust: crates/jolt-witness/src/backend/trace/mod.rs::checked_dense_grid_len. -/
-def WitnessParams.TraceBackendGridFits (p : WitnessParams) (fieldBytes : Nat) : Prop :=
-  0 < fieldBytes ∧
-  fieldBytes * max (2 ^ p.chunkBits) (max 128 p.ramSize) * p.traceLength ≤ 2 ^ 35
 
 -- Rust: crates/jolt-claims/src/protocols/jolt/geometry/dimensions.rs::JoltFormulaDimensions::try_from (instruction_d).
 -- Rust: crates/jolt-witness/src/backend/trace/mod.rs::RV64_LOOKUP_ADDRESS_BITS = 128.
@@ -240,8 +257,6 @@ structure WitnessType (Value : Type) (p : WitnessParams) where
   Product : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/flags.rs::ShouldBranch.
   ShouldBranch : Fin p.traceLength → Value
-  -- Rust: crates/jolt-witness/src/witnesses/flags.rs::ShouldJump.
-  ShouldJump : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/pc.rs::NextUnexpandedPc.
   NextUnexpandedPC : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/pc.rs::NextPc.
@@ -264,8 +279,6 @@ structure WitnessType (Value : Type) (p : WitnessParams) where
   RdInc : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/witnesses/increments.rs::RamInc.
   RamInc : Fin p.traceLength → Value
-  -- Rust: crates/jolt-witness/src/witnesses/ram.rs::RamHammingWeight.
-  RamHammingWeight : Fin p.traceLength → Value
   -- Rust: crates/jolt-witness/src/backend/trace/registers.rs::materialize_register_read_write_virtual.
   -- Rust: common/src/constants.rs::REGISTER_COUNT = 128.
   Rs1Ra : Fin 128 → Fin p.traceLength → Value

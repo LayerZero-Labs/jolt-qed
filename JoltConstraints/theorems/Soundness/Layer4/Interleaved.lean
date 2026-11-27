@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Soundness.Layer4.Table
 import JoltConstraints.theorems.Soundness.Layer4.Interleave
-import JoltConstraints.theorems.Soundness.Layer0.Words
 
 open LeanRV64D
 

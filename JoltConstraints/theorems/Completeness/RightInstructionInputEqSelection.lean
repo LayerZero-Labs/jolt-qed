@@ -1,5 +1,4 @@
 import JoltConstraints.translation.Constraints.RightInstructionInputEqSelection
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.witness_domain
 
@@ -12,7 +11,7 @@ namespace JoltConstraints
 /-- Constraint (33) selects a sum of flagged inputs, including the captured
 load destination; for example, ShiftData selects both its address and immediate.
 Jolt's verifier: `crates/jolt-claims/src/protocols/jolt/relations/instruction/input_virtualization.rs`
-(`InputVirtualization::unbatched_relation`) at `c6703570`. -/
+(`InputVirtualization::unbatched_relation`) at `ff6fc6568`. -/
 theorem honestWitness_rightInstructionInputEqSelection
     {F : Type} [Field F] (params : WitnessParams)
     {joltInstance : JoltInstance SourceInstruction} {privateInputs : JoltPrivateInputs} (trace : HonestTrace joltInstance privateInputs)

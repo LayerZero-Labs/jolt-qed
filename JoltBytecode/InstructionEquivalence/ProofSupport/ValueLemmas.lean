@@ -444,4 +444,28 @@ theorem jolt_sltu_value_toNat (x y : BitVec 64) :
   · rw [jolt_sltu_value_eq_zero_of_not_lt x y h]
     simp [h]
 
+/-- Jolt's AMO min/max rows select by arithmetic: `old + take * (rs2 - old)` is `rs2`
+when `take` holds and `old` otherwise.
+For example, with `take = false` the store keeps `old`.
+Jolt: `crates/jolt-program/src/expand/memory/shared.rs` (`expand_amo_minmax_d`). -/
+theorem select_by_mul {w : Nat} (take : Bool) (old rs2 : BitVec w) :
+    old + (if take then 1 else 0) * (rs2 - old) = if take then rs2 else old := by
+  cases take <;> simp
+
+/-- Jolt's signed less-than is Sail's `<_s`; for example, `-1 <_s 0`. -/
+theorem slt_eq_zopz0zI_s {w : Nat} (a b : BitVec w) : a.slt b = zopz0zI_s a b := by
+  simp [zopz0zI_s, BitVec.slt]
+
+/-- Jolt's signed less-than, with operands swapped, is Sail's `>_s`. -/
+theorem slt_eq_zopz0zK_s {w : Nat} (a b : BitVec w) : a.slt b = zopz0zK_s b a := by
+  simp [zopz0zK_s, BitVec.slt]
+
+/-- Jolt's unsigned less-than is Sail's `<_u`; for example, `0 <_u -1`. -/
+theorem ult_eq_zopz0zI_u {w : Nat} (a b : BitVec w) : a.ult b = zopz0zI_u a b := by
+  simp [zopz0zI_u, BitVec.ult, BitVec.toNatInt]
+
+/-- Jolt's unsigned less-than, with operands swapped, is Sail's `>_u`. -/
+theorem ult_eq_zopz0zK_u {w : Nat} (a b : BitVec w) : a.ult b = zopz0zK_u b a := by
+  simp [zopz0zK_u, BitVec.ult, BitVec.toNatInt]
+
 end

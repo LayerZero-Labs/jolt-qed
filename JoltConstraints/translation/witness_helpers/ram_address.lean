@@ -1,4 +1,3 @@
-import Mathlib.Algebra.Field.Defs
 import JoltConstraints.translation.witness
 import JoltConstraints.translation.trace
 
@@ -14,7 +13,7 @@ record `ea - (ea &&& mask)`, with B/H/W masks 7/6/4.
 For example, a halfword floor row at `ea = 10` records 8.
 Jolt's tracer: `tracer/src/instruction/floor_access.rs` (`addresses`);
 Jolt's prover: `crates/jolt-witness/src/witnesses/ram.rs` (`ram_access_address`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
     (preState : SailJoltState) : Option (BitVec 64) :=
   match instruction with
@@ -31,7 +30,7 @@ noncomputable def ramAccessAddress (instruction : JoltISA.Instr)
       some (ea - (ea &&& 4))
   | _ => none
 
--- Rust: [RamAddress](https://github.com/a16z/jolt/blob/8bbb2357890928d8f83b00ca542879077c4d3d28/crates/jolt-witness/src/witnesses/ram.rs).
+-- Rust: [RamAddress](https://github.com/a16z/jolt/blob/ff6fc656813d950565c9f6e1258b78bdaf0e60e8/crates/jolt-witness/src/witnesses/ram.rs).
 -- Encode the raw byte address before RAM word remapping. Read the base from
 -- the pre-state, including when a load overwrites that same register.
 -- Instructions without a memory access and padding positions contribute zero.

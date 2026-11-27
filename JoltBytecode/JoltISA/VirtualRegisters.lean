@@ -299,10 +299,8 @@ def joltRegisterCsrAddress? (r : VReg) : Option (BitVec 12) :=
 /-- TODO: Docs -/
 def JoltRegisterSlot.isProtected : JoltRegisterSlot → Bool
   | .xreg _ => false
-  -- LR/SC reservation virtual registers are Jolt bookkeeping, not RISC-visible
-  -- architectural state. LR/SC proofs will need their own reservation contract.
-  | .reservationW => false
-  | .reservationD => false
+  | .reservationW => true
+  | .reservationD => true
   | .mtvec => true
   | .mscratch => true
   | .mepc => true

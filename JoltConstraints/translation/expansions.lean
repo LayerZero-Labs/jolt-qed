@@ -57,8 +57,8 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .AND rd rs1 rs2 => some (.ofNative (.AND (.xreg rd) (.xreg rs1) (.xreg rs2)))
     | .ANDN rd rs1 rs2 => some (.ofNative (.ANDN (.xreg rd) (.xreg rs1) (.xreg rs2)))
     | .FENCE => some (.ofNative .FENCE)
-    | .ECALL => some (.ofProgram JoltISA.ecallProgram)
-    | .EBREAK => some (.ofProgram JoltISA.ebreakProgram)
+    | .ECALL => some (.ofProgram JoltISA.ecallProgramAuto)
+    | .EBREAK => some (.ofProgram JoltISA.ebreakProgramAuto)
     -- RV64I additions
     | .LWU rd rs1 imm => some (.ofProgram (JoltISA.lwuProgramAuto rd rs1 imm))
     | .LD rd rs1 imm => some (.ofNative (JoltISA.Encoded.LD .normal (.xreg rd) (.xreg rs1) imm))
@@ -87,8 +87,7 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .REMW rd rs1 rs2 q => some (.ofPureProgram rd (JoltISA.remwProgramAuto rd rs1 rs2 q))
     | .REMUW rd rs1 rs2 q => some (.ofPureProgram rd (JoltISA.remuwProgramAuto rd rs1 rs2 q))
     -- A
-    -- The generated LR programs take an rs2 they do not use.
-    | .LR_W rd rs1 _ _ => some (.ofProgram (JoltISA.lrwProgramAuto rd rs1 (regidx.Regidx 0)))
+    | .LR_W rd rs1 _ _ => some (.ofProgram (JoltISA.lrwProgramAuto rd rs1))
     -- PR #2039 computes SC success from reservation registers, without advice.
     | .SC_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.scwProgramAuto rd rs1 rs2))
     | .AMOSWAP_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoswapwProgramAuto rd rs1 rs2))
@@ -100,7 +99,7 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .AMOMAX_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amomaxwProgramAuto rd rs1 rs2))
     | .AMOMINU_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amominuwProgramAuto rd rs1 rs2))
     | .AMOMAXU_W rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amomaxuwProgramAuto rd rs1 rs2))
-    | .LR_D rd rs1 _ _ => some (.ofProgram (JoltISA.lrdProgramAuto rd rs1 (regidx.Regidx 0)))
+    | .LR_D rd rs1 _ _ => some (.ofProgram (JoltISA.lrdProgramAuto rd rs1))
     | .SC_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.scdProgramAuto rd rs1 rs2))
     | .AMOSWAP_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoswapdProgramAuto rd rs1 rs2))
     | .AMOADD_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amoadddProgramAuto rd rs1 rs2))
@@ -112,11 +111,17 @@ def SourceInstruction.expand : SourceInstruction → Option ExpandedSource
     | .AMOMINU_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amominudProgramAuto rd rs1 rs2))
     | .AMOMAXU_D rd rs1 rs2 _ _ => some (.ofProgram (JoltISA.amomaxudProgramAuto rd rs1 rs2))
     -- Zicsr and machine mode
-    | .CSRRW rd csr rs1 => some (.ofProgram (JoltISA.csrrwProgram csr rs1 rd))
-    | .CSRRS rd csr rs1 => some (.ofProgram (JoltISA.csrrsProgram csr rs1 rd))
-    | .MRET => some (.ofProgram JoltISA.mretProgram)
+    | .CSRRW rd csr rs1 => some (.ofProgram (JoltISA.csrrwProgramAuto csr rd rs1))
+    | .CSRRS rd csr rs1 => some (.ofProgram (JoltISA.csrrsProgramAuto csr rd rs1))
+    | .CSRRC rd csr rs1 => some (.ofProgram (JoltISA.csrrcProgramAuto csr rd rs1))
+    | .CSRRWI rd csr uimm => some (.ofProgram (JoltISA.csrrwiProgram csr uimm rd))
+    | .CSRRSI rd csr uimm => some (.ofProgram (JoltISA.csrrsiProgram csr uimm rd))
+    | .CSRRCI rd csr uimm => some (.ofProgram (JoltISA.csrrciProgram csr uimm rd))
+    | .MRET => some (.ofProgram JoltISA.mretProgramAuto)
   | .jolt instruction =>
     match instruction with
+    | .JoltSuccess =>
+        some (.ofNative (.JoltSuccess (.xreg (regidx.Regidx 0)) (.xreg (regidx.Regidx 0)) 0))
     | .AdviceLB rd => some (.ofProgram (JoltISA.advicelbProgramAuto rd))
     | .AdviceLH rd => some (.ofProgram (JoltISA.advicelhProgramAuto rd))
     | .AdviceLW rd => some (.ofProgram (JoltISA.advicelwProgramAuto rd))

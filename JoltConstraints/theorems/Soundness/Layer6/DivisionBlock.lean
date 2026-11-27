@@ -74,7 +74,7 @@ witness advice, apply the matching division soundness theorem, and construct
 honest rows using its concrete-execution theorem.
 For example, REM with divisor zero may use witness quotient 5 while the returned
 nine rows use quotient 0 and still produce the same architectural result.
-See jolt/crates/jolt-program/src/expand/division/rem.rs (`expand_rem`) at 5def437f. -/
+See jolt/crates/jolt-program/src/expand/division/rem.rs (`expand_rem`) at ff6fc6568. -/
 theorem division_block {F : Type} [Field F] (joltField : JoltField F)
     {joltInstance : JoltInstance SourceInstruction} {params : WitnessParams}
     {privateInputs : JoltPrivateInputs} (witness : WitnessType F params)

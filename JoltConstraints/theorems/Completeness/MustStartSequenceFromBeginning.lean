@@ -1,10 +1,8 @@
-import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.translation.Constraints.MustStartSequenceFromBeginning
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
-import JoltConstraints.theorems.execution_conditions
 import JoltConstraints.theorems.trace_interface
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.ProgramLayout
 
 open LeanRV64D
 

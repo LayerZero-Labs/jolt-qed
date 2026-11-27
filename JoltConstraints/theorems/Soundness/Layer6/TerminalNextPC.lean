@@ -1,5 +1,7 @@
 import JoltConstraints.theorems.Soundness.Layer7.StallSuffix
 import JoltConstraints.theorems.Soundness.Layer7.LastJump
+import JoltConstraints.theorems.Completeness.NextUnexpandedPCEqPCPlusImmIfShouldBranch
+import JoltConstraints.theorems.Soundness.Layer1.HaltEndRule
 
 open LeanRV64D
 
@@ -125,10 +127,8 @@ private theorem terminal_noncontrol
     (terminal : run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0)
     (cycle : Fin params.traceLength) (atCycle : cycle.val + 1 = run.rows.size)
     (nextBound : run.rows.size < params.traceLength)
-    (notJal : ¬ ∃ dst imm,
-      run.bytecode[last.rowIndex].instruction = .JAL dst imm)
-    (notJalr : ¬ ∃ dst base imm,
-      run.bytecode[last.rowIndex].instruction = .JALR dst base imm)
+    (jumpFalse : JoltMetadata.opcodeFlag
+      run.bytecode[last.rowIndex].instruction .Jump = false)
     (notBranch : JoltMetadata.instructionFlag
       run.bytecode[last.rowIndex].instruction .Branch = false)
     (address : BitVec 64)
@@ -138,22 +138,11 @@ private theorem terminal_noncontrol
     terminal_last_setup joltField joltInstance privateInputs witness context equations
       run bytecodeEq represented last atEnd cycle atCycle nextBound
   have sail := noncontrol_next_pc joltInstance privateInputs run index
-    (by simpa only [rowEq] using notJal)
-    (by simpa only [rowEq] using notJalr)
+    (by simpa only [rowEq] using jumpFalse)
     (by simpa only [rowEq] using notBranch)
   have addressEq : address = run.bytecode[last.rowIndex].address +
       (if source_is_compressed run.bytecode last.rowIndex then 2 else 4) := by
     exact Option.some.inj (postNext.symm.trans (by simpa only [rowEq] using sail))
-  have jumpFalse : JoltMetadata.opcodeFlag
-      run.bytecode[last.rowIndex].instruction .Jump = false := by
-    change (match run.bytecode[last.rowIndex].instruction with
-      | .JAL _ _ | .JALR _ _ _ => true | _ => false) = false
-    split
-    · rename_i dst imm jump
-      exact False.elim (notJal ⟨dst, imm, jump⟩)
-    · rename_i dst base imm jump
-      exact False.elim (notJalr ⟨dst, base, imm, jump⟩)
-    · rfl
   have branchFlag : witness.InstructionFlags .Branch cycle = 0 := by
     rw [JoltConstraints.Soundness.instructionFlag_of_selected_bytecode
       (two_pow_127_lt_char joltField) context equations .Branch cycle slot selected]
@@ -711,8 +700,7 @@ next unexpanded PC equal Sail's post-state next PC.
 For example, an ADDI at `0x80000000` followed by a real instruction selects
 Sail's `0x80000004` as the next source address.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`NextUnexpandedPc::extract`)
-and jolt/crates/jolt-witness/src/witnesses/flags.rs (`ShouldJump::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem terminal_next_unexpanded_pc
     {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
@@ -754,8 +742,26 @@ theorem terminal_next_unexpanded_pc
   have noBranch : JoltMetadata.instructionFlag
       run.bytecode[last.rowIndex].instruction .Branch = false :=
     Bool.eq_false_iff.mpr branch
+  have jumpFalse : JoltMetadata.opcodeFlag
+      run.bytecode[last.rowIndex].instruction .Jump = false := by
+    by_contra jump
+    have jumpTrue := Bool.eq_true_of_ne_false jump
+    rcases JoltMetadata.jumpCases _ jumpTrue with jalCase | jalrCase | ⟨kind, dst, src, imm, halt⟩
+    · exact jal jalCase
+    · exact jalr jalrCase
+    · obtain ⟨_, slot, _, _, selected, rowAt, _, _⟩ :=
+        terminal_last_setup joltField joltInstance privateInputs witness context equations
+          run bytecodeEq represented last atEnd cycle atCycle nextBound
+      have halted : run.bytecode[last.rowIndex].instruction.haltKind?.isSome = true := by
+        rw [halt]; cases kind <;> rfl
+      have padding := selected_halt_forces_next_padding (two_pow_127_lt_char joltField)
+        context equations cycle slot selected _ rowAt halted
+      rw [equations.nextIsNoopEqShift cycle, dite_eq_left (show cycle.val + 1 < params.traceLength by omega)] at padding
+      have same : (⟨cycle.val + 1, by omega⟩ : Fin params.traceLength) = ⟨run.rows.size, nextBound⟩ :=
+        Fin.ext atCycle
+      exact nextReal (by simpa only [same] using padding)
   exact terminal_noncontrol joltField joltInstance noWrap privateInputs witness context
     equations run bytecodeEq represented last atEnd terminal cycle atCycle nextBound
-    jal jalr noBranch address postNext
+    jumpFalse noBranch address postNext
 
 end JoltInstance

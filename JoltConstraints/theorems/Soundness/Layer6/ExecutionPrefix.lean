@@ -1,10 +1,8 @@
-import JoltConstraints.translation.Constraints.All
-import JoltConstraints.theorems.Soundness.Assumptions
-import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.translation.witness_helpers.pc
 import JoltConstraints.translation.witness_helpers.rs1_value
 import JoltConstraints.translation.witness_helpers.rs2_value
-import JoltConstraints.translation.witness_helpers.ram_address
+import JoltConstraints.translation.Constraints.BytecodeReadSelectors
+import JoltConstraints.translation.witness_helpers.ram_state
 
 open LeanRV64D
 
@@ -15,19 +13,19 @@ namespace JoltInstance
 /-- An instruction temporary is a register classified as `instructionTmp` by
 Jolt's register map, namely registers 40–47. For example, register 40 is an
 instruction temporary, while register 36 (`mepc`) is persistent machine state.
-See jolt/crates/jolt-program/src/expand/allocator.rs:133-143 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/allocator.rs:133-143 at ff6fc6568. -/
 def IsInstructionTemporary (register : Fin 128) : Prop :=
   (match JoltISA.joltRegisterSlot (BitVec.ofFin register) with
   | .instructionTmp _ => true
   | _ => false) = true
 
-/-- The witness observations for every row up to and including the first stable
-stall, or up to padding or the last witness cycle when there is no stall.
+/-- The witness observations for every row up to and including the first explicit
+halt, or up to padding or the last witness cycle when there is no halt.
 Source operands agree unless their register is an instruction temporary;
 absent operands still agree. For example, `rem a0, a1, zero` may use witness
 quotient advice 5 and honest advice 0: its reads of temporary 40 may differ,
 while its architectural operands and final result agree.
-See jolt/crates/jolt-program/src/expand/division/rem.rs:15-24 at 8bbb2357. -/
+See jolt/crates/jolt-program/src/expand/division/rem.rs:15-24 at ff6fc6568. -/
 structure RepresentsRows {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (trace : Trace) : Prop where
   rowsBound : trace.rows.size ≤ params.traceLength
@@ -55,25 +53,19 @@ structure RepresentsPrefix {F : Type} [Field F] {params : WitnessParams}
   cutRam :
     (∀ bound : trace.rows.size < params.traceLength,
       ∀ address : Fin params.ramSize,
-        address.val ≠ (trace.initialState.jolt_device.memory_layout.termination.toNat -
-          JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
         witness.RamVal address ⟨trace.rows.size, bound⟩ =
           ((TraceWitness.finalRamWord trace address.val).toNat : F)) ∧
     (trace.rows.size = params.traceLength →
       ∀ address : Fin params.ramSize,
-        address.val ≠ (trace.initialState.jolt_device.memory_layout.termination.toNat -
-          JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
         witness.RamValFinal address =
           ((TraceWitness.finalRamWord trace address.val).toNat : F))
 
-/-- Row agreement together with final RAM agreement outside the synthetic
-termination word. The stopping proof owns the final RAM comparison. -/
+/-- Row agreement together with agreement of every final shared-memory word.
+For example, an I/O-gap word is compared by the same rule as a program word. -/
 structure Represents {F : Type} [Field F] {params : WitnessParams}
     (witness : WitnessType F params) (trace : Trace) : Prop
     extends RepresentsRows witness trace where
   finalRam : ∀ address : Fin params.ramSize,
-    address.val ≠ (trace.initialState.jolt_device.memory_layout.termination.toNat -
-      JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
     witness.RamValFinal address = ((TraceWitness.finalRamWord trace address.val).toNat : F)
 
 

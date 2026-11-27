@@ -2,6 +2,7 @@ import JoltConstraints.theorems.Completeness.All
 import JoltConstraints.theorems.Completeness.completeness
 import JoltConstraints.theorems.advice_inputs
 import JoltConstraints.theorems.Soundness.soundness
+import JoltConstraints.theorems.Soundness.FieldModuli
 import JoltConstraints.theorems.Soundness.Layer0.Bounds
 import JoltConstraints.theorems.Soundness.Layer0.Words
 import JoltConstraints.theorems.Soundness.Layer1.OneHot
@@ -53,8 +54,6 @@ import JoltConstraints.theorems.Soundness.Layer5.RamInitialization
 import JoltConstraints.theorems.Soundness.Layer5.RamAgreement
 import JoltConstraints.theorems.Soundness.Layer5.LoadDoubleword
 import JoltConstraints.theorems.Soundness.Layer5.RamStoreAgreement
-import JoltConstraints.theorems.Soundness.Layer5.DeviceMemory
-import JoltConstraints.theorems.Soundness.Layer5.DeviceMemoryObstruction
 import JoltConstraints.theorems.Soundness.Layer5.AdviceExpansion
 import JoltConstraints.theorems.Soundness.Layer5.Registers
 import JoltConstraints.theorems.Soundness.Layer5.RegisterInputs
@@ -92,3 +91,5 @@ import JoltConstraints.theorems.Soundness.Layer5.RuntimeAdvice
 import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
 import JoltConstraints.theorems.Soundness.Layer6.TerminalNextPC
 import JoltConstraints.theorems.Soundness.Layer6.DivisionLayout
+
+import JoltConstraints.ConstraintGen.Equiv

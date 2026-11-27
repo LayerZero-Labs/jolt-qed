@@ -42,15 +42,15 @@ private theorem amoswapdProgramAuto_eq_sail
   have hbytes : MemBytesPresentAt js.sail addr 8 := by
     simpa [addr] using Assumptions.DwordPresent.memBytesPresentAt h.dword_present
   have hload_pmp : Assumptions.LoadPmpOk addr 8 js.sail := by
-    simpa [addr] using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.load_pmp.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hstore_pmp : Assumptions.StorePmpOk addr 8 js.sail := by
-    simpa [addr] using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.store_pmp.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hatomic_pmp : Assumptions.AtomicPmpOk amoop.AMOSWAP addr 8 js.sail := by
-    simpa [addr] using h.atomic_pmp.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.atomic_pmp.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hread_mmio : Assumptions.NotReadableMmio addr 8 js.sail := by
-    simpa [addr] using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.not_readable_mmio.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   have hwrite_mmio : Assumptions.NotWritableMmio addr 8 js.sail := by
-    simpa [addr] using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (by omega)
+    simpa [addr] using h.not_writable_mmio.subaccess (offset := 0) (accessWidth := 8) (hpositive := by omega) (by omega)
   by_cases h_align : addr &&& (7 : BitVec 64) = 0
   · let old :=
       loaded_dword_at js.sail addr hbytes
@@ -61,14 +61,13 @@ private theorem amoswapdProgramAuto_eq_sail
         rs1 js h.cur_privilege h.mstatus_mprv addr h.rs1_read
         hbytes hload_pmp hread_mmio h_align
         (JoltISA.amoOldVRegFor_writable rd) h.jolt_ram_load
-    have hld_layout :
-        js_afterLoad.jolt_device.memory_layout = js.jolt_device.memory_layout :=
-      (JoltIOSetupFrame.execInstr_rule _ js js_afterLoad _ hld).1
+    have hld_setup := JoltIOSetupFrame.execInstr_setup _ js js_afterLoad _ hld
     obtain ⟨js_afterStore, hsd, hsd_sail, hsd_vregs⟩ :=
       amo_dword_store_xreg_result_after_load_aligned_run
         rs2 rs1 js js_afterLoad h.cur_privilege h.mstatus_mprv
         addr rs2Val h.rs1_read h.rs2_read hstore_pmp hwrite_mmio
-        h_align hld_sail h.jolt_ram_store hld_layout
+        h_align hld_sail (by simpa only [JoltISA.amoDwordStoreValue] using
+          amo_dword_bundle_store_ok h hbytes (amo_dword_aligned_no_ovf addr h_align)) hld_setup
     obtain ⟨js_afterWrite, haddi, haddi_sail⟩ :=
       amo_dword_writeback_after_store_run_from oldReg
         rd js_afterLoad js_afterStore addr old hsd_vregs hld_old

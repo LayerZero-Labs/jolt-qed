@@ -1,9 +1,9 @@
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.translation.Constraints.RdWriteEqLookupIfWriteLookupToRd
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.TracePCProofHelpers
 import JoltConstraints.theorems.witness_domain
+import JoltConstraints.theorems.Completeness.Helpers.LookupWriteProofHelpers
 
 open LeanRV64D
 

@@ -1,30 +1,30 @@
 import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.theorems.Completeness.Helpers.IOSetupFrame
-import JoltConstraints.theorems.layout_facts
 
 open LeanRV64D
 
 set_option autoImplicit false
 
+/-- Extracted outputs always have the configured capacity, with zero defaults.
+For example, writing only the last output byte still gives the full output window. -/
+theorem JoltDevice.outputsOf_size (device : JoltDevice) (mem : Std.ExtHashMap Nat (BitVec 8)) :
+    (device.outputsOf mem).size = device.memory_layout.max_output_size.toNat := by
+  simp [JoltDevice.outputsOf]
+
 namespace JoltConstraints.Soundness
 
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
-/-- An execution prefix carries a reflexive, transitive relation on devices
-from its initial device to its final device when every successful byte store
-preserves the relation.
-For example, equality of the input arrays holds even for an empty prefix.
-See `jolt/common/src/jolt_device.rs` (`JoltDevice::store`) and
-`jolt/tracer/src/emulator/cpu.rs` (`Cpu::tick`) at 5def437f. -/
+/-- An execution prefix carries any reflexive, transitive device relation.
+For example, layout equality holds through stores and both halt kinds.
+Jolt at `ff6fc6568`: `tracer/src/emulator/cpu.rs` (`Cpu::halt`, `Cpu::tick`). -/
 theorem UntrustedAnswerRun.device_relation
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs)
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
-    (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (store : ∀ io io' address value,
-      JoltDevice.store? io address value = some io' → relation io io') :
+    (trans : ∀ a b c, relation a b → relation b c → relation a c) :
     relation run.initialState.jolt_device
       (TraceWitness.finalTraceState run.toTrace).jolt_device := by
   have startsDevice : ∀ first, run.rows[0]? = some first →
@@ -47,17 +47,16 @@ theorem UntrustedAnswerRun.device_relation
       relation (run.rows[step]).preState.jolt_device
         (run.rows[step]).postState.jolt_device := by
     intro step
-    exact execWithTapeAnswer_rule_of_device_relation relation refl trans store
+    exact execWithTapeAnswer_device_relation relation refl trans
       (run.bytecode[run.rows[step].rowIndex].instruction.withRuntimeAdvice
         run.rows[step].runtimeAdvice) (run.answers step) _ _ _ (run.executes step)
   exact Trace.finalTraceState_device_relation run.toTrace relation refl trans startsDevice
     linkedDevice preserved
 
 
-/-- An execution prefix preserves its initial memory layout, trusted and
-untrusted advice arrays, and input array in its final device.
-For example, an output store leaves the input array unchanged.
-See `jolt/common/src/jolt_device.rs` (`JoltDevice::store`) at 5def437f. -/
+/-- An execution prefix preserves its initial memory layout.
+For example, an output store updates shared bytes without changing the layout.
+Jolt at `ff6fc6568`: `tracer/src/emulator/mmu.rs` (`store_doubleword`). -/
 theorem UntrustedAnswerRun.final_device_same
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -66,86 +65,39 @@ theorem UntrustedAnswerRun.final_device_same
       (TraceWitness.finalTraceState run.toTrace).jolt_device := by
   exact UntrustedAnswerRun.device_relation run JoltIOSetupFrame.Same
     JoltIOSetupFrame.Same.refl
-    (fun _ _ _ first next => first.trans next) JoltIOSetupFrame.storeDeviceByte_same
+    (fun _ _ _ first next => first.trans next)
 
 
-/-- An execution prefix's final output array fits within the output capacity
-of its initial memory layout.
-For example, extending an empty output array to its second word still respects
-`max_output_size` when the device store succeeds.
-See `jolt/common/src/jolt_device.rs` (`JoltDevice::store`, `MemoryLayout::try_new`)
-at 5def437f. -/
+/-- Outputs extracted from final shared memory fit the initial output capacity.
+For example, an untouched output window extracts zero bytes at every position.
+Jolt at `ff6fc6568`: `common/src/jolt_device.rs` (`JoltDevice::outputs`). -/
 theorem UntrustedAnswerRun.final_outputs_fit_layout
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     (run : UntrustedAnswerRun joltInstance privateInputs) :
-    (TraceWitness.finalTraceState run.toTrace).jolt_device.outputs.size ≤
+    ((TraceWitness.finalTraceState run.toTrace).jolt_device.outputsOf
+      (TraceWitness.finalTraceState run.toTrace).sail.mem).size ≤
       run.initialState.jolt_device.memory_layout.max_output_size.toNat := by
-  let layout := run.initialState.jolt_device.memory_layout
-  let config := { joltInstance.memory_config with
-    program_size := some joltInstance.program.program_size }
-  have built : MemoryLayout.new config = some layout :=
-    (initial_state_device joltInstance privateInputs run.initialState run.initialized).1
-  obtain ⟨outputSpan, _, _, _, _⟩ :=
-    new_io_geometry config layout built
-  let Fits (io : JoltDevice) : Prop :=
-    io.memory_layout = layout ∧ io.outputs.size ≤ layout.max_output_size.toNat
-  let Rel (a b : JoltDevice) : Prop := Fits a → Fits b
-  have refl (io : JoltDevice) : Rel io io := fun fits => fits
-  have trans (a b c : JoltDevice) (ab : Rel a b) (bc : Rel b c) :
-      Rel a c := fun fits => bc (ab fits)
-  have store (io io' : JoltDevice) (address : Nat) (value : BitVec 8)
-      (stored : io.store? address value = some io') : Rel io io' := by
-    intro fits
-    exact JoltIOSetupFrame.storeDeviceByte_outputs_fit layout outputSpan
-      io io' address value fits.1 fits.2 stored
-  have initialEmpty : run.initialState.jolt_device.outputs = #[] := by
-    have initialized := run.initialized
-    unfold JoltInstance.initial_state at initialized
-    rw [bind_some_iff] at initialized
-    obtain ⟨_, _, initialized⟩ := initialized
-    dsimp only at initialized
-    split at initialized
-    · cases initialized
-    rw [bind_some_iff] at initialized
-    obtain ⟨_, _, initialized⟩ := initialized
-    split at initialized
-    · cases initialized
-    rw [bind_some_iff] at initialized
-    obtain ⟨_, _, initialized⟩ := initialized
-    split at initialized
-    · cases initialized
-    rw [bind_some_iff] at initialized
-    obtain ⟨_, _, initialized⟩ := initialized
-    have stateEq := Option.some.inj initialized
-    rw [← stateEq]
-    rw [init_state_jolt_device]
-  have initialFits : Fits run.initialState.jolt_device :=
-    ⟨rfl, by simp [initialEmpty]⟩
-  have finalRel : Rel run.initialState.jolt_device
-      (TraceWitness.finalTraceState run.toTrace).jolt_device :=
-    UntrustedAnswerRun.device_relation run Rel refl trans store
-  exact (finalRel initialFits).2
+  have fixed := run.final_device_same
+  rw [JoltDevice.outputsOf_size, fixed.1]
 
 
-/-- A relaxed-answer trace carries any reflexive, transitive device relation
-preserved by successful device byte stores to its final state. -/
+/-- A relaxed-answer trace carries any reflexive, transitive device relation.
+For example, its final layout equals its initial layout. -/
 theorem UntrustedAnswerTrace.device_relation
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     (trace : UntrustedAnswerTrace joltInstance privateInputs)
     (relation : JoltDevice → JoltDevice → Prop)
     (refl : ∀ io, relation io io)
-    (trans : ∀ a b c, relation a b → relation b c → relation a c)
-    (store : ∀ io io' address value,
-      JoltDevice.store? io address value = some io' → relation io io') :
+    (trans : ∀ a b c, relation a b → relation b c → relation a c) :
     relation trace.initialState.jolt_device
       (TraceWitness.finalTraceState trace).jolt_device := by
-  exact trace.toUntrustedAnswerRun.device_relation relation refl trans store
+  exact trace.toUntrustedAnswerRun.device_relation relation refl trans
 
 
-/-- A relaxed-answer trace keeps its initial layout, inputs and advice buffers
-in the final device. -/
+/-- A relaxed-answer trace keeps its initial layout.
+For example, a panic halt changes the claim without changing output capacity. -/
 theorem UntrustedAnswerTrace.final_device_same
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
@@ -161,7 +113,8 @@ theorem UntrustedAnswerTrace.final_outputs_fit_layout
     {joltInstance : JoltInstance SourceInstruction}
     {privateInputs : JoltPrivateInputs}
     (trace : UntrustedAnswerTrace joltInstance privateInputs) :
-    (TraceWitness.finalTraceState trace).jolt_device.outputs.size ≤
+    ((TraceWitness.finalTraceState trace).jolt_device.outputsOf
+      (TraceWitness.finalTraceState trace).sail.mem).size ≤
       trace.initialState.jolt_device.memory_layout.max_output_size.toNat := by
   exact trace.toUntrustedAnswerRun.final_outputs_fit_layout
 

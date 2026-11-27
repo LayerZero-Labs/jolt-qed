@@ -1,6 +1,5 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.translation.Constraints.RegistersValEqPrefixRdInc
-import JoltConstraints.translation.witness
 import JoltConstraints.translation.honest_witness
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.theorems.witness_domain

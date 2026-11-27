@@ -1,6 +1,9 @@
 import JoltConstraints.theorems.Completeness.Helpers.RegistersValHistoryProofHelpers
 import JoltConstraints.translation.Constraints.BytecodeReadSelectors
-import JoltConstraints.translation.honest_witness
+import JoltConstraints.translation.witness_helpers.rs1_ra
+import JoltConstraints.translation.witness_helpers.rs1_value
+import JoltConstraints.translation.witness_helpers.rs2_ra
+import JoltConstraints.translation.witness_helpers.rs2_value
 
 open LeanRV64D
 
@@ -20,7 +23,7 @@ namespace JoltConstraints
 /-- First source register read by an instruction, matching `TraceWitness.Rs1Ra`.
 For example, a floor LoadH selects its base, and ShiftDataH selects its value.
 Jolt's prover: `crates/jolt-riscv/src/instructions/virt/load_h.rs` and
-`shift_data_h.rs` (`jolt_instruction!`) at `c6703570`. -/
+`crates/jolt-riscv/src/instructions/virt/shift_data_h.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
 def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .ADDI _ src _ | .ADDIW _ src _ | .ANDI _ src _ | .ORI _ src _ | .XORI _ src _
   | .SLTI _ src _ | .SLTIU _ src _ | .JALR _ src _ | .BEQ src _ _ | .BNE src _ _
@@ -46,14 +49,15 @@ def rs1Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualAssertValidUnsignedRemainder src _ _ | .VirtualAssertMulUNoOverflow src _ _
   | .VirtualAssertLTE src _ _
   | .VirtualLoadB _ _ src _ _ | .VirtualLoadH _ _ src _ _ | .VirtualLoadW _ _ src _ _
-  | .VirtualStoreB src _ _ _ | .VirtualStoreH src _ _ _ | .VirtualStoreW src _ _ _ => some src
+  | .VirtualStoreB src _ _ _ | .VirtualStoreH src _ _ _ | .VirtualStoreW src _ _ _
+  | .JoltSuccess _ src _ | .JoltPanic _ src _ => some src
   | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .FENCE | .VirtualHostIO | .VirtualPow2I _ _ | .VirtualPow2IW _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualAdvice _ _ _ | .VirtualAdviceLoad _ _ => none
 
 /-- Second source register read by an instruction, matching `TraceWitness.Rs2Ra`.
 For example, StoreH selects the stored value, and ShiftDataH selects its address.
 Jolt's prover: `crates/jolt-riscv/src/instructions/virt/store_h.rs` and
-`shift_data_h.rs` (`jolt_instruction!`) at `c6703570`. -/
+`crates/jolt-riscv/src/instructions/virt/shift_data_h.rs` (`jolt_instruction!`) at `ff6fc6568`. -/
 def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .BEQ _ src _ | .BNE _ src _ | .BLT _ src _ | .BGE _ src _ | .BLTU _ src _ | .BGEU _ src _
   | .ADD _ _ src | .ADDW _ _ src | .SUB _ _ src | .SUBW _ _ src | .MUL _ _ src
@@ -72,7 +76,7 @@ def rs2Operand? : JoltISA.Instr → Option JoltISA.Src
   | .VirtualAssertLTE _ src _
   | .VirtualStoreB _ src _ _ | .VirtualStoreH _ src _ _ | .VirtualStoreW _ src _ _ => some src
   | .ADDI _ _ _ | .ADDIW _ _ _ | .ANDI _ _ _ | .ORI _ _ _ | .XORI _ _ _ | .SLTI _ _ _
-  | .SLTIU _ _ _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .JALR _ _ _ | .FENCE
+  | .SLTIU _ _ _ | .JoltSuccess _ _ _ | .JoltPanic _ _ _ | .LUI _ _ | .AUIPC _ _ | .JAL _ _ | .JALR _ _ _ | .FENCE
   | .VirtualMULI _ _ _ | .VirtualMULIW _ _ _ | .VirtualPow2 _ _ _ | .VirtualPow2W _ _ _
   | .VirtualPow2I _ _ | .VirtualPow2IW _ _ | .VirtualShiftRightBitmask _ _ _
   | .VirtualShiftRightBitmaskI _ _ | .VirtualShiftRightBitmaskW _ _ _ | .VirtualSRLI _ _ _

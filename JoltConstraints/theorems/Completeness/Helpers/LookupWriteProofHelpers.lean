@@ -1,9 +1,10 @@
 import JoltConstraints.theorems.Completeness.Helpers.JumpReturnProofHelpers
+import JoltConstraints.translation.witness_helpers.lookup_output
+import JoltConstraints.translation.witness_helpers.rd_value
 
 open LeanRV64D
 
 set_option autoImplicit false
-set_option maxHeartbeats 1000000
 set_option linter.unusedSimpArgs false
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions
 
@@ -40,7 +41,7 @@ For example, ShiftData captures the stored value shifted by its effective addres
 floor loads do not set WriteLookupOutputToRD and are excluded by `hflag`.
 Jolt's prover: `crates/jolt-riscv/src/instructions/virt/load_b.rs`;
 Jolt's tracer: `tracer/src/instruction/virtual_shift_data_b.rs` (`exec`)
-at `c6703570`. -/
+at `ff6fc6568`. -/
 theorem lookup_row_write {F : Type} [Field F] {bytecode : Array JoltInstructionRow}
     (row : HonestTraceRow bytecode) (valid : bytecode[row.rowIndex].Valid)
     (hpc : row.preState.sail.regs.get? Register.PC =

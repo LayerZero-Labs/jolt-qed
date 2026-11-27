@@ -3,24 +3,11 @@ The immediate obligations below `JoltInstance.soundness`. Each unfinished helper
 has a name and a concrete statement so the main theorem can be assembled without
 adding premises. See `JoltConstraints/documentation/model_review.md`, "Proofs owed".
 -/
-import JoltConstraints.translation.Constraints.All
-import JoltConstraints.theorems.Soundness.Assumptions
-import JoltConstraints.theorems.Soundness.Layer0.Words
-import JoltConstraints.theorems.Soundness.Layer5.PowerOfTwo
-import JoltConstraints.theorems.Completeness.Helpers.RamOutputProofHelpers
-import JoltConstraints.theorems.Completeness.All
-import JoltConstraints.translation.language
-import JoltConstraints.theorems.Soundness.Layer5.TapeTrace
 import JoltConstraints.theorems.Soundness.Layer6.PrefixAgreement
 import JoltConstraints.theorems.Soundness.Layer7.Stopping
 import JoltConstraints.theorems.Soundness.Layer7.ProverAccepts
 import JoltConstraints.theorems.Soundness.Layer7.SpoilAsserts
 import JoltConstraints.theorems.Soundness.Layer8.OutputWords
-import JoltConstraints.translation.witness_helpers.pc
-import JoltConstraints.translation.witness_helpers.rs1_value
-import JoltConstraints.translation.witness_helpers.rs2_value
-import JoltConstraints.translation.witness_helpers.ram_address
-import JoltConstraints.theorems.advice_below_input
 
 open LeanRV64D
 
@@ -31,11 +18,9 @@ namespace JoltInstance
 open Sail Sail.ConcurrencyInterfaceV1 Sail.ConcurrencyInterfaceV1.PreSail LeanRV64D LeanRV64D.Functions JoltISA
 
 /-- A. Reconstruct a relaxed-answer trace whose every executed row and every
-nontermination final RAM word agrees with the witness. -/
+final shared RAM word agrees with the witness. -/
 theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (assumptions : joltInstance.SoundnessAssumptions)
-    (restrictions : joltInstance.TemporaryRestrictions)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
@@ -45,15 +30,30 @@ theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField 
       trace.bytecode = context.bytecode ∧
         Represents witness trace.toUntrustedAnswerRun.toTrace := by
   obtain ⟨run, bytecodeEq, representedRows, realRows, noEarlierStop, cut, advice⟩ :=
-    soundness_execution_prefix_agreement joltField joltInstance assumptions restrictions
+    soundness_execution_prefix_agreement joltField joltInstance
       privateInputs witness context equations
   obtain ⟨stops, nonempty, finalRam⟩ :=
-    soundness_stopping joltField joltInstance restrictions
-      privateInputs witness context equations run bytecodeEq representedRows realRows
-      noEarlierStop cut advice
+    soundness_stopping joltField joltInstance
+      privateInputs witness context equations run bytecodeEq representedRows cut
   have accepted : joltInstance.bytecode.isSome := by
     obtain ⟨slots, preprocessed, entry⟩ := context.entryIsRust
-    simp [JoltInstance.bytecode, context.expands, preprocessed, entry]
+    have valid := context.validInputs
+    unfold JoltInstance.validate_inputs at valid
+    cases configured : joltInstance.memory_layout with
+    | none => simp only [configured, Bool.false_eq_true] at valid
+    | some layout =>
+      rw [configured] at valid
+      simp only [Bool.and_eq_true] at valid
+      have addressNonzero : joltInstance.program.entry_address ≠ 0#64 := by
+        simpa only [bne_iff_ne, show (0 : BitVec 64) = 0#64 from rfl] using valid.2.1
+      have region := valid.2.2
+      rw [← expand_program_source_extents
+        joltInstance.program context.bytecode context.expands] at region
+      cases checked : checkedCodeRegion layout (bytecode_source_extents context.bytecode) with
+      | none => simp only [checked, Option.isSome_none, Bool.false_eq_true] at region
+      | some bounds =>
+        simp [JoltInstance.bytecode, context.expands, preprocessed, entry,
+          addressNonzero, configured, checked, guard]
   let trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs := {
     toUntrustedAnswerRun := run
     accepted := accepted
@@ -66,8 +66,9 @@ theorem soundness_reconstruct_trace {F : Type} [Field F] (joltField : JoltField 
   exact ⟨trace, bytecodeEq,
     { toRepresentsRows := representedRows.toRepresentsRows, finalRam := finalRam }⟩
 
-/-- B. Constraint 26 checks the relaxed trace's output and panic words, while
-`Represents.finalRam` connects those words to the witness. -/
+/-- B. Constraint 26 checks the relaxed trace's shared output words, and row 21
+binds the halt kind to the public panic claim.
+For example, both success and panic traces can match their respective claims. -/
 theorem soundness_matches_outputs {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
@@ -81,104 +82,57 @@ theorem soundness_matches_outputs {F : Type} [Field F] (joltField : JoltField F)
   have publicWord : ∀ address : Fin params.ramSize,
       (context.io.memory_layout.input_start.toNat -
         JoltConstraints.ramLowestAddress context.io.memory_layout) / 8 ≤ address.val →
-      address.val < (JoltISA.RAM_START_ADDRESS -
+      address.val < (context.io.memory_layout.output_end.toNat -
         JoltConstraints.ramLowestAddress context.io.memory_layout) / 8 →
-      address.val ≠
-        (trace.initialState.jolt_device.memory_layout.termination.toNat -
-          JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
       TraceWitness.finalRamWord trace address.val =
         JoltConstraints.ramPublicIoWord context.io address.val := by
-    intro address lower upper nonTermination
+    intro address lower upper
     have checked := equations.ramOutputEqPublicIo address
     have selected : JoltConstraints.ramPublicIoMask (F := F) context.io address.val = 1 := by
       simp [JoltConstraints.ramPublicIoMask, lower, upper]
     rw [selected, one_mul] at checked
     have encoded : ((TraceWitness.finalRamWord trace address.val).toNat : F) =
         ((JoltConstraints.ramPublicIoWord context.io address.val).toNat : F) := by
-      rw [← represented.finalRam address nonTermination]
+      rw [← represented.finalRam address]
       exact sub_eq_zero.mp checked
     exact JoltConstraints.Soundness.word_eq_of_field_eq
       (JoltConstraints.Soundness.two_pow_127_lt_char joltField) encoded
-  have initialLayout :=
-    (initial_state_device joltInstance
-      privateInputs trace.initialState trace.initialized).1
-  have ioEq : context.io =
-      { inputs := joltInstance.inputs, trusted_advice := #[], untrusted_advice := #[],
-        outputs := trimTrailingZeros joltInstance.outputs, panic := joltInstance.panic,
-        memory_layout := trace.initialState.jolt_device.memory_layout } := by
-    have h := context.publicIo
-    simp [JoltInstance.public_io, initialLayout] at h
-    exact h.symm
-  have layoutEq : context.io.memory_layout = trace.initialState.jolt_device.memory_layout := by
-    rw [ioEq]
-  have adviceBelowInput : trace.initialState.jolt_device.AdviceBelowInput := by
-    obtain ⟨aligned, trustedBelow, untrustedBelow⟩ :=
-      initial_state_advice_below_input joltInstance
-        privateInputs trace.initialState trace.initialized
-    rw [MemoryLayout.get_lowest_address_toNat] at aligned
-    exact ⟨aligned, trustedBelow, untrustedBelow⟩
-  have finalFrame := trace.final_device_same
-  have runPublicWord : ∀ address : Fin params.ramSize,
-      (trace.initialState.jolt_device.memory_layout.input_start.toNat -
-        JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 ≤
-          address.val →
-      address.val < (JoltISA.RAM_START_ADDRESS -
-        JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
-      address.val ≠
-        (trace.initialState.jolt_device.memory_layout.termination.toNat -
-          JoltConstraints.ramLowestAddress trace.initialState.jolt_device.memory_layout) / 8 →
-      JoltConstraints.ramPublicIoWord
-        (TraceWitness.finalTraceState trace).jolt_device address.val =
-        JoltConstraints.ramPublicIoWord context.io address.val := by
-    intro address lower upper nonTermination
-    have finalRamPublic : TraceWitness.finalRamWord trace address.val =
-        JoltConstraints.ramPublicIoWord
-          (TraceWitness.finalTraceState trace).jolt_device address.val := by
-      exact JoltConstraints.finalRamWord_eq_ramPublicIoWord trace finalFrame
-        adviceBelowInput address.val lower upper
-    calc
-      JoltConstraints.ramPublicIoWord
-          (TraceWitness.finalTraceState trace).jolt_device address.val =
-          TraceWitness.finalRamWord trace address.val :=
-        finalRamPublic.symm
-      _ = JoltConstraints.ramPublicIoWord context.io address.val :=
-        publicWord address (by simpa only [layoutEq] using lower)
-          (by simpa only [layoutEq] using upper) nonTermination
+  have bytecodeEq : trace.bytecode = context.bytecode :=
+    Option.some.inj (trace.expands.symm.trans context.expands)
+  have panicEq := represented_final_panic joltField context equations trace bytecodeEq
+    represented.toRepresentsRows
   exact JoltConstraints.Soundness.public_words_determine_matches_outputs
-    joltInstance privateInputs context trace finalFrame
-      trace.final_outputs_fit_layout runPublicWord
+    joltInstance privateInputs context trace panicEq publicWord
 
 /-- C. The represented rows and verifier bounds give Jolt prover acceptance.
-The proof uses the last-jump check, the RAM-address check, and the padded
-length derived from the 256-cycle verifier floor, the witness length bound and
-`NoMaxLengthTrace`. For example, under a maximum of 1024, a 256-row run may
-be padded to 512, while the restriction excludes a 1024-row run.
-See jolt/crates/jolt-prover/src/config.rs
-(`ProverConfig::derive_from_dimensions`) at 5def437f. -/
+The proof uses the terminal-halt certificate, the RAM-address check and exact
+power-of-two padding with the 256-cycle floor.
+For example, 1024 real rows fit a public maximum of 1024.
+Jolt at `ff6fc6568`: `ProverConfig::derive_from_dimensions`. -/
 theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
-    (noMaxLengthTrace : joltInstance.NoMaxLengthTrace)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)
     (witness : WitnessType F params)
     (context : JoltConstraints.ConstraintContext joltInstance privateInputs params)
     (equations : JoltConstraints.ConstraintEquations context.bytecode context.initialRam
       context.io context.entry witness)
     (trace : JoltConstraints.Soundness.UntrustedAnswerTrace joltInstance privateInputs)
-    (bytecodeEq : trace.bytecode = context.bytecode)
+    (_bytecodeEq : trace.bytecode = context.bytecode)
     (represented : Represents witness trace.toUntrustedAnswerRun.toTrace) :
     (trace.prover_config joltInstance).isSome := by
-  have jump := represented_trace_ends_in_jump joltField joltInstance privateInputs
-    witness context equations trace bytecodeEq represented.toRepresentsRows
+  have halt := relaxed_trace_ends_in_halt trace
+  have nonemptyRows : trace.rows ≠ #[] := by
+    intro empty
+    exact halt.1 (by rw [empty]; rfl)
   obtain ⟨padded, padding, fits⟩ := checked_trace_length_fits trace.rows.size
     params.logT joltInstance.max_padded_trace_length represented.rowsBound
     context.traceLengthBound (context.traceLengthFloor.trans context.traceLengthBound)
-    (noMaxLengthTrace privateInputs trace)
   obtain ⟨ramK, ramSize⟩ := represented_ram_size_computes joltField joltInstance
     privateInputs witness context equations trace.toUntrustedAnswerRun.toTrace
     trace.initialized represented.rowsBound represented.ramAddress
   unfold Trace.prover_config ProverConfig.deriveFromDimensions
   change (do
-    guard (trace.rows.size = 0 ∨ trace.execution_dimensions.ends_in_jump = true)
+    guard (trace.rows.size ≠ 0 ∧ trace.execution_dimensions.ends_in_halt = true)
     let traceLength ← ProverConfig.checkedTraceLength trace.rows.size
     let ramSize ← ProverConfig.checkedRamSize trace.execution_dimensions
       trace.initialState.jolt_device.memory_layout
@@ -186,15 +140,15 @@ theorem soundness_prover_accepts {F : Type} [Field F] (joltField : JoltField F)
       (program_image_len_words joltInstance.program.memory_init)
     guard (traceLength ≤ joltInstance.max_padded_trace_length.toNat)
     pure ({ trace_length := traceLength, ram_K := ramSize } : ProverConfig)).isSome
-  simp only [jump]
-  simp [padding, ramSize, fits]
+  simp only [halt]
+  simp [padding, ramSize, fits, nonemptyRows]
 
 /-- D. Each executed spoil assert uses its row's pre-state operands.
 Representation supplies those operands because they are not instruction
 temporaries, and the lookup and Assert constraints force equality.
 For example, a custom equality assertion with immediate 2 must have equal sides.
 See jolt/tracer/src/instruction/virtual_assert_eq.rs (`VirtualAssertEQ::exec`)
-at 5def437f. -/
+at ff6fc6568. -/
 theorem soundness_spoil_asserts_pass {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     {params : WitnessParams} (privateInputs : JoltPrivateInputs)

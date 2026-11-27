@@ -1,5 +1,4 @@
 import JoltConstraints.theorems.Soundness.Layer6.PlainRow
-import JoltBytecode.InstructionEquivalence.ProofSupport.ProgramComposition
 
 open LeanRV64D
 
@@ -66,7 +65,7 @@ def DivisionKind.result (kind : DivisionKind) (lhs rhs : BitVec 64) : BitVec 64 
 /-- Read the single honest advice word from the existing tracer-advice definition.
 The placeholder zero is irrelevant to that definition.
 For example, REM with divisor zero gets quotient magnitude zero.
-See jolt/tracer/src/instruction/rem.rs (`RISCVTrace::trace`) at 5def437f. -/
+See jolt/tracer/src/instruction/rem.rs (`RISCVTrace::trace`) at ff6fc6568. -/
 def DivisionKind.honestAdvice (kind : DivisionKind) (rd rs1 rs2 : regidx)
     (pre : SailJoltState) : BitVec 64 :=
   ((kind.source rd rs1 rs2 0).honestTracerAdvice pre).headD 0

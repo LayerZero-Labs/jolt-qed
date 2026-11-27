@@ -53,7 +53,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
           (load_effective_address h.rs1_val imm &&& (7 : BitVec 64)).toNat = 0 := by
         simpa [ea] using congrArg BitVec.toNat halign_ea
       simpa [hoff]
-    have hstore_access := StoreProgramEqSailAssumptions.storeAccessFacts h 8 hfits
+    have hstore_access := StoreProgramEqSailAssumptions.storeAccessFacts h 8 (by decide) hfits
     have haligned_access : AlignedAccess ea 8 :=
       { misalign := access_misaligned_8_aligned_false ea halign_ea
         split := split_misaligned_aligned_8 ea halign_ea }
@@ -71,7 +71,7 @@ theorem sdJolt_reduces_to_vmem_write_addr
       have hregs : js'.sail.regs = js.sail.regs := by
         simp only [js', state_after_dword_store]
       have hprojected : Projection.ProjectedVRegsPreserved js js' :=
-        ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+        ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
       simpa [js'] using
         Projection.systemProject_eq_sail_of_projected_vregs_preserved_of_sail_regs_eq
           js js' hregs hprojected h.linkedCSRs
@@ -86,14 +86,18 @@ theorem sdJolt_reduces_to_vmem_write_addr
       exact BitVec.and_not_eq_self_of_and_eq_zero x 7 hx
     have hbase_eq : compute_aligned_dword_base_address h.rs1_val imm = ea := by
       simpa [compute_aligned_dword_base_address, ea] using hclear ea halign_ea
-    have hjolt : Assumptions.JoltRamStoreOk ea js := by
-      simpa [hbase_eq] using h.jolt_ram_store
+    have hjolt : Assumptions.JoltRamStoreOk ea js h.rs2_val 8 := by
+      have hstore := h.jolt_store.ram_store
+      simp only [JoltISA.storeDwordValue] at hstore
+      rwa [show load_effective_address h.rs1_val imm &&& (-8 : BitVec 64) = ea from hbase_eq]
+        at hstore
     simp only [halign, ite_true]
     simp only [EStateM.bind]
     rw [JoltISA.Mmu.store_doubleword_eq_sail js ea h.rs2_val h.cur_privilege h.mstatus_mprv
       (aligned_dword_access_of_align ea halign_ea) hstore_access.store_pmp
       hstore_access.write_mmio
-      (JoltISA.Mmu.effective_address_ok_of_store hstore_access.write_mmio.ram hjolt)]
+      (JoltISA.Mmu.effective_address_ok_of_store hstore_access.write_mmio.ram hjolt)
+      hjolt.preserves_protected]
     unfold liftSail
     unfold System.systemProjectResult
     simp only [hwrite, hwrite_raw, EStateM.pure]

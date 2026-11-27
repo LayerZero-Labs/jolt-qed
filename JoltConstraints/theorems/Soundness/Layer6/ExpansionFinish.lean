@@ -1,5 +1,6 @@
 import JoltConstraints.theorems.Soundness.Layer6.PrefixState
 import JoltConstraints.theorems.Soundness.Layer6.TerminalNextPC
+import JoltConstraints.theorems.Soundness.Layer6.BytecodePC
 
 open LeanRV64D
 
@@ -62,7 +63,7 @@ Sail's post-state next PC.
 For example, after a terminal ADDI at `0x80000000`, the next real cycle selects
 a source-start row at `0x80000004`.
 See jolt/crates/jolt-witness/src/witnesses/pc.rs (`NextUnexpandedPc::extract`)
-at 5def437f. -/
+at ff6fc6568. -/
 private theorem boundary_successor {F : Type} [Field F] (joltField : JoltField F)
     (joltInstance : JoltInstance SourceInstruction)
     (noWrap : joltInstance.program.NextPCNoWrap)
@@ -210,7 +211,7 @@ private theorem expansion_ready {F : Type} [Field F] (joltField : JoltField F)
       run.bytecode[last.rowIndex].virtual_sequence_remaining.getD 0 = 0) :
     ∀ bound : run.rows.size < params.traceLength,
       witness.InstructionFlags .IsNoop ⟨run.rows.size, bound⟩ = 0 →
-      (∀ last ∈ run.rows.back?, ¬ last.StableStall) →
+      (∀ last ∈ run.rows.back?, ¬ last.Halts) →
       ∃ (next : Fin run.bytecode.size) (pre : SailJoltState)
         (slot : Fin (2 ^ params.logBytecodeK)),
         JoltConstraints.bytecodeRa witness slot ⟨run.rows.size, bound⟩ = 1 ∧
@@ -284,7 +285,6 @@ theorem expansion_finish {F : Type} [Field F] (joltField : JoltField F)
     honestAdvice := honestAdvice
     atBoundary := atBoundary
     registers := ?_
-    terminationWord := state.terminationWord
     ready := expansion_ready joltField joltInstance joltInstance.program.next_pc_no_wrap privateInputs
       witness context equations run first state honestAdvice atBoundary
   }
