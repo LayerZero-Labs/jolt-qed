@@ -143,7 +143,7 @@ private theorem mem_liftE {ε α : Type} {m : SailM α} (hm : SailMemory m) :
 private theorem mem_bindE {ε α β : Type} {m : SailME ε α} {f : α → SailME ε β}
     (hm : SailMemory (ExceptT.run m)) (hf : ∀ a, SailMemory (ExceptT.run (f a))) :
     SailMemory (ExceptT.run (m >>= f)) := by
-  simp only [bind, ExceptT.bind, ExceptT.run, ExceptT.mk, ExceptT.bindCont]
+  simp only [bind, ExceptT.bind, ExceptT.run, ExceptT.mk]
   refine mem_bind hm (fun a => ?_)
   cases a
   · exact mem_pure _
@@ -213,7 +213,7 @@ RAM and the device-store rule for I/O.
 For example, storing one byte to RAM changes only Sail memory. -/
 theorem storeRaw_rule
     (sail : ∀ state after, relation state { state with sail := after })
-    (store : ∀ state device address value,
+    (_store : ∀ state device address value,
       JoltDevice.store? state.jolt_device state.sail.mem address value = some device →
       relation state { state with sail := { state.sail with mem := device } })
     (s s' : SailJoltState)

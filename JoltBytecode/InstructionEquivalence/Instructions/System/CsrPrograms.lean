@@ -165,7 +165,7 @@ theorem csrrcProgramAuto_eq (csr : SystemCSR) (rd rs1 : regidx) :
   cases csr <;> by_cases hr : r = 0 <;> by_cases hd : d = 0 <;> by_cases hdr : d = r <;>
     (try subst hr) <;> (try subst hd) <;>
     simp_all [csrrcProgramAuto, csrrcProgram, csrBitUpdateProgram, csrReadInto, isX0_regidx,
-      regidx_beq, sameXReg, pureWritebackRdZeroProgram, Encoded.ANDI, Encoded.ADDI,
+      regidx_beq, sameXReg, pureWritebackRdZeroProgram, Encoded.ADDI,
       SystemCSR.vreg, mstatusVReg, trapHandlerVReg, mscratchVReg, mepcVReg, mcauseVReg,
       mtvalVReg, inlineTmp0, inlineTmp, inlineRegisterBase,
       riscvRegisterBase, riscvRegisterCount, numReservedVirtualRegisters] <;> decide

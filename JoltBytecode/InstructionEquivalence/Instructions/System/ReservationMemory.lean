@@ -73,12 +73,12 @@ theorem reserved_vmem_read_addr (access : MemoryAccessType mem_payload)
   unfold vmem_read_addr SailME.run Sail.ConcurrencyInterfaceV1.PreSail.PreSailME.run
   simp [hmis, hsplit, bind, EStateM.bind, pure, EStateM.pure, EStateM.map,
     ExceptT.run, ExceptT.mk, ExceptT.bind, ExceptT.bindCont, ExceptT.pure,
-    ExceptT.lift, ExceptT.map, ExceptT.instMonadLift,
+    ExceptT.lift,
     MonadLift.monadLift, liftM, monadLift, Functor.map,
     misaligned_order, sys_misaligned_order_decreasing, bits_of_virtaddr,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
     untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt,
-    htrans, hmem, Step.reservationPolicyLegal.load, hw1, hw2, bits_of_physaddr,
+    htrans, hmem, Step.reservationPolicyLegal.load, hw2, bits_of_physaddr,
     Sail.BitVec.updateSubrange, Sail.BitVec.updateSubrange']
   rw [hw1]
   simp
@@ -140,7 +140,7 @@ theorem conditional_vmem_write_addr (access : MemoryAccessType mem_payload)
     ExceptT.lift, MonadLift.monadLift, liftM, monadLift, Functor.map,
     misaligned_order, sys_misaligned_order_decreasing, bits_of_virtaddr, bits_of_physaddr,
     LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
-    untilFuelM, untilFuelM.go, zeros, BitVec.zero, BitVec.addInt, haccess,
+    untilFuelM, untilFuelM.go, BitVec.addInt, haccess,
     htrans, hmatch, andM, toBool, LeanRV64D.Functions.not, hrm, hrp, effectivePrivilege,
     hzero, hphys, hea,
     Sail.BitVec.extractLsb, hdata, hmem]

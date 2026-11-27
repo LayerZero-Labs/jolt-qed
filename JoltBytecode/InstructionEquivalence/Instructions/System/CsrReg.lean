@@ -130,16 +130,13 @@ theorem csrBitUpdateProgram_spec (clear : Bool) (csr : JoltISA.SystemCSR)
         RETIRE_SUCCESS, System.systemProjectResult, systemProject_withVRegs_writeRd, JoltISA.SystemCSR.address, JoltISA.SystemCSR.vreg,
         JoltISA.mstatusVReg, JoltISA.trapHandlerVReg, JoltISA.mscratchVReg,
         JoltISA.mepcVReg, JoltISA.mcauseVReg, JoltISA.mtvalVReg,
-        JoltISA.reservationWReg, JoltISA.reservationDReg,
-        System.extDHashMap_insert_insert_same, System.extDHashMap_insert_comm_of_ne,
-        JoltISA.inlineTmp0, JoltISA.inlineTmp1, JoltISA.inlineTmp,
+        JoltISA.inlineTmp0, JoltISA.inlineTmp,
         JoltISA.inlineRegisterBase, JoltISA.numReservedVirtualRegisters,
         JoltISA.riscvRegisterBase, JoltISA.riscvRegisterCount,
         bind, EStateM.bind, pure, EStateM.pure, get, getThe,
         MonadStateOf.get, EStateM.get, modify, modifyGet, MonadStateOf.modifyGet,
         EStateM.modifyGet]
     all_goals simp [System.systemProject, Step.csrSet, Step.setReg,
-      JoltISA.SystemCSR.address, JoltISA.SystemCSR.vreg,
       JoltISA.mstatusVReg, JoltISA.trapHandlerVReg, JoltISA.mscratchVReg,
       JoltISA.mepcVReg, JoltISA.mcauseVReg, JoltISA.mtvalVReg,
       JoltISA.reservationWReg, JoltISA.reservationDReg,
@@ -264,7 +261,7 @@ theorem csrrwProgram_spec (csr : JoltISA.SystemCSR) (rs1 rd : regidx)
       · simp [registerSwapValue, hc]
     rw [hswap]
     unfold JoltISA.csrrwProgram
-    rw [if_neg hspecial]
+    rw [ite_eq_right hspecial]
     by_cases ha : (!JoltISA.isX0 rd && JoltISA.sameXReg rd rs1) = true
     · simp only [ha, ↓reduceIte]
       have hcopy := JoltISA.execProgram_instr_run_retire
@@ -402,7 +399,7 @@ theorem csrBitUpdateProgram_eq_execute (clear : Bool) (csr : JoltISA.SystemCSR)
         rd (csrValue csr js)) = _
     rw [csrSet_csrValue_self]
     cases clear <;> simp
-  · rw [if_pos (Or.inr hz)]
+  · rw [ite_eq_left (Or.inr hz)]
     have hv := registerBitUpdateValue_legal clear csr (js.vregs csr.vreg) src
       (fun hc => by subst csr; exact hm) (fun hc => by subst csr; exact ht)
       (fun hc => by subst csr; exact he)

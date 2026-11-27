@@ -146,11 +146,11 @@ theorem csrReadInto_run (csr : JoltISA.SystemCSR) (rd : regidx)
   | false =>
     by_cases hm : csr = .mstatus
     · subst csr
-      simp [JoltISA.csrReadInto, hz, JoltISA.execProgram, JoltISA.execInstr,
+      simp [JoltISA.csrReadInto, hz, JoltISA.execInstr,
         JoltISA.readSrc, readVReg, JoltISA.writeDst, liftSail, csrValue,
         bind, EStateM.bind, pure, EStateM.pure, get, getThe, MonadStateOf.get,
         EStateM.get, Riscv.ori, wX_bits_stateAfterWrite, RETIRE_SUCCESS]
-    · simp [JoltISA.csrReadInto, hz, hm, JoltISA.execProgram, JoltISA.execInstr,
+    · simp [JoltISA.csrReadInto, hz, hm, JoltISA.execInstr,
         JoltISA.readSrc, readVReg, JoltISA.writeDst, liftSail, csrValue,
         bind, EStateM.bind, pure, EStateM.pure, get, getThe, MonadStateOf.get,
         EStateM.get, JoltISA.addWide_low, wX_bits_stateAfterWrite, RETIRE_SUCCESS]
@@ -193,9 +193,9 @@ theorem csrImmediateBitUpdateProgram_run (clear : Bool) (csr : JoltISA.SystemCSR
   by_cases hm : JoltISA.csrImmediateMask clear csr imm = 0#64
   · have hsame : setCsr js csr (bitUpdate clear (js.vregs csr.vreg) 0#64) = js := by
       rw [bitUpdate_zero, setCsr_self]
-    simp only [hm, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, hsame]
-    cases hz : JoltISA.isX0 rd <;>
-      simp [hz, JoltISA.execProgram, JoltISA.pureWritebackRdZeroProgram,
+    simp only [hm, hsame]
+    cases JoltISA.isX0 rd <;>
+      simp [JoltISA.execProgram, JoltISA.pureWritebackRdZeroProgram,
         JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst, liftSail,
         hzero, hwzero, wX_bits_stateAfterWrite,
         JoltISA.addWide_low, RETIRE_SUCCESS, pure, EStateM.pure, bind, EStateM.bind]
@@ -232,31 +232,27 @@ theorem csrrwiProgram_run (csr : JoltISA.SystemCSR) (imm : BitVec 5)
         { setCsr js csr (immediateSwapValue csr (js.vregs csr.vreg) imm) with
           sail := stateAfterWrite js.sail rd (csrValue csr js) } := by
   have hzero (s : SailState) : rX_bits (.Regidx 0#5) s = .ok 0#64 s := rX_bits_regidx_zero s
-  have hzreg (s : SailState) : rX_bits zreg s = .ok 0#64 s := by
-    exact rX_bits_regidx_zero s
   have hw := writeCsr_run csr
   unfold JoltISA.csrrwiProgram
   rw [csrReadInto_run]
   cases csr <;>
     simp only [JoltISA.SystemCSR.vreg] at hw ⊢ <;>
     simp [immediateSwapValue, swapValue, JoltISA.SystemCSR.vreg, JoltISA.execProgram, JoltISA.execInstr,
-      JoltISA.readSrc, JoltISA.writeDst, hw, hzero, hzreg, setCsr, readVReg, liftSail,
-      Riscv.andi, Riscv.ori, JoltISA.addWide_low,
-      RETIRE_SUCCESS, pure, EStateM.pure, bind, EStateM.bind,
-      get, getThe, MonadStateOf.get, EStateM.get]
+      JoltISA.readSrc, JoltISA.writeDst, hw, hzero, setCsr, liftSail,
+      JoltISA.addWide_low, RETIRE_SUCCESS, pure, EStateM.pure, bind, EStateM.bind]
 
   all_goals first
   | rfl
   | (split <;>
     simp_all (config := { contextual := true }) [JoltISA.execProgram, JoltISA.execInstr, JoltISA.readSrc,
-      JoltISA.writeDst, setCsr, readVReg, liftSail, Riscv.andi, Riscv.ori,
+      JoltISA.writeDst, setCsr, readVReg, liftSail, Riscv.andi,
       JoltISA.addWide_low, RETIRE_SUCCESS, pure, EStateM.pure, bind, EStateM.bind,
       get, getThe, MonadStateOf.get, EStateM.get])
   all_goals first
   | rfl
   | (split <;> simp_all (config := { contextual := true })
       [JoltISA.execProgram, JoltISA.execInstr, JoltISA.readSrc, JoltISA.writeDst,
-        JoltISA.SystemCSR.vreg, setCsr, readVReg, liftSail, Riscv.ori,
+        JoltISA.SystemCSR.vreg, readVReg, Riscv.ori,
         RETIRE_SUCCESS, pure, EStateM.pure, bind, EStateM.bind,
         get, getThe, MonadStateOf.get, EStateM.get] <;>
       first | rfl | (funext r; split <;> simp_all))
@@ -275,7 +271,7 @@ theorem and_singleBit (v : BitVec 64) (bit : Nat) :
   apply BitVec.eq_of_getLsbD_eq
   intro i hi
   cases hv : v.getLsbD bit <;>
-    simp only [hv, Bool.false_eq_true, ↓reduceIte, BitVec.getLsbD_and, hmask,
+    simp only [Bool.false_eq_true, ↓reduceIte, BitVec.getLsbD_and, hmask,
       BitVec.getLsbD_zero]
   all_goals by_cases hb : i = bit <;> simp_all
 
@@ -457,9 +453,9 @@ theorem csrImmediateBitUpdateProgram_eq_execute (clear : Bool) (csr : JoltISA.Sy
   · subst imm
     rw [csrImmediateMask_zero, bitUpdate_zero, setCsr_self]
     cases clear <;>
-      simp [Projection.systemProject_stateAfterWrite, zero_extend, Sail.BitVec.zeroExtend]
+      simp [Projection.systemProject_stateAfterWrite]
   · have hz' : imm ≠ (0 : BitVec 5) := hz
-    rw [if_pos (Or.inr hz'), systemProject_setCsr_writeRd]
+    rw [ite_eq_left (Or.inr hz'), systemProject_setCsr_writeRd]
     have hv := immediateBitUpdateValue_legal clear csr (js.vregs csr.vreg) imm
       (fun hc => by subst csr; exact hm)
       (fun hc => by subst csr; exact ht)

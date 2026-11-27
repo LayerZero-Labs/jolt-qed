@@ -81,10 +81,10 @@ theorem lrReserveRows_run (double : Bool) (rs1 : regidx) (js : SailJoltState)
   have hsext : sign_extend (m := 64) (0#12) = 0#64 := rfl
   cases double <;>
     simp [lrReserveRows, lrReserved, RETIRE_SUCCESS, JoltISA.Program.Run,
-      JoltISA.execProgram, JoltISA.execInstr, JoltISA.readSrc, readVReg,
+      JoltISA.execProgram, JoltISA.execInstr, JoltISA.readSrc,
       JoltISA.writeDst, writeVReg, stateAfterVRegWrite, liftSail, hr, hz, hsext,
-      bind, EStateM.bind, EStateM.run, pure, EStateM.pure, get, getThe, MonadStateOf.get,
-      EStateM.get, modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
+      bind, EStateM.bind, EStateM.run, pure, EStateM.pure,
+      modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
 
 /-- LR's read and destination-write rows after recording its reservation.
 For example, LR.W extracts a signed word from its containing doubleword. -/
@@ -126,16 +126,15 @@ theorem reservationLd_run (rd rs1 : regidx) (js : SailJoltState) (addr value : B
     (JoltISA.execInstr (JoltISA.Encoded.LD .amo (JoltISA.sideEffectingRdZeroDst rd)
       (.xreg rs1) 0#12)).run js = .ok RETIRE_SUCCESS (NativeDispatch.afterDst js rd value) := by
   have hzero : sign_extend (m := 64) 0#12 = 0#64 := rfl
-  have ha' : addr &&& (7 : BitVec 64) = 0 := ha
   simp [JoltISA.execInstr, JoltISA.readSrc, liftSail,
-    bind, EStateM.bind, EStateM.run, hr, hzero, ha', hl,
-    NativeDispatch.writeDst_run, pure, EStateM.pure]
-  rw [if_pos ha]
+    bind, EStateM.bind, EStateM.run, hr, hzero,
+    pure]
+  rw [ite_eq_left ha]
   change (JoltISA.Mmu.load_doubleword addr >>= fun r =>
     match r with
     | .Ok v => JoltISA.writeDst (JoltISA.sideEffectingRdZeroDst rd) v *> pure RETIRE_SUCCESS
     | .Err e => pure e) js = _
-  simp only [bind, EStateM.bind, hl, NativeDispatch.writeDst_run, pure, EStateM.pure]
+  simp only [bind, EStateM.bind, hl, pure]
   change (EStateM.bind (JoltISA.writeDst (JoltISA.sideEffectingRdZeroDst rd) value)
     (fun _ => EStateM.pure RETIRE_SUCCESS)) js = _
   simp only [EStateM.bind, NativeDispatch.writeDst_run, EStateM.pure]
@@ -169,7 +168,7 @@ theorem lrReadRows_run (double : Bool) (rd rs1 : regidx)
       have hpext : (JoltISA.execInstr (.VirtualPextSigned (JoltISA.sideEffectingRdZeroDst rd)
           (.vreg scratch) (.vreg (scratch + 1#7)))).run masked =
           .ok RETIRE_SUCCESS (NativeDispatch.afterDst masked rd (AtomicFamily.amoWordLaneOld addr value)) := by
-        simpa only [masked, loaded, stateAfterVRegWrite, if_neg hne, ite_true] using
+        simpa only [masked, loaded, stateAfterVRegWrite, ite_eq_right hne, ite_true] using
           reservationPext_run rd scratch (scratch + 1#7) masked
       change (JoltISA.execProgram (.instr _ (.instr _ (.instr _ (.done RETIRE_SUCCESS))))).run js = _
       have h1 := JoltISA.execProgram_instr_run_retire _
@@ -208,7 +207,7 @@ theorem lrRows_run (double : Bool) (rd rs1 : regidx)
   let reserved := lrReserved double checked addr
   have hscratch : WritableVReg scratch := by
     dsimp only [scratch]
-    cases h : JoltISA.isX0 rd <;> simp [h, WritableVReg]
+    cases h : JoltISA.isX0 rd <;> simp [WritableVReg]
   have hcheck := reservationRamCheck_run scratch rs1 js addr hscratch hr hram
   have hreserve := lrReserveRows_run double rs1 checked addr hr
   have hrs : rX_bits rs1 reserved.sail = .ok addr reserved.sail := by

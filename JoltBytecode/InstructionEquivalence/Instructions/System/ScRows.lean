@@ -68,7 +68,7 @@ theorem scSelectRows_run (result old flag : JoltISA.VReg) (rs2 : regidx)
   have hsub := JoltISA.sub_run_vreg_xreg_vreg result rs2 old js src hr hw
   have hmul : (JoltISA.execInstr (.MUL (.vreg result) (.vreg result) (.vreg flag))).run sub =
       .ok RETIRE_SUCCESS mul := by
-    simpa only [sub, mul, stateAfterVRegWrite, ite_true, if_neg (Ne.symm hrf)] using
+    simpa only [sub, mul, stateAfterVRegWrite, ite_true, ite_eq_right (Ne.symm hrf)] using
       JoltISA.mul_run_vreg_vreg_vreg result result flag sub hw
   have hadd := JoltISA.add_run_vreg_vreg_vreg result old result mul hw
   have hadd' : (JoltISA.execInstr (.ADD (.vreg result) (.vreg old) (.vreg result))).run mul =
@@ -133,7 +133,7 @@ theorem scClearRows_run (double : Bool) (js : SailJoltState) :
   cases double <;> simp [scClearRows, scCleared, stateAfterVRegWrite, JoltISA.Program.Run,
     RETIRE_SUCCESS, JoltISA.execProgram, JoltISA.execInstr, JoltISA.readSrc,
     JoltISA.writeDst, writeVReg, liftSail, hz, hsext, bind, EStateM.bind, EStateM.run,
-    pure, EStateM.pure, get, getThe, MonadStateOf.get, EStateM.get,
+    pure, EStateM.pure,
     modify, modifyGet, MonadStateOf.modifyGet, EStateM.modifyGet]
 
 /-- An aligned SC doubleword store uses the supplied direct RAM write.
@@ -150,7 +150,7 @@ theorem reservationSd_run (rs1 : regidx) (source : JoltISA.VReg)
   simp only [hr, bind, EStateM.bind, EStateM.run, hzero, BitVec.add_zero,
     get, getThe, MonadStateOf.get, EStateM.get, pure, EStateM.pure, hv]
   have ha' : addr &&& (7 : BitVec 64) = 0 := ha
-  refine (congrArg (fun m : JoltMonad ExecutionResult => m js) (if_pos ha')).trans ?_
+  refine (congrArg (fun m : JoltMonad ExecutionResult => m js) (ite_eq_left ha')).trans ?_
   change (JoltISA.Mmu.store_doubleword addr value >>= fun r =>
     match r with | .Ok _ => pure RETIRE_SUCCESS | .Err e => pure e) js = _
   simp only [bind, EStateM.bind, hs, pure, EStateM.pure]

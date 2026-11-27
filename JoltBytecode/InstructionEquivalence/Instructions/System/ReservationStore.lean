@@ -50,7 +50,7 @@ theorem scWord_merge_old (addr value : BitVec 64) (ha : addr &&& 3#64 = 0#64) :
     rw [Nat.shiftRight_zero]
     have h := AtomicFamily.sign_extend_64_setWidth_32 word
     have hn : ¬(64 : Nat) ≤ 32 := by decide
-    simpa only [BitVec.setWidth, dif_neg hn] using h
+    simpa only [BitVec.setWidth, dite_eq_right hn] using h
 
   rw [StoreSplice.fusedWordSplice_eq value _ addr (amoWordBase addr) hsetup, hlow]
   rw [reservation_offset, Nat.mul_comm]

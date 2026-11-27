@@ -20,8 +20,8 @@ when the reservation holds `a`. -/
 theorem ite_beq_symm {α : Type} (a b : BitVec 64) (x y : α) :
     (if a == b then x else y) = (if b = a then x else y) := by
   by_cases hc : b = a
-  · rw [if_pos (beq_iff_eq.mpr hc.symm), if_pos hc]
-  · rw [if_neg (by simpa [beq_iff_eq] using fun h : a = b => hc h.symm), if_neg hc]
+  · rw [ite_eq_left (beq_iff_eq.mpr hc.symm), ite_eq_left hc]
+  · rw [ite_eq_right (by simpa [beq_iff_eq] using fun h : a = b => hc h.symm), ite_eq_right hc]
 
 /-- The SC.D store assumption in the select form the SC.D proof uses.
 For example, a failed SC.D checks the old doubleword. -/
@@ -124,18 +124,18 @@ theorem joltScStore_eq (double : Bool) (js : SailJoltState) (addr src : BitVec 6
         change state_after_dword_store js.sail addr (JoltISA.Mmu.ram_doubleword js.sail.mem addr.toNat) = js.sail
         rw [JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail addr hb hn]
         exact store_loaded_dword_self js.sail addr hb hn
-      · simp only [joltScStore, hsuc, reservationBase, ite_false, ite_true, reservationStore]
+      · simp only [joltScStore, hsuc, reservationBase, ite_true, reservationStore]
   | false =>
       change MemBytesPresentAt js.sail (amoWordBase addr) 8 at hb
       have hn := AtomicFamily.amo_word_base_no_ovf addr
       cases hsuc : scSuccess false js addr
-      · simp only [joltScStore, hsuc, reservationBase, ite_false, ite_true, Bool.false_eq_true]
+      · simp only [joltScStore, hsuc, reservationBase, ite_false, Bool.false_eq_true]
         change state_after_dword_store js.sail (amoWordBase addr)
           (AtomicFamily.amoWordLaneMerged addr _ (AtomicFamily.amoWordLaneOld addr _)) = js.sail
         rw [scWord_merge_old addr _ ha,
           JoltISA.Mmu.ram_doubleword_eq_loaded_dword_at js.sail (amoWordBase addr) hb hn]
         exact store_loaded_dword_self js.sail (amoWordBase addr) hb hn
-      · simp only [joltScStore, hsuc, reservationBase, ite_false, ite_true, reservationStore]
+      · simp only [joltScStore, hsuc, reservationBase, ite_true, reservationStore]
         change state_after_dword_store js.sail (amoWordBase addr)
           (AtomicFamily.amoWordLaneMerged addr (JoltISA.Mmu.ram_doubleword js.sail.mem (amoWordBase addr).toNat) src) =
             state_after_word_store js.sail addr (Sail.BitVec.extractLsb src 31 0)
@@ -251,7 +251,7 @@ theorem scRows_eq_execute (double : Bool) (aq rl : Bool) (rd rs1 rs2 : regidx)
   have hclear := clearReservation_writeback {js with sail := post} rd (if success then 0#64 else 1#64)
   rw [hpostProject] at hclear
   simp [execute_STORECON, LeanRV64D.sail_assert, Sail.ConcurrencyInterfaceV1.PreSail.sail_assert,
-    hwidth, h.rs2_read, reservationStoreData, hsource, bind, EStateM.bind, pure, EStateM.pure,
+    hwidth, h.rs2_read, hsource, bind, EStateM.bind, pure, EStateM.pure,
     wX_bits_stateAfterWrite, hcancel, hstatus, hclear]
   rfl
 
